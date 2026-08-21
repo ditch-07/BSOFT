@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Students{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Students</h2>
+    <div>
+        <a href="{% url 'student_create' %}" class="btn btn-primary">+ Register Student</a>
+    </div>
+</div>
+
+<!-- Search and filters -->
+<div class="row g-2 mb-4">
+    <div class="col-md-6">
+        <form method="get" class="d-flex">
+            <input type="text" name="q" value="{{ query }}" class="form-control rounded-pill me-2" placeholder="Search student number, name...">
+            <button type="submit" class="btn btn-dark rounded-pill px-4">Search</button>
+            {% if query or status_filter %}
+                <a href="{% url 'student_list' %}" class="btn btn-outline-secondary rounded-pill ms-2">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="col-md-6 text-md-end">
+        <div class="btn-group" role="group">
+            <a href="{% url 'student_list' %}" class="btn btn-outline-secondary {% if not status_filter %}active{% endif %}">All</a>
+            <a href="?status=active{% if query %}&q={{ query }}{% endif %}" class="btn btn-outline-success {% if status_filter == 'active' %}active{% endif %}">Active</a>
+            <a href="?status=inactive{% if query %}&q={{ query }}{% endif %}" class="btn btn-outline-secondary {% if status_filter == 'inactive' %}active{% endif %}">Inactive</a>
+        </div>
+    </div>
+</div>
+
+<!-- Student table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Student No.</th>
+                        <th>Name</th>
+                        <th>Class</th>
+                        <th>Guardian</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in page_obj %}
+                    <tr data-href="{% url 'student_detail' student.pk %}" style="cursor:pointer;">
+                        <td class="text-nowrap">{{ student.student_number }}</td>
+                        <td>
+                            <a href="{% url 'student_detail' student.pk %}" class="fw-bold text-decoration-none">
+                                {{ student.first_name }}
+                                {% if student.middle_name %}{{ student.middle_name }} {% endif %}
+                                {{ student.last_name }}
+                            </a>
+                        </td>
+                        <td>{{ student.current_course_name }}</td>
+                        <td>{{ student.guardian_name|default:"—" }}</td>
+                        <td>
+                            {% if student.active %}
+                                <span class="badge text-bg-success">Active</span>
+                            {% else %}
+                                <span class="badge text-bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-5 text-muted">
+                            {% if query or status_filter %}
+                                No students match your search.
+                            {% else %}
+                                No students found. <a href="{% url 'student_create' %}">Register one</a>.
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination and row count -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+        <span class="text-muted">
+            Showing {{ page_obj.start_index }} – {{ page_obj.end_index }} of {{ page_obj.paginator.count }} students
+        </span>
+    </div>
+    <div>
+        {% if page_obj.has_other_pages %}
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">&laquo;</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Previous</a>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if query %}&q={{ query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">&raquo;</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- JavaScript to make rows clickable -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('tr[data-href]');
+    rows.forEach(row => {
+        row.addEventListener('click', function(e) {
+            // Avoid triggering if click is on a link inside the row
+            if (e.target.tagName === 'A') return;
+            window.location.href = this.dataset.href;
+        });
+    });
+});
+</script>
+
+{% endblock %}

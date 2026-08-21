@@ -1,0 +1,202 @@
+{% load static %}
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        {% block title %}
+            NRZ Student Management
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{% static 'vendor/bootstrap/bootstrap.min.css' %}"
+    >
+    <style>
+
+    .sidebar-link {
+        color: #495057;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-weight: 500;
+        transition: 0.15s ease;
+    }
+
+    .sidebar-link:hover {
+        background-color: #f1f3f5;
+        color: #212529;
+    }
+
+    .sidebar-link.active {
+        background-color: #212529;
+        color: white !important;
+        font-weight: 600;
+    }
+
+</style>
+
+</head>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark shadow-sm">
+
+    <div class="container-fluid">
+
+        <a
+            class="navbar-brand fw-bold"
+            href="{% url 'dashboard' %}"
+        >
+            NRZ STUDENT MANAGEMENT
+        </a>
+
+        <div class="d-flex gap-2">
+
+            <a
+                class="btn btn-sm btn-outline-light"
+                href="{% url 'student_list' %}"
+            >
+                Students
+            </a>
+
+            <a
+                class="btn btn-sm btn-outline-light"
+                href="{% url 'academic_year_list' %}"
+            >
+                Academics
+            </a>
+{% comment %} 
+            <a
+                class="btn btn-sm btn-outline-light"
+                href="{% url 'fee_setup' %}"
+            >
+                Fees
+            </a> {% endcomment %}
+
+            <a
+                class="btn btn-sm btn-success"
+                href="{% url 'payment_create' %}"
+            >
+                Payment
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+<div class="container-fluid">
+
+    <div class="row">
+
+        <aside
+            class="col-md-2 bg-white border-end min-vh-100 p-3"
+        >
+
+            <h6 class="text-muted">
+                MANAGEMENT
+            </h6>
+
+       <div class="nav flex-column gap-1">
+
+    <a
+        href="{% url 'dashboard' %}"
+        class="nav-link sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+    >
+        Dashboard
+    </a>
+
+
+    <a
+        href="{% url 'student_list' %}"
+        class="nav-link sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}"
+    >
+        Students
+    </a>
+
+<!-- Example: add a section -->
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="academicSetupDropdown" role="button" data-bs-toggle="dropdown">
+        Academic Setup
+    </a>
+    <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'academic_year_list' %}">Academic Years</a></li>
+        <li><a class="dropdown-item" href="{% url 'semester_list' %}">Semesters</a></li>
+        <li><a class="dropdown-item" href="{% url 'course_list' %}">Courses</a></li>
+    </ul>
+</li>
+    <a
+        href="{% url 'payment_create' %}"
+        class="nav-link sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}"
+    >
+        Payments
+    </a>
+
+</div>
+            <hr>
+
+            <h6 class="text-muted">
+                SYSTEM
+            </h6>
+
+            <a
+                class="nav-link"
+                href="/admin/"
+            >
+                Administration
+            </a>
+
+        </aside>
+
+
+        <main class="col-md-10 p-4">
+
+            {% for message in messages %}
+
+                <div
+                    class="alert alert-success alert-dismissible fade show"
+                >
+
+                    {{ message }}
+
+                    <button
+                        type="button"
+                        class="btn-close"
+                        data-bs-dismiss="alert"
+                    ></button>
+
+                </div>
+
+            {% endfor %}
+
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+    </div>
+
+</div>
+
+
+<script
+    src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"
+></script>
+
+</body>
+
+</html>

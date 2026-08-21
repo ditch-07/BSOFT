@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}
+Student Profile
+{% endblock %}
+
+
+{% block content %}
+
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+
+    <div>
+
+        <h2 class="fw-bold">
+
+            {{ student.first_name }}
+
+            {% if student.middle_name %}
+                {{ student.middle_name }}
+            {% endif %}
+
+            {{ student.last_name }}
+
+        </h2>
+
+        <div class="text-muted">
+
+            {{ student.student_number }}
+
+            {% if student.class_name %}
+                · {{ student.class_name }}
+            {% endif %}
+
+        </div>
+
+    </div>
+
+
+    <a
+        href="{% url 'payment_create' %}"
+        class="btn btn-success"
+    >
+        + Record Payment
+    </a>
+
+</div>
+
+
+<div class="row g-4">
+
+
+    <div class="col-lg-4">
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body">
+
+                <h5>
+                    Student Information
+                </h5>
+
+                <hr>
+
+                <div class="mb-2">
+                    <strong>Student Number:</strong><br>
+                    {{ student.student_number }}
+                </div>
+
+                <div class="mb-2">
+                    <strong>Class:</strong><br>
+                    {{ student.class_name|default:"—" }}
+                </div>
+
+                <div class="mb-2">
+                    <strong>Date of Birth:</strong><br>
+                    {{ student.date_of_birth|default:"—" }}
+                </div>
+
+                <div class="mb-2">
+                    <strong>Guardian:</strong><br>
+                    {{ student.guardian_name|default:"—" }}
+                </div>
+
+                <div class="mb-2">
+                    <strong>Phone:</strong><br>
+                    {{ student.guardian_phone|default:"—" }}
+                </div>
+
+            </div>
+
+        </div>
+
+        
+        
+    </div>
+
+
+    <div class="col-lg-8">
+
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body">
+
+                <h5>
+                    Fee Tracking
+                </h5>
+
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>Semester</th>
+                                <th>Charged</th>
+                                <th>Paid</th>
+                                <th>Balance</th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {% for item in balances %}
+
+                            <tr>
+
+                                <td class="fw-semibold">
+                                    {{ item.semester }}
+                                </td>
+
+                                <td>
+                                    ${{ item.charged|floatformat:2 }}
+                                </td>
+
+                                <td class="text-success">
+                                    ${{ item.paid|floatformat:2 }}
+                                </td>
+
+                                <td>
+
+                                    {% if item.balance > 0 %}
+
+                                        <span class="text-danger fw-bold">
+                                            ${{ item.balance|floatformat:2 }}
+                                        </span>
+
+                                    {% elif item.balance == 0 %}
+
+                                        <span class="badge text-bg-success">
+                                            PAID
+                                        </span>
+
+                                    {% else %}
+
+                                        <span class="text-primary fw-bold">
+                                            Credit ${{ item.balance|floatformat:2|slice:"1:" }}
+                                        </span>
+
+                                    {% endif %}
+
+                                </td>
+
+                            </tr>
+
+                            {% empty %}
+
+                            <tr>
+
+                                <td
+                                    colspan="4"
+                                    class="text-center text-muted"
+                                >
+                                    No semesters configured.
+                                </td>
+
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="card border-0 shadow-sm mt-4">
+
+            <div class="card-body">
+
+                <h5>
+                    Payment History
+                </h5>
+
+
+                <div class="table-responsive">
+
+                    <table class="table table-hover">
+
+                        <thead>
+
+                            <tr>
+
+                                <th>Receipt</th>
+                                <th>Date</th>
+                                <th>Semester</th>
+                                <th>Method</th>
+                                <th>Amount</th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {% for payment in payments %}
+
+                            <tr>
+
+                                <td class="fw-bold">
+                                    {{ payment.receipt_number }}
+                                </td>
+
+                                <td>
+                                    {{ payment.payment_date }}
+                                </td>
+
+                                <td>
+                                    {{ payment.semester }}
+                                </td>
+
+                                <td>
+                                    {{ payment.get_method_display }}
+                                </td>
+
+                                <td class="text-success fw-bold">
+                                    ${{ payment.amount|floatformat:2 }}
+                                </td>
+
+                            </tr>
+
+                            {% empty %}
+
+                            <tr>
+
+                                <td
+                                    colspan="5"
+                                    class="text-center text-muted"
+                                >
+                                    No payments recorded.
+                                </td>
+
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

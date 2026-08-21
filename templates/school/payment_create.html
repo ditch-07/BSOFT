@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}
+Record Payment
+{% endblock %}
+
+
+{% block content %}
+
+<div class="row justify-content-center">
+
+    <div class="col-xl-9">
+
+        <div class="mb-4">
+
+            <h2 class="fw-bold mb-1">
+                Record Payment
+            </h2>
+
+            <p class="text-muted">
+                Search for a student and record their payment.
+            </p>
+
+        </div>
+
+
+        <!-- STUDENT SEARCH -->
+
+        <div class="card border-0 shadow-sm mb-4">
+
+            <div class="card-body p-4">
+
+                <h5 class="mb-3">
+                    Select Student
+                </h5>
+
+
+                <div class="position-relative">
+
+                    <input
+                        type="search"
+                        id="studentSearch"
+                        class="form-control form-control-lg"
+                        placeholder="Search student number or name..."
+                        autocomplete="off"
+                    >
+
+
+                    <div
+                        id="searchResults"
+                        class="list-group position-absolute w-100 shadow-sm"
+                        style="z-index: 1000;"
+                    ></div>
+
+                </div>
+
+
+                {% if student %}
+
+                    <div class="alert alert-light border mt-3 mb-0">
+
+                        <div class="d-flex justify-content-between">
+
+                            <div>
+
+                                <strong>
+                                    {{ student.student_number }}
+                                </strong>
+
+                                <br>
+
+                                {{ student.first_name }}
+                                {{ student.last_name }}
+
+                            </div>
+
+                            <div class="text-end">
+
+                                {% if enrollment %}
+
+                                    <strong>
+                                        {{ enrollment.course.name }}
+                                    </strong>
+
+                                    <br>
+
+                                    <small class="text-muted">
+                                        {{ enrollment.semester }}
+                                    </small>
+
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        {% if student and enrollment %}
+
+        <!-- BALANCE -->
+
+        <div class="row g-3 mb-4">
+
+            <div class="col-md-4">
+
+                <div class="card border-0 shadow-sm">
+
+                    <div class="card-body">
+
+                        <small class="text-muted">
+                            Fees Charged
+                        </small>
+
+                        <h4 class="mb-0">
+                            ${{ charged|floatformat:2 }}
+                        </h4>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col-md-4">
+
+                <div class="card border-0 shadow-sm">
+
+                    <div class="card-body">
+
+                        <small class="text-muted">
+                            Paid
+                        </small>
+
+                        <h4 class="mb-0">
+                            ${{ paid|floatformat:2 }}
+                        </h4>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="col-md-4">
+
+                <div class="card border-0 shadow-sm">
+
+                    <div class="card-body">
+
+                        <small class="text-muted">
+                            Outstanding
+                        </small>
+
+                        <h4 class="mb-0">
+                            ${{ balance|floatformat:2 }}
+                        </h4>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- PAYMENT -->
+
+        <div class="card border-0 shadow-sm">
+
+            <div class="card-body p-4">
+
+                <h5 class="mb-4">
+                    Payment Details
+                </h5>
+
+
+                <form method="post">
+
+                    {% csrf_token %}
+
+                    <input
+                        type="hidden"
+                        name="student_id"
+                        value="{{ student.id }}"
+                    >
+
+
+                    {% for field in form %}
+
+                        <div class="mb-3">
+
+                            <label
+                                for="{{ field.id_for_label }}"
+                                class="form-label fw-semibold"
+                            >
+                                {{ field.label }}
+                            </label>
+
+                            {{ field }}
+
+                            {% for error in field.errors %}
+
+                                <div class="text-danger small">
+                                    {{ error }}
+                                </div>
+
+                            {% endfor %}
+
+                        </div>
+
+                    {% endfor %}
+
+
+                    <div class="d-flex justify-content-end">
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary px-4"
+                        >
+                            Record Payment
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+<script>
+
+const searchInput =
+    document.getElementById("studentSearch");
+
+const results =
+    document.getElementById("searchResults");
+
+
+let searchTimer;
+
+
+searchInput.addEventListener(
+    "input",
+    function () {
+
+        clearTimeout(searchTimer);
+
+        const query =
+            this.value.trim();
+
+        results.innerHTML = "";
+
+        if (query.length < 2) {
+            return;
+        }
+
+
+        searchTimer = setTimeout(
+            async function () {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "{% url 'student_search' %}?q="
+                            + encodeURIComponent(query)
+                        );
+
+                    const data =
+                        await response.json();
+
+
+                    results.innerHTML = "";
+
+
+                    if (
+                        data.students.length === 0
+                    ) {
+
+                        results.innerHTML = `
+                            <div class="list-group-item text-muted">
+                                No students found.
+                            </div>
+                        `;
+
+                        return;
+                    }
+
+
+                    data.students.forEach(
+                        function (student) {
+
+                            const item =
+                                document.createElement(
+                                    "a"
+                                );
+
+                            item.href =
+                                "{% url 'payment_create' %}"
+                                + "?student="
+                                + student.id;
+
+                            item.className =
+                                "list-group-item list-group-item-action";
+
+
+                            item.innerHTML = `
+
+                                <div class="d-flex justify-content-between">
+
+                                    <div>
+
+                                        <strong>
+                                            ${student.student_number}
+                                        </strong>
+
+                                        —
+                                        ${student.name}
+
+                                    </div>
+
+                                    <small class="text-muted">
+                                        ${student.course}
+                                    </small>
+
+                                </div>
+
+                                <small class="text-muted">
+                                    ${student.semester}
+                                </small>
+
+                            `;
+
+
+                            results.appendChild(
+                                item
+                            );
+
+                        }
+                    );
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        error
+                    );
+
+                }
+
+            },
+            250
+        );
+
+    }
+);
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Dashboard</h2>
+        <p class="text-muted">School financial and student overview</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'student_create' %}" class="btn btn-primary">+ Register Student</a>
+        <a href="{% url 'payment_create' %}" class="btn btn-success">+ Record Payment</a>
+    </div>
+</div>
+
+<!-- Current Period Banner -->
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+    <div>
+        <strong>
+            {% if current_semester %}
+                {{ current_semester }} ({{ current_semester.status_label }})
+            {% else %}
+                No active semester
+            {% endif %}
+        </strong>
+        <span class="ms-3 text-muted">
+            {% if current_semester %}
+                {{ current_semester.start_date|date:"M d" }} – {{ current_semester.end_date|date:"M d, Y" }}
+            {% endif %}
+        </span>
+    </div>
+    <div>
+        {% if upcoming_semester %}
+            <span class="badge bg-warning text-dark">
+                ⏳ {{ upcoming_semester }} starts {{ upcoming_semester.start_date|date:"M d" }}
+            </span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Active Students</div>
+                <div class="display-6 fw-bold">{{ total_students }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Expected Fees</div>
+                <div class="display-6 fw-bold">${{ total_charged|floatformat:2 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Collected</div>
+                <div class="display-6 fw-bold text-success">${{ total_paid|floatformat:2 }}</div>
+                <small class="text-muted">{{ collection_rate|floatformat:0 }}% collection rate</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted">Outstanding</div>
+                <div class="display-6 fw-bold text-danger">${{ outstanding|floatformat:2 }}</div>
+                <small class="text-muted">{{ students_with_balance }} students with balance</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Two columns: Today's Activity + Attention -->
+<div class="row g-4 mb-4">
+    <!-- Today's Payments -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Today's Payments</h5>
+                    <span class="badge bg-success">${{ today_total|floatformat:2 }}</span>
+                </div>
+                {% if today_payments %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Receipt</th>
+                                <th>Student</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in today_payments %}
+                            <tr>
+                                <td>{{ payment.receipt_number }}</td>
+                                <td>{{ payment.student.first_name }} {{ payment.student.last_name }}</td>
+                                <td class="fw-bold">${{ payment.amount|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No payments recorded today.</p>
+                {% endif %}
+                <a href="{% url 'payment_create' %}" class="btn btn-sm btn-outline-primary mt-2">Record Payment</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attention Required -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="mb-3">⚠️ Attention Required</h5>
+                {% if students_with_balance > 0 %}
+                <p class="mb-2"><strong>{{ students_with_balance }}</strong> students have outstanding balances.</p>
+                <div class="list-group">
+                    {% for student in top_outstanding %}
+                    <a href="{% url 'student_detail' student.pk %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        {{ student.first_name }} {{ student.last_name }}
+                        <span class="badge bg-danger rounded-pill">${{ student.balance|floatformat:2 }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">All students are up to date 🎉</p>
+                {% endif %}
+
+                {% if upcoming_semester %}
+                <hr>
+                <p>📅 <strong>{{ upcoming_semester }}</strong> starts in <strong>{{ upcoming_semester.start_date|timeuntil }}</strong>.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Payments -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Recent Payments</h5>
+            <a href="{% url 'payment_create' %}" class="btn btn-sm btn-success">Record Payment</a>
+        </div>
+        <div class="table-responsive mt-3">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Receipt</th>
+                        <th>Student</th>
+                        <th>Semester</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in recent_payments %}
+                    <tr>
+                        <td>{{ payment.receipt_number }}</td>
+                        <td><a href="{% url 'student_detail' payment.student.pk %}">{{ payment.student }}</a></td>
+                        <td>{{ payment.semester }}</td>
+                        <td>{{ payment.payment_date|date:"Y-m-d" }}</td>
+                        <td class="fw-bold">${{ payment.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">No payments recorded yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
