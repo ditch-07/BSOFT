@@ -1,0 +1,122 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}NRZ Student Management{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+    <style>
+        .sidebar-link {
+            display: block;
+            color: #495057;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-weight: 500;
+            transition: 0.15s ease;
+            text-decoration: none;
+        }
+        .sidebar-link:hover {
+            background-color: #f1f3f5;
+            color: #212529;
+        }
+        .sidebar-link.active {
+            background-color: #212529;
+            color: white !important;
+            font-weight: 600;
+        }
+        .sidebar-heading {
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #adb5bd;
+            font-weight: 700;
+            padding: 0 12px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark shadow-sm">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">
+            NRZ STUDENT MANAGEMENT
+        </a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-light" href="{% url 'student_list' %}">Students</a>
+            <a class="btn btn-sm btn-outline-light" href="{% url 'academic_year_list' %}">Academics</a>
+            <a class="btn btn-sm btn-success" href="{% url 'payment_create' %}">+ Payment</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <div class="row">
+
+        <aside class="col-md-2 bg-white border-end min-vh-100 p-3">
+
+            <div class="nav flex-column gap-1 mb-3">
+                <a href="{% url 'dashboard' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    Dashboard
+                </a>
+                <a href="{% url 'student_list' %}"
+                   class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
+                    Students
+                </a>
+                <a href="{% url 'payment_create' %}"
+                   class="sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                    Payments
+                </a>
+            </div>
+
+            <div class="sidebar-heading mb-1">Academic Setup</div>
+            <div class="nav flex-column gap-1 mb-3">
+                <a href="{% url 'academic_year_list' %}"
+                   class="sidebar-link {% if 'academic_year' in request.resolver_match.url_name %}active{% endif %}">
+                    Academic Years
+                </a>
+                <a href="{% url 'semester_list' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'semester_list' or request.resolver_match.url_name == 'semester_create' or request.resolver_match.url_name == 'semester_edit' %}active{% endif %}">
+                    Semesters
+                </a>
+                <a href="{% url 'program_list' %}"
+                   class="sidebar-link {% if 'program' in request.resolver_match.url_name %}active{% endif %}">
+                    Programs
+                </a>
+                <a href="{% url 'semester_list' %}"
+                   class="sidebar-link">
+                    Fee Structures
+                </a>
+            </div>
+
+            <hr>
+            <div class="sidebar-heading mb-1">System</div>
+            <div class="nav flex-column gap-1">
+                <a class="sidebar-link" href="/admin/">Administration</a>
+            </div>
+
+        </aside>
+
+        <main class="col-md-10 p-4">
+
+            {% for message in messages %}
+                <div class="alert alert-{% if 'error' in message.tags %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+    </div>
+</div>
+
+<script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

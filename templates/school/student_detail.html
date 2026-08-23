@@ -1,282 +1,146 @@
 {% extends "base.html" %}
 
-{% block title %}
-Student Profile
-{% endblock %}
-
+{% block title %}Student Profile{% endblock %}
 
 {% block content %}
 
-
 <div class="d-flex justify-content-between align-items-start mb-4">
-
     <div>
-
         <h2 class="fw-bold">
-
             {{ student.first_name }}
-
-            {% if student.middle_name %}
-                {{ student.middle_name }}
-            {% endif %}
-
+            {% if student.middle_name %}{{ student.middle_name }}{% endif %}
             {{ student.last_name }}
-
         </h2>
-
         <div class="text-muted">
-
-            {{ student.student_number }}
-
-            {% if student.class_name %}
-                · {{ student.class_name }}
+            {{ student.student_number }} · {{ student.program.name }}
+            {% if student.status == "ACTIVE" %}
+                <span class="badge text-bg-success ms-1">Active</span>
+            {% elif student.status == "DEFERRED" %}
+                <span class="badge text-bg-warning ms-1">Deferred</span>
+            {% elif student.status == "WITHDRAWN" %}
+                <span class="badge text-bg-secondary ms-1">Withdrawn</span>
+            {% elif student.status == "COMPLETED" %}
+                <span class="badge text-bg-primary ms-1">Completed</span>
             {% endif %}
-
         </div>
-
     </div>
 
-
-    <a
-        href="{% url 'payment_create' %}"
-        class="btn btn-success"
-    >
-        + Record Payment
-    </a>
-
+    <div class="d-flex gap-2">
+        <a href="{% url 'student_status_change' student.pk %}" class="btn btn-outline-secondary">
+            Change Status
+        </a>
+        <a href="{% url 'payment_create' %}?student={{ student.pk }}" class="btn btn-success">
+            + Record Payment
+        </a>
+    </div>
 </div>
-
 
 <div class="row g-4">
 
-
     <div class="col-lg-4">
-
         <div class="card border-0 shadow-sm">
-
             <div class="card-body">
-
-                <h5>
-                    Student Information
-                </h5>
-
+                <h5>Student Information</h5>
                 <hr>
-
-                <div class="mb-2">
-                    <strong>Student Number:</strong><br>
-                    {{ student.student_number }}
-                </div>
-
-                <div class="mb-2">
-                    <strong>Class:</strong><br>
-                    {{ student.class_name|default:"—" }}
-                </div>
-
-                <div class="mb-2">
-                    <strong>Date of Birth:</strong><br>
-                    {{ student.date_of_birth|default:"—" }}
-                </div>
-
-                <div class="mb-2">
-                    <strong>Guardian:</strong><br>
-                    {{ student.guardian_name|default:"—" }}
-                </div>
-
-                <div class="mb-2">
-                    <strong>Phone:</strong><br>
-                    {{ student.guardian_phone|default:"—" }}
-                </div>
-
+                <div class="mb-2"><strong>Student Number:</strong><br>{{ student.student_number }}</div>
+                <div class="mb-2"><strong>Program:</strong><br>{{ student.program.name }}</div>
+                <div class="mb-2"><strong>Intake Year:</strong><br>{{ student.intake_year.name }}</div>
+                <div class="mb-2"><strong>Date of Birth:</strong><br>{{ student.date_of_birth|default:"—" }}</div>
+                <div class="mb-2"><strong>Guardian:</strong><br>{{ student.guardian_name|default:"—" }}</div>
+                <div class="mb-2"><strong>Phone:</strong><br>{{ student.guardian_phone|default:"—" }}</div>
             </div>
-
         </div>
 
-        
-        
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-body">
+                <h6 class="text-muted mb-1">Owed This Academic Year</h6>
+                {% if total_owed_this_year > 0 %}
+                    <div class="fs-4 fw-bold text-danger">${{ total_owed_this_year|floatformat:2 }}</div>
+                {% elif total_owed_this_year == 0 %}
+                    <div class="fs-4 fw-bold text-success">$0.00 — Fully Paid</div>
+                {% else %}
+                    <div class="fs-4 fw-bold text-primary">Credit ${{ total_owed_this_year|floatformat:2|slice:"1:" }}</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
-
     <div class="col-lg-8">
-
-
         <div class="card border-0 shadow-sm">
-
             <div class="card-body">
-
-                <h5>
-                    Fee Tracking
-                </h5>
-
-
+                <h5>Fee Tracking</h5>
                 <div class="table-responsive">
-
                     <table class="table table-hover">
-
                         <thead>
-
                             <tr>
-
                                 <th>Semester</th>
                                 <th>Charged</th>
                                 <th>Paid</th>
                                 <th>Balance</th>
-
                             </tr>
-
                         </thead>
-
-
                         <tbody>
-
                             {% for item in balances %}
-
                             <tr>
-
-                                <td class="fw-semibold">
-                                    {{ item.semester }}
-                                </td>
-
+                                <td class="fw-semibold">{{ item.semester }}</td>
+                                <td>${{ item.charged|floatformat:2 }}</td>
+                                <td class="text-success">${{ item.paid|floatformat:2 }}</td>
                                 <td>
-                                    ${{ item.charged|floatformat:2 }}
-                                </td>
-
-                                <td class="text-success">
-                                    ${{ item.paid|floatformat:2 }}
-                                </td>
-
-                                <td>
-
                                     {% if item.balance > 0 %}
-
-                                        <span class="text-danger fw-bold">
-                                            ${{ item.balance|floatformat:2 }}
-                                        </span>
-
+                                        <span class="text-danger fw-bold">${{ item.balance|floatformat:2 }}</span>
                                     {% elif item.balance == 0 %}
-
-                                        <span class="badge text-bg-success">
-                                            PAID
-                                        </span>
-
+                                        <span class="badge text-bg-success">PAID</span>
                                     {% else %}
-
-                                        <span class="text-primary fw-bold">
-                                            Credit ${{ item.balance|floatformat:2|slice:"1:" }}
-                                        </span>
-
+                                        <span class="text-primary fw-bold">Credit ${{ item.balance|floatformat:2|slice:"1:" }}</span>
                                     {% endif %}
-
                                 </td>
-
                             </tr>
-
                             {% empty %}
-
                             <tr>
-
-                                <td
-                                    colspan="4"
-                                    class="text-center text-muted"
-                                >
-                                    No semesters configured.
+                                <td colspan="4" class="text-center text-muted">
+                                    No charges or payments recorded for this student yet.
                                 </td>
-
                             </tr>
-
                             {% endfor %}
-
                         </tbody>
-
                     </table>
-
                 </div>
-
             </div>
-
         </div>
 
-
         <div class="card border-0 shadow-sm mt-4">
-
             <div class="card-body">
-
-                <h5>
-                    Payment History
-                </h5>
-
-
+                <h5>Payment History</h5>
                 <div class="table-responsive">
-
                     <table class="table table-hover">
-
                         <thead>
-
                             <tr>
-
                                 <th>Receipt</th>
                                 <th>Date</th>
                                 <th>Semester</th>
                                 <th>Method</th>
                                 <th>Amount</th>
-
                             </tr>
-
                         </thead>
-
-
                         <tbody>
-
                             {% for payment in payments %}
-
                             <tr>
-
-                                <td class="fw-bold">
-                                    {{ payment.receipt_number }}
-                                </td>
-
-                                <td>
-                                    {{ payment.payment_date }}
-                                </td>
-
-                                <td>
-                                    {{ payment.semester }}
-                                </td>
-
-                                <td>
-                                    {{ payment.get_method_display }}
-                                </td>
-
-                                <td class="text-success fw-bold">
-                                    ${{ payment.amount|floatformat:2 }}
-                                </td>
-
+                                <td class="fw-bold">{{ payment.receipt_number }}</td>
+                                <td>{{ payment.payment_date }}</td>
+                                <td>{{ payment.semester }}</td>
+                                <td>{{ payment.get_method_display }}</td>
+                                <td class="text-success fw-bold">${{ payment.amount|floatformat:2 }}</td>
                             </tr>
-
                             {% empty %}
-
                             <tr>
-
-                                <td
-                                    colspan="5"
-                                    class="text-center text-muted"
-                                >
-                                    No payments recorded.
-                                </td>
-
+                                <td colspan="5" class="text-center text-muted">No payments recorded.</td>
                             </tr>
-
                             {% endfor %}
-
                         </tbody>
-
                     </table>
-
                 </div>
-
             </div>
-
         </div>
-
     </div>
 
 </div>

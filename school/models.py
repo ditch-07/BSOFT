@@ -1,15 +1,18 @@
 from decimal import Decimal
-from django.forms import inlineformset_factory
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q, Sum
-from django.utils import timezone
+
 
 class AcademicYear(models.Model):
-
     name = models.CharField(
         max_length=20,
         unique=True,
     )
+
+    start_date = models.DateField()
+    end_date = models.DateField()
 
     is_current = models.BooleanField(
         default=False,
@@ -17,132 +20,133 @@ class AcademicYear(models.Model):
 
     class Meta:
         ordering = ["-name"]
-
         constraints = [
             models.UniqueConstraint(
                 fields=["is_current"],
                 condition=Q(is_current=True),
                 name="only_one_current_academic_year",
-            )
-        ]
-
-    def __str__(self):
-        return self.name
-
-from django.core.exceptions import ValidationError
-from django.db import models
-from django.utils import timezone
-
-
-class Semester(models.Model):
-
-    SEMESTER_CHOICES = [
-        (1, "Semester 1"),
-        (2, "Semester 2"),
-        (3, "Semester 3"),
-        (4, "Semester 4"),
-    ]
-
-    MONTH_CHOICES = [
-        (1, "January"), (2, "February"), (3, "March"),
-        (4, "April"), (5, "May"), (6, "June"),
-        (7, "July"), (8, "August"), (9, "September"),
-        (10, "October"), (11, "November"), (12, "December"),
-    ]
-
-    academic_year = models.ForeignKey(
-        AcademicYear,
-        on_delete=models.CASCADE,
-        related_name="semesters",
-    )
-
-    number = models.PositiveSmallIntegerField(
-        choices=SEMESTER_CHOICES,
-    )
-
-    start_month = models.PositiveSmallIntegerField(choices=MONTH_CHOICES)
-    end_month = models.PositiveSmallIntegerField(choices=MONTH_CHOICES)
-
-    class Meta:
-        ordering = ["-academic_year__name", "number"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["academic_year", "number"],
-                name="unique_semester_number_per_year",
             ),
         ]
-
-    def _month_sequence(self):
-        """
-        Returns the ordered list of months this semester spans,
-        handling wrap-around (e.g. Nov -> Feb crosses year-end).
-        """
-        if self.start_month <= self.end_month:
-            return list(range(self.start_month, self.end_month + 1))
-        # wraps past December into the new year
-        return list(range(self.start_month, 13)) + list(range(1, self.end_month + 1))
 
     def clean(self):
         super().clean()
 
-        if self.start_month and self.end_month and self.start_month == self.end_month:
-            raise ValidationError("Start month and end month cannot be the same.")
-
-        if self.academic_year_id and self.start_month and self.end_month:
-            my_months = set(self._month_sequence())
-
-            siblings = Semester.objects.filter(
-                academic_year=self.academic_year
-            ).exclude(pk=self.pk)
-
-            for other in siblings:
-                if my_months & set(other._month_sequence()):
-                    raise ValidationError(
-                        f"These months overlap with {other} "
-                        f"({other.get_start_month_display()} – {other.get_end_month_display()})."
-                    )
+        if self.start_date and self.end_date:
+            if self.start_date >= self.end_date:
+                raise ValidationError(
+                    "Academic year end date must be after the start date."
+                )
 
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        return self.name
+
+
+class Semester(models.Model):
+    PERIOD_CHOICES = [
+        (1, "Semester Period 1"),
+        (2, "Semester Period 2"),
+    ]
+
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="semesters",
+    )
+
+    number = models.PositiveSmallIntegerField(
+        choices=PERIOD_CHOICES,
+    )
+
+    start_date = models.DateField()
+    end_date = models.DateField()
+
+    class Meta:
+        ordering = ["-academic_year__name", "number"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["academic_year", "number"],
+                name="unique_semester_period_per_year",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.start_date and self.end_date:
+            if self.start_date >= self.end_date:
+                raise ValidationError(
+                    "Semester end date must be after the start date."
+                )
+
+        if self.academic_year_id:
+            if (
+                self.start_date
+                and self.academic_year.start_date
+                and self.start_date < self.academic_year.start_date
+            ):
+                raise ValidationError(
+                    "Semester cannot start before the academic year."
+                )
+
+            if (
+                self.end_date
+                and self.academic_year.end_date
+                and self.end_date > self.academic_year.end_date
+            ):
+                raise ValidationError(
+                    "Semester cannot end after the academic year."
+                )
+
+    @property
+    def is_active(self):
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        return self.start_date <= today <= self.end_date
+
+    @property
+    def is_upcoming(self):
+        from django.utils import timezone
+
+        return self.start_date > timezone.localdate()
+
+    @property
+    def is_completed(self):
+        from django.utils import timezone
+
+        return self.end_date < timezone.localdate()
+
     @property
     def status(self):
-        today = timezone.localdate()
-        current_month = today.month
-        return "ACTIVE" if current_month in self._month_sequence() else (
-            "UPCOMING" if self._is_upcoming(current_month) else "COMPLETED"
-        )
+        if self.is_active:
+            return "ACTIVE"
 
-    def _is_upcoming(self, current_month):
-        # Rough heuristic: if we haven't reached start_month yet this cycle
-        seq = self._month_sequence()
-        return current_month not in seq and seq and current_month < seq[0]
+        if self.is_upcoming:
+            return "UPCOMING"
 
-    @property
-    def status_label(self):
-        return {
-            "UPCOMING": "Upcoming",
-            "ACTIVE": "Active",
-            "COMPLETED": "Completed",
-        }[self.status]
+        return "COMPLETED"
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return (
-            f"{self.academic_year.name} - "
-            f"Semester {self.number} "
-            f"({self.get_start_month_display()}–{self.get_end_month_display()})"
-        )
-    
-class Course(models.Model):
+        return f"{self.academic_year.name} - Semester {self.number}"
 
-    name = models.CharField(
-        max_length=150,
+
+class Program(models.Model):
+    code = models.CharField(
+        max_length=30,
         unique=True,
     )
 
-    code = models.CharField(
-        max_length=30,
+    name = models.CharField(
+        max_length=150,
         unique=True,
     )
 
@@ -150,6 +154,8 @@ class Course(models.Model):
         blank=True,
     )
 
+    duration_years = models.PositiveSmallIntegerField()
+
     active = models.BooleanField(
         default=True,
     )
@@ -157,15 +163,97 @@ class Course(models.Model):
     class Meta:
         ordering = ["name"]
 
+    def clean(self):
+        super().clean()
+
+        if self.duration_years < 1:
+            raise ValidationError(
+                "Program duration must be at least one year."
+            )
+
+    @property
+    def total_semesters(self):
+        return self.duration_years * 2
+
     def __str__(self):
         return f"{self.code} - {self.name}"
 
 
-class FeeItem(models.Model):
+class FeeStructure(models.Model):
+    """
+    Defines what a particular program/year level owes
+    during a specific academic semester period.
+    """
+
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.PROTECT,
+        related_name="fee_structures",
+    )
+
+    year_level = models.PositiveSmallIntegerField()
+
+    semester = models.ForeignKey(
+        Semester,
+        on_delete=models.PROTECT,
+        related_name="fee_structures",
+    )
+
+    class Meta:
+        ordering = [
+            "program",
+            "year_level",
+            "semester__academic_year__name",
+            "semester__number",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "program",
+                    "year_level",
+                    "semester",
+                ],
+                name="unique_program_year_level_semester_fee_structure",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.year_level < 1:
+            raise ValidationError(
+                "Year level must be at least 1."
+            )
+
+        if self.program_id:
+            if self.year_level > self.program.duration_years:
+                raise ValidationError(
+                    "Year level cannot exceed the program duration."
+                )
+
+    @property
+    def program_semester_number(self):
+        return ((self.year_level - 1) * 2) + self.semester.number
+
+    def __str__(self):
+        return (
+            f"{self.program} - "
+            f"Year {self.year_level} - "
+            f"Semester {self.program_semester_number} - "
+            f"{self.semester.academic_year.name}"
+        )
+
+
+class FeeStructureItem(models.Model):
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
 
     name = models.CharField(
         max_length=100,
-        unique=True,
     )
 
     description = models.CharField(
@@ -173,56 +261,36 @@ class FeeItem(models.Model):
         blank=True,
     )
 
-    # Default/reference amount.
-    # The actual semester amount lives on SemesterFee.
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
     )
 
-    active = models.BooleanField(
-        default=True,
-    )
-
     class Meta:
         ordering = ["name"]
 
-    def __str__(self):
-        return self.name
-
-class SemesterFee(models.Model):
-    semester = models.ForeignKey(
-        Semester,
-        on_delete=models.CASCADE,
-        related_name="fees",
-    )
-    name = models.CharField(max_length=100)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-
-    class Meta:
-        ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
-                fields=["semester", "name"],
-                name="unique_fee_name_per_semester",
-            )
+                fields=["fee_structure", "name"],
+                name="unique_fee_item_per_structure",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.semester} - {self.name}"
+        return f"{self.name} - {self.amount}"
+
 
 class Student(models.Model):
+    ACTIVE = "ACTIVE"
+    DEFERRED = "DEFERRED"
+    WITHDRAWN = "WITHDRAWN"
+    COMPLETED = "COMPLETED"
 
-    MALE = "MALE"
-    FEMALE = "FEMALE"
-    OTHER = "OTHER"
-    NOT_SPECIFIED = "NOT_SPECIFIED"
-
-    GENDER_CHOICES = [
-        (MALE, "Male"),
-        (FEMALE, "Female"),
-        (OTHER, "Other"),
-        (NOT_SPECIFIED, "Prefer not to say"),
+    STATUS_CHOICES = [
+        (ACTIVE, "Active"),
+        (DEFERRED, "Deferred"),
+        (WITHDRAWN, "Withdrawn"),
+        (COMPLETED, "Completed"),
     ]
 
     student_number = models.CharField(
@@ -250,8 +318,7 @@ class Student(models.Model):
 
     gender = models.CharField(
         max_length=20,
-        choices=GENDER_CHOICES,
-        default=NOT_SPECIFIED,
+        blank=True,
     )
 
     guardian_name = models.CharField(
@@ -268,8 +335,22 @@ class Student(models.Model):
         blank=True,
     )
 
-    active = models.BooleanField(
-        default=True,
+    program = models.ForeignKey(
+        Program,
+        on_delete=models.PROTECT,
+        related_name="students",
+    )
+
+    intake_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="students",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=ACTIVE,
     )
 
     created_at = models.DateTimeField(
@@ -288,44 +369,60 @@ class Student(models.Model):
             f"{self.first_name} "
             f"{self.last_name}"
         )
-    
-    @property
-    def current_course(self):
-            """Return the course for the student's current active enrollment."""
-            today = timezone.localdate()
-            enrollment = self.enrollments.filter(
-                status=Enrollment.ACTIVE,
-                semester__start_date__lte=today,
-                semester__end_date__gte=today,
-            ).select_related('course').first()
-            return enrollment.course if enrollment else None
-    
-    @property
-    def current_course_name(self):
-            course = self.current_course
-            return course.name if course else "—"
+
+
+class StudentStatusLog(models.Model):
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.PROTECT,
+        related_name="status_logs",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Student.STATUS_CHOICES,
+    )
+
+    date_changed = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    note = models.TextField(
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-date_changed"]
+
+    def __str__(self):
+        return (
+            f"{self.student} - "
+            f"{self.get_status_display()} - "
+            f"{self.date_changed}"
+        )
 
 
 class Enrollment(models.Model):
-
     ACTIVE = "ACTIVE"
     COMPLETED = "COMPLETED"
+    DEFERRED = "DEFERRED"
     WITHDRAWN = "WITHDRAWN"
 
     STATUS_CHOICES = [
         (ACTIVE, "Active"),
         (COMPLETED, "Completed"),
+        (DEFERRED, "Deferred"),
         (WITHDRAWN, "Withdrawn"),
     ]
 
     student = models.ForeignKey(
         Student,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="enrollments",
     )
 
-    course = models.ForeignKey(
-        Course,
+    program = models.ForeignKey(
+        Program,
         on_delete=models.PROTECT,
         related_name="enrollments",
     )
@@ -335,6 +432,8 @@ class Enrollment(models.Model):
         on_delete=models.PROTECT,
         related_name="enrollments",
     )
+
+    year_level = models.PositiveSmallIntegerField()
 
     status = models.CharField(
         max_length=20,
@@ -347,38 +446,62 @@ class Enrollment(models.Model):
     )
 
     class Meta:
-        ordering = ["-enrolled_at"]
+        ordering = ["-semester__academic_year__name", "-semester__number"]
 
         constraints = [
             models.UniqueConstraint(
-                fields=[
-                    "student",
-                    "semester",
-                ],
+                fields=["student", "semester"],
                 name="student_can_only_enroll_once_per_semester",
-            )
+            ),
         ]
+
+    @property
+    def program_semester_number(self):
+        return ((self.year_level - 1) * 2) + self.semester.number
+
+    def clean(self):
+        super().clean()
+
+        if self.program_id and self.year_level > self.program.duration_years:
+            raise ValidationError(
+                "Year level cannot exceed the program duration."
+            )
+
+        if self.program_id and self.student_id:
+            if self.student.program_id != self.program_id:
+                raise ValidationError(
+                    "Enrollment program must match the student's program."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return (
             f"{self.student} - "
-            f"{self.course} - "
-            f"{self.semester}"
+            f"{self.program} - "
+            f"Semester {self.program_semester_number}"
         )
 
 
 class StudentCharge(models.Model):
-
     student = models.ForeignKey(
         Student,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="charges",
     )
 
-    semester_fee = models.ForeignKey(
-        SemesterFee,
+    enrollment = models.ForeignKey(
+        Enrollment,
         on_delete=models.PROTECT,
         related_name="charges",
+    )
+
+    fee_item = models.ForeignKey(
+        FeeStructureItem,
+        on_delete=models.PROTECT,
+        related_name="student_charges",
     )
 
     amount = models.DecimalField(
@@ -393,17 +516,13 @@ class StudentCharge(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=[
-                    "student",
-                    "semester_fee",
-                ],
-                name="unique_student_semester_fee",
-            )
+                fields=["student", "enrollment", "fee_item"],
+                name="unique_student_enrollment_fee_item",
+            ),
         ]
 
 
 class Payment(models.Model):
-
     CASH = "CASH"
     BANK = "BANK"
     ECOCASH = "ECOCASH"
@@ -470,26 +589,17 @@ class Payment(models.Model):
 
 
 def student_balance(student, semester):
-
     charged = (
         student.charges
-        .filter(
-            semester_fee__semester=semester
-        )
-        .aggregate(
-            total=Sum("amount")
-        )["total"]
+        .filter(enrollment__semester=semester)
+        .aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )
 
     paid = (
         student.payments
-        .filter(
-            semester=semester
-        )
-        .aggregate(
-            total=Sum("amount")
-        )["total"]
+        .filter(semester=semester)
+        .aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )
 

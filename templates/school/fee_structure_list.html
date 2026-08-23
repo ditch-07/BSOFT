@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Fee Structures{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Fee Structures</h2>
+        <p class="text-muted mb-0">{{ semester }}</p>
+    </div>
+    <a href="{% url 'semester_list' %}" class="btn btn-secondary">Back to Semesters</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Program</th>
+                    <th>Year Level</th>
+                    <th>Total Fees</th>
+                    <th>Status</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.program.name }}</td>
+                    <td>Year {{ row.year_level }}</td>
+                    <td>
+                        {% if row.total is not None %}
+                            ${{ row.total|floatformat:2 }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.fee_structure %}
+                            <span class="badge text-bg-success">Configured</span>
+                        {% else %}
+                            <span class="badge text-bg-warning">Not configured</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if row.fee_structure %}
+                            <a href="{% url 'fee_structure_edit' row.fee_structure.pk %}"
+                               class="btn btn-sm btn-outline-primary">Edit</a>
+                        {% else %}
+                            <a href="{% url 'fee_structure_create' semester.pk %}?program={{ row.program.pk }}&year_level={{ row.year_level }}"
+                               class="btn btn-sm btn-primary">Configure</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">
+                        No active programs yet.
+                        <a href="{% url 'program_create' %}">Add one</a>.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
