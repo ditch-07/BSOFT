@@ -487,9 +487,11 @@ def student_create(request):
     student_form = StudentForm(request.POST or None)
 
     today = timezone.localdate()
+    # Offer the current semester AND any upcoming ones — registration
+    # routinely happens before a semester starts, not just during it.
     semesters = Semester.objects.filter(
-        start_date__lte=today, end_date__gte=today
-    ).select_related("academic_year")
+        end_date__gte=today
+    ).select_related("academic_year").order_by("start_date")
 
     year_level_choices = range(1, 7)  # widest possible; template caps by program JS-side
 

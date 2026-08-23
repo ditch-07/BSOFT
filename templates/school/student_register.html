@@ -66,12 +66,15 @@
                             <select name="semester" class="form-select" required>
                                 <option value="">Select semester</option>
                                 {% for semester in semesters %}
-                                    <option value="{{ semester.pk }}">{{ semester }}</option>
+                                    <option value="{{ semester.pk }}">
+                                        {{ semester }}
+                                        {% if semester.status == "ACTIVE" %}(current){% elif semester.status == "UPCOMING" %}(upcoming){% endif %}
+                                    </option>
                                 {% endfor %}
                             </select>
                             {% if not semesters %}
                                 <div class="text-danger small">
-                                    No active semester right now — <a href="{% url 'semester_create' %}">create one first</a>.
+                                    No current or upcoming semester exists — <a href="{% url 'semester_create' %}">create one first</a>.
                                 </div>
                             {% endif %}
                         </div>
