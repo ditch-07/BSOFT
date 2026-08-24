@@ -8,7 +8,6 @@
     <div>
         <h2 class="fw-bold">
             {{ student.first_name }}
-            {% if student.middle_name %}{{ student.middle_name }}{% endif %}
             {{ student.last_name }}
         </h2>
         <div class="text-muted">
@@ -48,6 +47,7 @@
                 <div class="mb-2"><strong>Date of Birth:</strong><br>{{ student.date_of_birth|default:"—" }}</div>
                 <div class="mb-2"><strong>Guardian:</strong><br>{{ student.guardian_name|default:"—" }}</div>
                 <div class="mb-2"><strong>Phone:</strong><br>{{ student.guardian_phone|default:"—" }}</div>
+                <div class="mb-2"><strong>National ID:</strong><br>{{ student.national_id|default:"—" }}</div>
             </div>
         </div>
 

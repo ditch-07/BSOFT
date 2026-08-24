@@ -302,9 +302,8 @@ class Student(models.Model):
         max_length=100,
     )
 
-    middle_name = models.CharField(
+    national_id = models.CharField(
         max_length=100,
-        blank=True,
     )
 
     last_name = models.CharField(
@@ -329,6 +328,11 @@ class Student(models.Model):
     guardian_phone = models.CharField(
         max_length=30,
         blank=True,
+    )
+
+    student_phone = models.CharField(
+        max_length=30,
+        blank=True ,
     )
 
     address = models.TextField(

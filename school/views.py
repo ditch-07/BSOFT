@@ -172,7 +172,6 @@ def student_search(request):
         .filter(
             Q(student_number__icontains=query)
             | Q(first_name__icontains=query)
-            | Q(middle_name__icontains=query)
             | Q(last_name__icontains=query)
         )
         .order_by("last_name", "first_name")[:10]
@@ -452,7 +451,6 @@ def student_list(request):
         students = students.filter(
             Q(student_number__icontains=query)
             | Q(first_name__icontains=query)
-            | Q(middle_name__icontains=query)
             | Q(last_name__icontains=query)
         )
 

@@ -120,7 +120,7 @@ class StudentForm(BootstrapFormMixin, forms.ModelForm):
         fields = [
             "student_number",
             "first_name",
-            "middle_name",
+            "national_id",
             "last_name",
             "date_of_birth",
             "gender",

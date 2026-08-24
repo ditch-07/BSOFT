@@ -135,7 +135,7 @@ class Command(BaseCommand):
                     student_number=student_number,
                     first_name=first,
                     last_name=last,
-                    middle_name=random.choice(['', 'M.', 'A.', 'K.', 'N.', 'P.']) if random.random() > 0.5 else '',
+                    national_id_=random.choice(['', 'M.', 'A.', 'K.', 'N.', 'P.']) if random.random() > 0.5 else '',
                     date_of_birth=random_date_of_birth(),
                     gender=random.choice(['MALE', 'FEMALE', 'OTHER', 'NOT_SPECIFIED']),
                     guardian_name=f"{random.choice(['Mr.', 'Mrs.', 'Ms.'])} {random_name()[0]} {random_name()[1]}" if random.random() > 0.3 else '',
