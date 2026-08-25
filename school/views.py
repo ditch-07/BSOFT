@@ -181,13 +181,14 @@ def student_search(request):
     today = timezone.localdate()
 
     for student in students:
+        # Changed from start_date__lte to end_date__gte to include upcoming semesters
         enrollment = (
             student.enrollments.filter(
                 status=Enrollment.ACTIVE,
-                semester__start_date__lte=today,
                 semester__end_date__gte=today,
             )
             .select_related("program", "semester", "semester__academic_year")
+            .order_by("semester__start_date")
             .first()
         )
         data.append(
@@ -201,7 +202,6 @@ def student_search(request):
         )
 
     return JsonResponse({"students": data})
-
 
 # ============================================================
 # ACADEMIC YEARS
@@ -696,10 +696,10 @@ def payment_create(request):
         enrollment = (
             student.enrollments.filter(
                 status=Enrollment.ACTIVE,
-                semester__start_date__lte=today,
                 semester__end_date__gte=today,
             )
             .select_related("program", "semester", "semester__academic_year")
+            .order_by("semester__start_date")
             .first()
         )
 
