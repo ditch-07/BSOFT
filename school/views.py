@@ -922,6 +922,10 @@ def bulk_progress_students(request, semester_id):
         if created:
             enrolled_count += 1
 
+            # Mark the old enrollment as completed
+            current.status = Enrollment.COMPLETED
+            current.save(update_fields=["status"])
+
             # Auto-assign charges from FeeStructure
             fee_structure = FeeStructure.objects.filter(
                 program=program,
