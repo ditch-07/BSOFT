@@ -208,8 +208,10 @@ def student_search(request):
 # ============================================================
 
 def academic_year_list(request):
-    years = AcademicYear.objects.all()
-    return render(request, "school/academic_year_list.html", {"years": years})
+    years = AcademicYear.objects.all().order_by("-name")
+    paginator = Paginator(years, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "school/academic_year_list.html", {"page_obj": page_obj})
 
 
 def academic_year_create(request):
@@ -242,8 +244,10 @@ def academic_year_create(request):
 # ============================================================
 
 def semester_list(request):
-    semesters = Semester.objects.select_related("academic_year")
-    return render(request, "school/semester_list.html", {"semesters": semesters})
+    semesters = Semester.objects.select_related("academic_year").order_by("-academic_year__name", "number")
+    paginator = Paginator(semesters, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "school/semester_list.html", {"page_obj": page_obj})
 
 
 def semester_create(request):
@@ -294,8 +298,10 @@ def semester_edit(request, pk):
 # ============================================================
 
 def program_list(request):
-    programs = Program.objects.all()
-    return render(request, "school/program_list.html", {"programs": programs})
+    programs = Program.objects.all().order_by("name")
+    paginator = Paginator(programs, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "school/program_list.html", {"page_obj": page_obj})
 
 
 def program_create(request):
@@ -365,6 +371,10 @@ def fee_structure_list(request, semester_id):
                 }
             )
 
+    # Paginate rows
+    paginator = Paginator(rows, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
     all_programs = Program.objects.filter(active=True)
 
     selected_program = None
@@ -376,7 +386,7 @@ def fee_structure_list(request, semester_id):
         "school/fee_structure_list.html",
         {
             "semester": semester,
-            "rows": rows,
+            "page_obj": page_obj,
             "program_filter": program_filter,
             "year_level_filter": year_level_filter,
             "all_programs": all_programs,

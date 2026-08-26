@@ -65,59 +65,81 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <table class="table table-hover align-middle">
-            <thead>
-                <tr>
-                    <th>Program</th>
-                    <th>Year Level</th>
-                    <th>Total Fees</th>
-                    <th>Status</th>
-                    <th class="text-end">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr>
-                    <td>{{ row.program.name }}</td>
-                    <td>Year {{ row.year_level }}</td>
-                    <td>
-                        {% if row.total is not None %}
-                            ${{ row.total|floatformat:2 }}
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if row.fee_structure %}
-                            <span class="badge text-bg-success">Configured</span>
-                        {% else %}
-                            <span class="badge text-bg-warning">Not configured</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-end">
-                        {% if row.fee_structure %}
-                            <a href="{% url 'fee_structure_edit' row.fee_structure.pk %}?program={{ program_filter }}&year_level={{ year_level_filter }}"
-                               class="btn btn-sm btn-outline-primary">Edit</a>
-                        {% else %}
-                            <a href="{% url 'fee_structure_create' semester.pk %}?program={{ row.program.pk }}&year_level={{ row.year_level }}&filter_program={{ program_filter }}&filter_year_level={{ year_level_filter }}"
-                               class="btn btn-sm btn-primary">Configure</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center text-muted">
-                        No fee structures found.
-                        {% if program_filter or year_level_filter %}
-                            <a href="{% url 'fee_structure_list' semester.pk %}" class="text-decoration-none">Clear filters</a> to see all.
-                        {% else %}
-                            <a href="{% url 'program_create' %}" class="text-decoration-none">Add a program</a> to get started.
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Program</th>
+                        <th>Year Level</th>
+                        <th>Total Fees</th>
+                        <th>Status</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in page_obj %}
+                    <tr>
+                        <td>{{ row.program.name }}</td>
+                        <td>Year {{ row.year_level }}</td>
+                        <td>
+                            {% if row.total is not None %}
+                                ${{ row.total|floatformat:2 }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.fee_structure %}
+                                <span class="badge text-bg-success">Configured</span>
+                            {% else %}
+                                <span class="badge text-bg-warning">Not configured</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if row.fee_structure %}
+                                <a href="{% url 'fee_structure_edit' row.fee_structure.pk %}?program={{ program_filter }}&year_level={{ year_level_filter }}"
+                                   class="btn btn-sm btn-outline-primary">Edit</a>
+                            {% else %}
+                                <a href="{% url 'fee_structure_create' semester.pk %}?program={{ row.program.pk }}&year_level={{ row.year_level }}&filter_program={{ program_filter }}&filter_year_level={{ year_level_filter }}"
+                                   class="btn btn-sm btn-primary">Configure</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            No fee structures found.
+                            {% if program_filter or year_level_filter %}
+                                <a href="{% url 'fee_structure_list' semester.pk %}" class="text-decoration-none">Clear filters</a> to see all.
+                            {% else %}
+                                <a href="{% url 'program_create' %}" class="text-decoration-none">Add a program</a> to get started.
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if program_filter %}&program={{ program_filter }}{% endif %}{% if year_level_filter %}&year_level={{ year_level_filter }}{% endif %}">Previous</a>
+                    </li>
+                {% endif %}
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                </li>
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if program_filter %}&program={{ program_filter }}{% endif %}{% if year_level_filter %}&year_level={{ year_level_filter }}{% endif %}">Next</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
