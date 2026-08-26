@@ -50,6 +50,7 @@ urlpatterns = [
 
     # Payments
     path("payments/new/", views.payment_create, name="payment_create"),
+    path("financial-records/", views.financial_records, name="financial_records"),
     path(
     "semesters/<int:semester_id>/progress/",
     views.bulk_progress_students,

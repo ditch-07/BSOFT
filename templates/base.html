@@ -93,6 +93,15 @@
             </div>
 
             <hr>
+            <div class="sidebar-heading mb-1">Reports</div>
+            <div class="nav flex-column gap-1">
+                <a href="{% url 'financial_records' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
+                    Financial Records
+                </a>
+            </div>
+
+            <hr>
             <div class="sidebar-heading mb-1">System</div>
             <div class="nav flex-column gap-1">
                 <a class="sidebar-link" href="/admin/">Administration</a>

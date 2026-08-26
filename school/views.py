@@ -161,6 +161,98 @@ def dashboard(request):
     return render(request, "school/dashboard.html", context)
 
 
+# ============================================================
+# FINANCIAL RECORDS
+# ============================================================
+
+def financial_records(request):
+    """
+    Institution-wide financial records showing aggregate charged/paid/outstanding
+    per semester, grouped by academic year.
+    """
+    from itertools import groupby
+
+    year_filter = request.GET.get("academic_year", "")
+    current_year = AcademicYear.objects.filter(is_current=True).first()
+    default_year_id = str(current_year.pk) if current_year else ""
+    selected_year_id = year_filter or default_year_id
+
+    semesters_qs = Semester.objects.select_related("academic_year").order_by(
+        "-academic_year__name", "number"
+    )
+
+    if selected_year_id:
+        semesters_qs = semesters_qs.filter(academic_year_id=selected_year_id)
+
+    semester_data = []
+    for sem in semesters_qs:
+        total_charged = StudentCharge.objects.filter(
+            fee_item__fee_structure__semester=sem
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+        total_paid = Payment.objects.filter(
+            semester=sem
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+        outstanding = total_charged - total_paid
+        collection_rate = (total_paid / total_charged * 100) if total_charged > 0 else 0
+
+        semester_data.append({
+            "semester": sem,
+            "academic_year": sem.academic_year,
+            "total_charged": total_charged,
+            "total_paid": total_paid,
+            "outstanding": outstanding,
+            "collection_rate": collection_rate,
+        })
+
+    year_groups = {}
+    for item in semester_data:
+        year = item["academic_year"]
+        if year not in year_groups:
+            year_groups[year] = []
+        year_groups[year].append(item)
+
+    year_totals = {}
+    for year, semesters in year_groups.items():
+        charged = sum(s["total_charged"] for s in semesters)
+        paid = sum(s["total_paid"] for s in semesters)
+        year_totals[year] = {
+            "charged": charged,
+            "paid": paid,
+            "outstanding": sum(s["outstanding"] for s in semesters),
+            "collection_rate": (paid / charged * 100) if charged > 0 else 0,
+        }
+
+    all_years = AcademicYear.objects.all().order_by("-name")
+
+    selected_year = None
+    if selected_year_id:
+        selected_year = all_years.filter(pk=selected_year_id).first()
+
+    grand_total_charged = sum(t["charged"] for t in year_totals.values())
+    grand_total_paid = sum(t["paid"] for t in year_totals.values())
+    grand_total_outstanding = sum(t["outstanding"] for t in year_totals.values())
+    grand_collection_rate = (
+        (grand_total_paid / grand_total_charged * 100) if grand_total_charged > 0 else 0
+    )
+
+    context = {
+        "year_groups": year_groups,
+        "year_totals": year_totals,
+        "all_years": all_years,
+        "selected_year_id": selected_year_id,
+        "selected_year": selected_year,
+        "current_year": current_year,
+        "grand_total_charged": grand_total_charged,
+        "grand_total_paid": grand_total_paid,
+        "grand_total_outstanding": grand_total_outstanding,
+        "grand_collection_rate": grand_collection_rate,
+        "today": timezone.localdate(),
+    }
+    return render(request, "school/financial_records.html", context)
+
+
 def student_search(request):
     query = request.GET.get("q", "").strip()
 

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Financial Records{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="fw-bold mb-1">Financial Records</h2>
+        <p class="text-muted mb-0">Institution-wide revenue overview by academic year and semester</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'financial_records' %}" class="btn btn-outline-secondary">Clear Filter</a>
+    </div>
+</div>
+
+<!-- Academic Year Filter -->
+<form method="get" class="mb-4 print-hidden">
+    <div class="row g-3 align-items-end">
+        <div class="col-auto">
+            <label for="academic_year" class="form-label fw-semibold">Academic Year</label>
+            <select name="academic_year" id="academic_year" class="form-select" onchange="this.form.submit()">
+                <option value="">All Years</option>
+                {% for y in all_years %}
+                <option value="{{ y.pk }}" {% if selected_year_id == y.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ y.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <span class="form-text d-block">
+                {% if selected_year %}
+                    Showing: {{ selected_year.name }}
+                {% else %}
+                    Showing all academic years
+                {% endif %}
+            </span>
+        </div>
+    </div>
+</form>
+
+<!-- Print-only header -->
+<div class="print-only mb-4 text-center">
+    <h2 class="fw-bold mb-1">NRZ Student Management</h2>
+    <h3 class="text-muted mb-2">Financial Records Report</h3>
+    <p class="text-muted small">
+        Generated: {{ today|date:"F d, Y" }}
+        {% if selected_year %} | Filter: {{ selected_year.name }}{% endif %}
+    </p>
+    <hr>
+</div>
+
+{% if year_groups %}
+    {% for year, semesters in year_groups.items %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">{{ year.name }} - Annual Summary</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Semester</th>
+                            <th class="text-end">Charged</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Outstanding</th>
+                            <th class="text-end">Collection %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in semesters %}
+                        <tr>
+                            <td>{{ s.semester }}</td>
+                            <td class="text-end fw-bold">${{ s.total_charged|floatformat:2 }}</td>
+                            <td class="text-end text-success fw-bold">${{ s.total_paid|floatformat:2 }}</td>
+                            <td class="text-end {% if s.outstanding > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
+                                ${{ s.outstanding|floatformat:2 }}
+                            </td>
+                            <td class="text-end">{{ s.collection_rate|floatformat:1 }}%</td>
+                        </tr>
+                        {% endfor %}
+                        <!-- Year total row -->
+                        <tr class="table-secondary fw-bold">
+                            <td>{{ year.name }} TOTAL</td>
+                            <td class="text-end">${{ year_totals.year.charged|floatformat:2 }}</td>
+                            <td class="text-end text-success">${{ year_totals.year.paid|floatformat:2 }}</td>
+                            <td class="text-end text-danger">${{ year_totals.year.outstanding|floatformat:2 }}</td>
+                            <td class="text-end">{{ year_totals.year.collection_rate|floatformat:1 }}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Grand totals -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Grand Totals</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="text-muted small">Total Charged</div>
+                    <div class="fw-bold fs-4">${{ grand_total_charged|floatformat:2 }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Total Paid</div>
+                    <div class="fw-bold fs-4 text-success">${{ grand_total_paid|floatformat:2 }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Total Outstanding</div>
+                    <div class="fw-bold fs-4 text-danger">${{ grand_total_outstanding|floatformat:2 }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Overall Collection</div>
+                    <div class="fw-bold fs-4">{{ grand_collection_rate|floatformat:1 }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+            <p class="text-muted mb-0">No semesters found{% if selected_year_id %} for the selected academic year{% endif %}.</p>
+        </div>
+    </div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .navbar, 
+    aside, 
+    .sidebar, 
+    .btn, 
+    .form-select, 
+    form[method="get"], 
+    .print-hidden,
+    .card-header { display: none !important; }
+    .container-fluid { display: block; }
+    main { width: 100%; margin: 0; padding: 0; }
+    .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; page-break-inside: avoid; margin-bottom: 1rem !important; }
+    .table { font-size: 0.85rem; }
+    .table-secondary { background: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .bg-light { background: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .bg-dark { background: #212529 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .text-white { color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .text-success { color: #198754 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .text-danger { color: #dc3545 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .card-body { padding: 0.5rem !important; }
+    .print-only { display: block !important; }
+}
+
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
+
+/* Ensure table fits on page */
+@media print {
+    .table-responsive { overflow: visible; }
+    .table { width: 100%; }
+}
+</style>
+{% endblock %}
