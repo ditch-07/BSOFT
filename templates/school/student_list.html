@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load school_tags %}
 
 {% block title %}Students{% endblock %}
 
@@ -11,8 +12,8 @@
 
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
-        <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-6">
+        <form method="get" class="row g-2 align-items-end" id="studentFilterForm">
+            <div class="col-md-4">
                 <label class="form-label small text-muted mb-1">Search</label>
                 <input
                     type="text"
@@ -22,29 +23,61 @@
                     value="{{ query }}"
                 >
             </div>
-            <div class="col-md-4">
-                <label class="form-label small text-muted mb-1">Status</label>
-                <select name="status" class="form-select">
-                    <option value="">All statuses</option>
-                    {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
-                            {{ label }}
-                        </option>
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Program</label>
+                <select name="program" class="form-select">
+                    <option value="">All Programs ({{ program_counts|length }})</option>
+                    {% for p in program_counts %}
+                    <option value="{{ p.program__id }}" {% if program_filter == p.program__id|stringformat:"s" %}selected{% endif %}>
+                        {{ p.program__name }} <span class="text-muted small">({{ p.count }})</span>
+                    </option>
                     {% endfor %}
                 </select>
             </div>
-            {% if program_filter %}
-                <input type="hidden" name="program" value="{{ program_filter }}">
-            {% endif %}
             <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-primary w-100">Filter</button>
+                <label class="form-label small text-muted mb-1">Intake Year</label>
+                <select name="intake_year" class="form-select">
+                    <option value="">All Years ({{ intake_year_counts|length }})</option>
+                    {% for y in intake_year_counts %}
+                    <option value="{{ y.intake_year__id }}" {% if intake_year_filter == y.intake_year__id|stringformat:"s" %}selected{% endif %}>
+                        {{ y.intake_year__name }} <span class="text-muted small">({{ y.count }})</span>
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                        {{ label }} <span class="text-muted small">({{ status_counts|get_item:value|default:0 }})</span>
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small text-muted mb-1">Current</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="current_semester" value="1" id="id_current_semester" {% if current_semester_only %}checked{% endif %}>
+                    <label class="form-check-label small" for="id_current_semester">Active semester</label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-outline-primary">Filter</button>
             </div>
         </form>
-        {% if program_filter %}
-        <div class="mt-2">
+
+        {% if query or status_filter or program_filter or intake_year_filter or current_semester_only %}
+        <div class="mt-3">
             <span class="badge text-bg-secondary">
-                Filtered by program
-                <a href="?q={{ query }}&status={{ status_filter }}" class="text-white ms-1">&times;</a>
+                Filters active:
+                {% if query %} Search: "{{ query }}"{% endif %}
+                {% if program_filter %} · Program{% endif %}
+                {% if intake_year_filter %} · Intake Year{% endif %}
+                {% if status_filter %} · Status{% endif %}
+                {% if current_semester_only %} · Current Semester{% endif %}
+                <a href="{% url 'student_list' %}" class="text-white ms-2 text-decoration-none">&times; Clear</a>
             </span>
         </div>
         {% endif %}
@@ -60,6 +93,7 @@
                         <th>Student Number</th>
                         <th>Name</th>
                         <th>Program</th>
+                        <th>Intake Year</th>
                         <th>Current Semester</th>
                         <th>Status</th>
                         <th class="text-end">Actions</th>
@@ -75,6 +109,7 @@
                             </a>
                         </td>
                         <td>{{ student.program.name }}</td>
+                        <td>{{ student.intake_year.name }}</td>
                         <td>
                             {% with enrollment=student.enrollments.all|first %}
                                 {% if enrollment %}
@@ -106,9 +141,9 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
+                        <td colspan="7" class="text-center text-muted py-4">
                             No students found.
-                            {% if not query and not status_filter %}
+                            {% if not query and not status_filter and not program_filter and not intake_year_filter %}
                                 <a href="{% url 'student_create' %}">Register the first one</a>.
                             {% endif %}
                         </td>
@@ -123,15 +158,15 @@
             <ul class="pagination justify-content-center mb-0">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}">Previous</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&intake_year={{ intake_year_filter }}&current_semester={{ current_semester_only }}">Previous</a>
                     </li>
                 {% endif %}
                 <li class="page-item disabled">
-                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} students)</span>
                 </li>
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}">Next</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&intake_year={{ intake_year_filter }}&current_semester={{ current_semester_only }}">Next</a>
                     </li>
                 {% endif %}
             </ul>

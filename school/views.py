@@ -600,6 +600,8 @@ def student_list(request):
     query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "")
     program_filter = request.GET.get("program", "")
+    intake_year_filter = request.GET.get("intake_year", "")
+    current_semester_only = request.GET.get("current_semester", "")
 
     students = Student.objects.all()
 
@@ -616,7 +618,33 @@ def student_list(request):
     if status_filter:
         students = students.filter(status=status_filter.upper())
 
-    students = students.select_related("program").prefetch_related(
+    if intake_year_filter:
+        students = students.filter(intake_year_id=intake_year_filter)
+
+    if current_semester_only:
+        today = timezone.localdate()
+        current_sem = Semester.objects.filter(
+            start_date__lte=today, end_date__gte=today
+        ).first()
+        if current_sem:
+            students = students.filter(enrollments__semester=current_sem)
+
+    # Get programs with student counts for filter dropdown
+    program_counts = Student.objects.values("program__id", "program__name").annotate(
+        count=Count("id")
+    ).order_by("program__name")
+
+    # Get intake years with student counts
+    intake_year_counts = Student.objects.values("intake_year__id", "intake_year__name").annotate(
+        count=Count("id")
+    ).order_by("-intake_year__name")
+
+    # Get status counts
+    status_counts = Student.objects.values("status").annotate(
+        count=Count("id")
+    ).order_by("status")
+
+    students = students.select_related("program", "intake_year").prefetch_related(
         "enrollments__semester"
     )
 
@@ -631,7 +659,12 @@ def student_list(request):
             "query": query,
             "status_filter": status_filter,
             "program_filter": program_filter,
+            "intake_year_filter": intake_year_filter,
+            "current_semester_only": current_semester_only,
             "status_choices": Student.STATUS_CHOICES,
+            "program_counts": program_counts,
+            "intake_year_counts": intake_year_counts,
+            "status_counts": {s["status"]: s["count"] for s in status_counts},
         },
     )
 
