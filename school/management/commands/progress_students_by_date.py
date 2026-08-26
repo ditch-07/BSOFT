@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Sum
@@ -12,6 +12,7 @@ from school.models import (
     Payment,
 )
 from school.views import create_academic_year_enrollments
+from school.utils.time_utils import get_current_date   # 👈 new import
 
 
 class Command(BaseCommand):
@@ -23,10 +24,25 @@ class Command(BaseCommand):
             action='store_true',
             help='Show what would be done without making changes.',
         )
+        parser.add_argument(
+            '--date',
+            type=str,
+            help='Override "today" date (YYYY-MM-DD). If not provided, uses system date (or frozen time if enabled).',
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
-        today = timezone.localdate()
+        date_str = options.get('date')
+
+        # Determine the "today" date
+        if date_str:
+            today = datetime.strptime(date_str, '%Y-%m-%d').date()
+            self.stdout.write(self.style.WARNING(f"Using explicit date: {today}"))
+        else:
+            today = get_current_date()   # uses frozen time if enabled, else real system date
+            if hasattr(today, 'tzinfo'):  # ensure it's a date, not datetime
+                today = today.date()
+            self.stdout.write(f"Using date from system/frozen: {today}")
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN - No changes will be made"))
@@ -165,5 +181,4 @@ class Command(BaseCommand):
                 self.stdout.write(f"  {s['student'].student_number} - {s['student'].first_name} {s['student'].last_name} "
                                  f"({s['semester']}): ${s['balance']}")
 
-        # Store last run info (could be cached or stored in a model)
         self.stdout.write(self.style.SUCCESS(f"\nAuto-progression completed at {timezone.now()}"))
