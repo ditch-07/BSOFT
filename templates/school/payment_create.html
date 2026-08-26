@@ -47,43 +47,35 @@
 
                     <hr>
 
-                    <!-- Semester Selector Dropdown -->
-                    {% if enrollment_data %}
-                    <div class="mb-4">
-                        <label for="semesterSelect" class="form-label fw-semibold">Select Semester <span class="text-danger">*</span></label>
-                        <select 
-                            id="semesterSelect" 
-                            class="form-select form-select-lg"
-                            onchange="this.form.submit()"
-                            name="semester"
-                            required
-                        >
-                            <option value="" disabled {% if not enrollment %}selected{% endif %}>
-                                — Choose a semester to pay for —
-                            </option>
-                            {% for ed in enrollment_data %}
-                            <option value="{{ ed.enrollment.semester.pk }}" 
-                                    {% if ed.is_selected %}selected{% endif %}
-                                    data-charged="{{ ed.charged }}"
-                                    data-paid="{{ ed.paid }}"
-                                    data-balance="{{ ed.balance }}">
-                                {{ ed.enrollment.semester }} 
-                                — Year {{ ed.enrollment.year_level }} 
-                                ({{ ed.enrollment.program.code }})
-                                {% if ed.is_current %} • Current{% endif %}
-                                {% if ed.enrollment.status == "COMPLETED" %} • Completed{% endif %}
-                                — Balance: ${{ ed.balance|floatformat:2 }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text mt-1">
-                            Default is the current semester. Select a different semester to record payment for past or upcoming terms.
+                    <!-- Semester info display (read-only when not editing) -->
+                    {% if enrollment %}
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Current Semester</label>
+                            <div class="form-control-plaintext fw-bold">{{ enrollment.semester }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Program / Year</label>
+                            <div class="form-control-plaintext">{{ enrollment.program.code }} — Year {{ enrollment.year_level }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Outstanding Balance</label>
+                            <div class="form-control-plaintext fw-bold fs-5 {% if balance > 0 %}text-danger{% elif balance == 0 %}text-success{% else %}text-primary{% endif %}">
+                                {% if balance > 0 %}${{ balance|floatformat:2 }}
+                                {% elif balance == 0 %}Paid in full
+                                {% else %}Credit ${{ balance|floatformat:2|slice:"1:" }}{% endif %}
+                            </div>
                         </div>
                     </div>
-                    {% else %}
-                    <div class="alert alert-warning mb-0">
-                        This student has no enrollments with financial activity (charges or payments).
-                        A payment can't be linked without one.
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Charged</label>
+                            <div class="form-control-plaintext fw-bold">${{ charged|floatformat:2 }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Paid</label>
+                            <div class="form-control-plaintext fw-bold text-success">${{ paid|floatformat:2 }}</div>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
@@ -102,44 +94,26 @@
                     <div class="card-body p-4">
                         <h5 class="mb-3">Payment Details</h5>
                         
-                        <!-- Semester & Balance Summary -->
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Semester</label>
-                                <div class="form-control-plaintext fw-bold">
-                                    {{ enrollment.semester }}
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Program / Year</label>
-                                <div class="form-control-plaintext">
-                                    {{ enrollment.program.code }} — Year {{ enrollment.year_level }}
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Outstanding Balance</label>
-                                <div class="form-control-plaintext fw-bold fs-5 {% if balance > 0 %}text-danger{% elif balance == 0 %}text-success{% else %}text-primary{% endif %}">
-                                    {% if balance > 0 %}
-                                        ${{ balance|floatformat:2 }}
-                                    {% elif balance == 0 %}
-                                        Paid in full
-                                    {% else %}
-                                        Credit ${{ balance|floatformat:2|slice:"1:" }}
-                                    {% endif %}
-                                </div>
+                        <!-- Semester Selector Dropdown (inside form) -->
+                        {% if enrollment_data %}
+                        <div class="mb-4">
+                            <label for="{{ form.semester.id_for_label }}" class="form-label fw-semibold">
+                                {{ form.semester.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.semester }}
+                            {% if form.semester.errors %}
+                                <div class="text-danger small">{{ form.semester.errors }}</div>
+                            {% endif %}
+                            <div class="form-text mt-1">
+                                Default is the current semester. Select a different semester to record payment for past or upcoming terms.
                             </div>
                         </div>
-
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Charged</label>
-                                <div class="form-control-plaintext fw-bold">${{ charged|floatformat:2 }}</div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold">Paid</label>
-                                <div class="form-control-plaintext fw-bold text-success">${{ paid|floatformat:2 }}</div>
-                            </div>
+                        {% else %}
+                        <div class="alert alert-warning mb-0">
+                            This student has no enrollments with financial activity (charges or payments).
+                            A payment can't be linked without one.
                         </div>
+                        {% endif %}
 
                         <hr>
 
@@ -221,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Auto-submit form when semester changes (to reload with correct balance)
-    const semesterSelect = document.getElementById('semesterSelect');
+    const semesterSelect = document.getElementById('{{ form.semester.id_for_label }}');
     if (semesterSelect) {
         semesterSelect.addEventListener('change', function() {
             if (this.value) {
