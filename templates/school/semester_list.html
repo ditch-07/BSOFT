@@ -11,7 +11,7 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <table class="table table-hover">
+        <table class="table table-hover align-middle">
             <thead>
                 <tr>
                     <th>Academic Year</th>
@@ -39,6 +39,12 @@
                         {% endif %}
                     </td>
                     <td class="text-end">
+                        <form action="{% url 'bulk_progress_students' semester.pk %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Progress all active students from {{ semester }} to the next semester?');">
+                                Progress
+                            </button>
+                        </form>
                         <a href="{% url 'fee_structure_list' semester.pk %}" class="btn btn-sm btn-outline-secondary">
                             Fees
                         </a>

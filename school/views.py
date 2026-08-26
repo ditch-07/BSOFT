@@ -749,3 +749,91 @@ def payment_create(request):
             "balance": balance,
         },
     )
+
+@transaction.atomic
+def bulk_progress_students(request, semester_id):
+    """
+    Progresses all active students from a source semester into the next upcoming semester.
+    """
+    source_semester = get_object_or_404(Semester, pk=semester_id)
+    
+    # Find the next chronological semester
+    target_semester = (
+        Semester.objects.filter(start_date__gt=source_semester.start_date)
+        .order_by("start_date")
+        .first()
+    )
+
+    if not target_semester:
+        messages.error(request, "No upcoming semester found to progress students into.")
+        return redirect("semester_list")
+
+    # Get active enrollments from the source semester
+    active_enrollments = Enrollment.objects.filter(
+        semester=source_semester,
+        status=Enrollment.ACTIVE,
+        student__status=Student.ACTIVE,
+    ).select_related("student", "program")
+
+    enrolled_count = 0
+    completed_count = 0
+
+    for current in active_enrollments:
+        student = current.student
+        program = current.program
+
+        # Calculate next year level
+        if source_semester.number == 1:
+            next_year_level = current.year_level
+        else:
+            next_year_level = current.year_level + 1
+
+        # Check if student completed the program
+        if next_year_level > program.duration_years:
+            student.status = Student.COMPLETED
+            student.save(update_fields=["status"])
+            
+            StudentStatusLog.objects.create(
+                student=student,
+                status=Student.COMPLETED,
+                note=f"Completed {program.name} after {source_semester}.",
+            )
+            completed_count += 1
+            continue
+
+        # Create new Enrollment
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=student,
+            semester=target_semester,
+            defaults={
+                "program": program,
+                "year_level": next_year_level,
+                "status": Enrollment.ACTIVE,
+            },
+        )
+
+        if created:
+            enrolled_count += 1
+
+            # Auto-assign charges from FeeStructure
+            fee_structure = FeeStructure.objects.filter(
+                program=program,
+                year_level=next_year_level,
+                semester=target_semester,
+            ).prefetch_related("items").first()
+
+            if fee_structure:
+                for item in fee_structure.items.all():
+                    StudentCharge.objects.get_or_create(
+                        student=student,
+                        enrollment=enrollment,
+                        fee_item=item,
+                        defaults={"amount": item.amount},
+                    )
+
+    messages.success(
+        request,
+        f"Progressed {enrolled_count} students to {target_semester}. "
+        f"{completed_count} students marked as completed/graduated."
+    )
+    return redirect("semester_list")
