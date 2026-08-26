@@ -10,80 +10,84 @@
     <a href="{% url 'student_create' %}" class="btn btn-primary">+ Register Student</a>
 </div>
 
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-2 align-items-end" id="studentFilterForm">
-            <div class="col-md-4">
-                <label class="form-label small text-muted mb-1">Search</label>
-                <input
-                    type="text"
-                    name="q"
-                    class="form-control"
-                    placeholder="Student number or name..."
-                    value="{{ query }}"
-                >
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-muted mb-1">Program</label>
-                <select name="program" class="form-select">
-                    <option value="">All Programs ({{ program_counts|length }})</option>
-                    {% for p in program_counts %}
-                    <option value="{{ p.program__id }}" {% if program_filter == p.program__id|stringformat:"s" %}selected{% endif %}>
-                        {{ p.program__name }} <span class="text-muted small">({{ p.count }})</span>
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">Intake Year</label>
-                <select name="intake_year" class="form-select">
-                    <option value="">All Years ({{ intake_year_counts|length }})</option>
-                    {% for y in intake_year_counts %}
-                    <option value="{{ y.intake_year__id }}" {% if intake_year_filter == y.intake_year__id|stringformat:"s" %}selected{% endif %}>
-                        {{ y.intake_year__name }} <span class="text-muted small">({{ y.count }})</span>
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small text-muted mb-1">Status</label>
-                <select name="status" class="form-select">
-                    <option value="">All Statuses</option>
-                    {% for value, label in status_choices %}
-                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
-                        {{ label }} <span class="text-muted small">({{ status_counts|get_item:value|default:0 }})</span>
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-1">
-                <label class="form-label small text-muted mb-1">Current</label>
-                <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" name="current_semester" value="1" id="id_current_semester" {% if current_semester_only %}checked{% endif %}>
-                    <label class="form-check-label small" for="id_current_semester">Active semester</label>
-                </div>
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
-            </div>
-        </form>
-
-        {% if query or status_filter or program_filter or intake_year_filter or current_semester_only %}
-        <div class="mt-3">
-            <span class="badge text-bg-secondary">
-                Filters active:
-                {% if query %} Search: "{{ query }}"{% endif %}
-                {% if program_filter %} · Program{% endif %}
-                {% if intake_year_filter %} · Intake Year{% endif %}
-                {% if status_filter %} · Status{% endif %}
-                {% if current_semester_only %} · Current Semester{% endif %}
-                <a href="{% url 'student_list' %}" class="text-white ms-2 text-decoration-none">&times; Clear</a>
-            </span>
+<!-- 1. Top Summary Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <h3 class="mb-0">{{ total_students }}</h3>
+            <small class="text-muted">Total Students</small>
         </div>
-        {% endif %}
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <h3 class="mb-0">{{ filtered_count }}</h3>
+            <small class="text-muted">Filtered Results</small>
+        </div>
     </div>
 </div>
 
+<!-- 2. Compact Search + Filters (One row) -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-center">
+            <!-- Search bar (full width) -->
+            <div class="col-md-4">
+                <input type="text" name="q" class="form-control" placeholder="Search by number or name..." value="{{ query }}">
+            </div>
+            
+            <!-- Intake Year & Status Dropdowns (Compact) -->
+            <div class="col-md-2">
+                <select name="intake_year" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Years</option>
+                    {% for y in intake_year_counts %}
+                    <option value="{{ y.intake_year__id }}" {% if intake_year_filter == y.intake_year__id|stringformat:"s" %}selected{% endif %}>
+                        {{ y.intake_year__name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Current Semester Checkbox -->
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="current_semester" value="1" id="id_current_semester" {% if current_semester_only %}checked{% endif %} onchange="this.form.submit()">
+                    <label class="form-check-label" for="id_current_semester">Current Sem</label>
+                </div>
+            </div>
+            
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary w-100">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 3. Trade/Program Filter Pills (The "Value" you asked for) -->
+<div class="mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'student_list' %}" class="btn btn-outline-primary {% if not program_filter %}active{% endif %}">
+            All Programs ({{ total_students }})
+        </a>
+        {% for p in program_counts %}
+        <a href="?program={{ p.program__id }}&q={{ query }}&intake_year={{ intake_year_filter }}&status={{ status_filter }}" 
+           class="btn btn-outline-primary {% if program_filter == p.program__id|stringformat:"s" %}active{% endif %}">
+            {{ p.program__name }} ({{ p.count }})
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 4. Table (Keep logic as is) -->
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">

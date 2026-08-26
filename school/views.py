@@ -37,6 +37,58 @@ from .models import (
 )
 
 
+def create_academic_year_enrollments(student, start_semester, start_year_level):
+    """
+    Create enrollments and charges for all semesters in the academic year
+    of `start_semester` from that semester onward.
+    """
+    academic_year = start_semester.academic_year
+    semesters = Semester.objects.filter(
+        academic_year=academic_year,
+        number__gte=start_semester.number
+    ).order_by('number')
+
+    enrollments_created = 0
+    current_year_level = start_year_level
+
+    for sem in semesters:
+        # Cap year level at program duration
+        if current_year_level > student.program.duration_years:
+            break
+
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=student,
+            semester=sem,
+            defaults={
+                'program': student.program,
+                'year_level': current_year_level,
+                'status': Enrollment.ACTIVE,
+            }
+        )
+        if created:
+            enrollments_created += 1
+
+        fee_structure = FeeStructure.objects.filter(
+            program=student.program,
+            year_level=current_year_level,
+            semester=sem
+        ).prefetch_related('items').first()
+
+        if fee_structure:
+            for item in fee_structure.items.all():
+                StudentCharge.objects.get_or_create(
+                    student=student,
+                    enrollment=enrollment,
+                    fee_item=item,
+                    defaults={'amount': item.amount}
+                )
+
+        # Year level stays the same for all semesters in the same academic year.
+        # It only increments when moving to the next academic year (handled elsewhere).
+
+    return enrollments_created
+
+
 # ============================================================
 # DASHBOARD
 # ============================================================
@@ -604,7 +656,7 @@ def student_list(request):
     current_semester_only = request.GET.get("current_semester", "")
 
     students = Student.objects.all()
-
+    total_students = Student.objects.count() 
     if query:
         students = students.filter(
             Q(student_number__icontains=query)
@@ -647,14 +699,16 @@ def student_list(request):
     students = students.select_related("program", "intake_year").prefetch_related(
         "enrollments__semester"
     )
-
-    paginator = Paginator(students, 20)
+    filtered_count = students.count()
+    paginator = Paginator(students, 10)
     page_obj = paginator.get_page(request.GET.get("page"))
 
     return render(
         request,
         "school/student_list.html",
         {
+            "total_students": total_students,
+            "filtered_count": filtered_count,
             "page_obj": page_obj,
             "query": query,
             "status_filter": status_filter,
@@ -739,27 +793,12 @@ def student_create(request):
                 enrollment.student = student
                 enrollment.save()
 
-                fee_structure = FeeStructure.objects.filter(
-                    program=student.program,
-                    year_level=year_level,
-                    semester=semester,
-                ).prefetch_related("items").first()
-
-                if fee_structure:
-                    for item in fee_structure.items.all():
-                        StudentCharge.objects.create(
-                            student=student,
-                            enrollment=enrollment,
-                            fee_item=item,
-                            amount=item.amount,
-                        )
-                else:
-                    messages.warning(
-                        request,
-                        "Student registered, but no fee structure is set up yet for "
-                        f"{student.program} Year {year_level} in {semester}. "
-                        "The student currently shows a $0 balance until fees are configured.",
-                    )
+                # Create enrollments and charges for all semesters in the academic year
+                create_academic_year_enrollments(
+                    student=student,
+                    start_semester=semester,
+                    start_year_level=year_level
+                )
 
                 StudentStatusLog.objects.create(
                     student=student,
@@ -1117,21 +1156,12 @@ def bulk_progress_students(request, semester_id):
             current.status = Enrollment.COMPLETED
             current.save(update_fields=["status"])
 
-            # Auto-assign charges from FeeStructure
-            fee_structure = FeeStructure.objects.filter(
-                program=program,
-                year_level=next_year_level,
-                semester=target_semester,
-            ).prefetch_related("items").first()
-
-            if fee_structure:
-                for item in fee_structure.items.all():
-                    StudentCharge.objects.get_or_create(
-                        student=student,
-                        enrollment=enrollment,
-                        fee_item=item,
-                        defaults={"amount": item.amount},
-                    )
+            # Create enrollments and charges for all semesters in the target academic year
+            create_academic_year_enrollments(
+                student=student,
+                start_semester=target_semester,
+                start_year_level=next_year_level
+            )
 
     messages.success(
         request,

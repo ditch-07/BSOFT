@@ -18,6 +18,7 @@ from school.models import (
     StudentCharge,
     Payment,
 )
+from school.views import create_academic_year_enrollments
 
 try:
     from faker import Faker
@@ -167,33 +168,21 @@ class Command(BaseCommand):
                     status=Student.ACTIVE,
                 )
 
-                # Create enrollment
-                enrollment = Enrollment.objects.create(
+                # Create enrollments and charges for all semesters in the academic year
+                create_academic_year_enrollments(
                     student=student,
-                    program=program,
-                    semester=semester,
-                    year_level=1,
-                    status=Enrollment.ACTIVE,
+                    start_semester=semester,
+                    start_year_level=1
                 )
+                self.stdout.write(f"  {student_number}: Created academic year enrollments")
 
-                # Create charges from fee structure
-                fee_structure = FeeStructure.objects.filter(
-                    program=program, year_level=1, semester=semester
-                ).prefetch_related('items').first()
-
+                # Create payment based on distribution (using Semester 1 charges)
+                # Get total charged for Semester 1
+                sem1_enrollment = student.enrollments.filter(semester=semester).first()
                 total_charged = Decimal('0')
-                if fee_structure:
-                    for item in fee_structure.items.all():
-                        StudentCharge.objects.create(
-                            student=student,
-                            enrollment=enrollment,
-                            fee_item=item,
-                            amount=item.amount,
-                        )
-                        total_charged += item.amount
-                        self.stdout.write(f"  {student_number}: Charged {item.name} = ${item.amount}")
+                if sem1_enrollment:
+                    total_charged = student.charges.filter(enrollment=sem1_enrollment).aggregate(total=Sum('amount'))['total'] or Decimal('0')
 
-                # Create payment based on distribution
                 payment_percent = get_payment_percent()
                 if payment_percent > 0 and total_charged > 0:
                     amount = (total_charged * Decimal(str(payment_percent))).quantize(Decimal('0.01'))
