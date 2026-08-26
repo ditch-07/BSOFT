@@ -324,16 +324,33 @@ def program_create(request):
 
 def fee_structure_list(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
+
+    program_filter = request.GET.get("program", "")
+    year_level_filter = request.GET.get("year_level", "")
+
     programs = Program.objects.filter(active=True)
+
+    if program_filter:
+        programs = programs.filter(pk=program_filter)
 
     existing = {
         (fs.program_id, fs.year_level): fs
         for fs in FeeStructure.objects.filter(semester=semester).prefetch_related("items")
     }
 
+    max_year_level = 6
+    if programs.exists():
+        max_year_level = max(p.duration_years for p in programs)
+
+    # Build year_level_choices for template (1 to max_year_level)
+    year_level_choices = range(1, max_year_level + 1)
+
     rows = []
     for program in programs:
-        for year_level in range(1, program.duration_years + 1):
+        year_levels = range(1, program.duration_years + 1)
+        if year_level_filter and year_level_filter.isdigit():
+            year_levels = [int(year_level_filter)]
+        for year_level in year_levels:
             fs = existing.get((program.id, year_level))
             rows.append(
                 {
@@ -348,12 +365,24 @@ def fee_structure_list(request, semester_id):
                 }
             )
 
+    all_programs = Program.objects.filter(active=True)
+
+    selected_program = None
+    if program_filter:
+        selected_program = all_programs.filter(pk=program_filter).first()
+
     return render(
         request,
         "school/fee_structure_list.html",
         {
             "semester": semester,
             "rows": rows,
+            "program_filter": program_filter,
+            "year_level_filter": year_level_filter,
+            "all_programs": all_programs,
+            "max_year_level": max_year_level,
+            "year_level_choices": year_level_choices,
+            "selected_program": selected_program,
         },
     )
 
@@ -363,13 +392,13 @@ def fee_structure_create(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
     fee_structure = FeeStructure(semester=semester)
 
+    filter_program = request.GET.get("filter_program", request.GET.get("program", ""))
+    filter_year_level = request.GET.get("filter_year_level", request.GET.get("year_level", ""))
+
     if request.method == "POST":
         form = FeeStructureForm(request.POST, instance=fee_structure)
         formset = FeeStructureItemFormSet(request.POST, instance=fee_structure)
 
-        # We need the FeeStructure to exist (even unsaved-but-valid) before
-        # the formset can validate against it, so validate the parent form
-        # first without committing.
         if form.is_valid():
             fee_structure = form.save(commit=False)
             fee_structure.semester = semester
@@ -380,7 +409,15 @@ def fee_structure_create(request, semester_id):
                 formset.instance = fee_structure
                 formset.save()
                 messages.success(request, "Fee structure saved successfully.")
-                return redirect("fee_structure_list", semester_id=semester.pk)
+                redirect_url = reverse("fee_structure_list", args=[semester.pk])
+                params = []
+                if filter_program:
+                    params.append(f"program={filter_program}")
+                if filter_year_level:
+                    params.append(f"year_level={filter_year_level}")
+                if params:
+                    redirect_url += "?" + "&".join(params)
+                return redirect(redirect_url)
     else:
         initial = {}
         if request.GET.get("program"):
@@ -400,6 +437,9 @@ def fee_structure_create(request, semester_id):
             "semester": semester,
             "title": f"Configure Fees — {semester}",
             "back_url_name": "fee_structure_list",
+            "back_semester_id": semester.pk,
+            "filter_program": filter_program,
+            "filter_year_level": filter_year_level,
         },
     )
 
@@ -409,6 +449,9 @@ def fee_structure_edit(request, pk):
     fee_structure = get_object_or_404(FeeStructure, pk=pk)
     semester = fee_structure.semester
 
+    filter_program = request.GET.get("program", "")
+    filter_year_level = request.GET.get("year_level", "")
+
     if request.method == "POST":
         form = FeeStructureForm(request.POST, instance=fee_structure)
         formset = FeeStructureItemFormSet(request.POST, instance=fee_structure)
@@ -417,7 +460,15 @@ def fee_structure_edit(request, pk):
             form.save()
             formset.save()
             messages.success(request, "Fee structure updated successfully.")
-            return redirect("fee_structure_list", semester_id=semester.pk)
+            redirect_url = reverse("fee_structure_list", args=[semester.pk])
+            params = []
+            if filter_program:
+                params.append(f"program={filter_program}")
+            if filter_year_level:
+                params.append(f"year_level={filter_year_level}")
+            if params:
+                redirect_url += "?" + "&".join(params)
+            return redirect(redirect_url)
     else:
         form = FeeStructureForm(instance=fee_structure)
         formset = FeeStructureItemFormSet(instance=fee_structure)
@@ -432,6 +483,9 @@ def fee_structure_edit(request, pk):
             "title": f"Edit Fees — {fee_structure.program} Year {fee_structure.year_level}",
             "submit_label": "Update Fees",
             "back_url_name": "fee_structure_list",
+            "back_semester_id": semester.pk,
+            "filter_program": filter_program,
+            "filter_year_level": filter_year_level,
         },
     )
 

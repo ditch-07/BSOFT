@@ -81,7 +81,7 @@
             </div>
 
             <div class="d-flex gap-2 justify-content-end">
-                <a href="{% url back_url_name semester.pk %}" class="btn btn-secondary">Cancel</a>
+                <a href="{% url back_url_name back_semester_id %}{% if filter_program or filter_year_level %}?program={{ filter_program }}&year_level={{ filter_year_level }}{% endif %}" class="btn btn-secondary">Cancel</a>
                 <button type="submit" class="btn btn-primary px-4">
                     {{ submit_label|default:"Save Fee Structure" }}
                 </button>
