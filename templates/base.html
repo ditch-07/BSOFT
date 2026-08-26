@@ -107,6 +107,17 @@
                 <a class="sidebar-link" href="/admin/">Administration</a>
             </div>
 
+            {% if ENABLE_TIME_OVERRIDE %}
+            <hr>
+            <div class="sidebar-heading mb-1">Testing</div>
+            <div class="nav flex-column gap-1">
+                <a href="{% url 'time_override' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'time_override' %}active{% endif %}">
+                    ⏰ Time Override
+                </a>
+            </div>
+            {% endif %}
+
         </aside>
 
         <main class="col-md-10 p-4">
