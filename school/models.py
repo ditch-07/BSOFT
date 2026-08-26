@@ -130,22 +130,22 @@ class Semester(models.Model):
 
     @property
     def is_active(self):
-        from django.utils import timezone
+        from school.utils.time_utils import get_current_date
 
-        today = timezone.localdate()
+        today = get_current_date()
         return self.start_date <= today <= self.end_date
 
     @property
     def is_upcoming(self):
-        from django.utils import timezone
+        from school.utils.time_utils import get_current_date
 
-        return self.start_date > timezone.localdate()
+        return self.start_date > get_current_date()
 
     @property
     def is_completed(self):
-        from django.utils import timezone
+        from school.utils.time_utils import get_current_date
 
-        return self.end_date < timezone.localdate()
+        return self.end_date < get_current_date()
 
     @property
     def status(self):
