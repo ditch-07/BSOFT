@@ -384,29 +384,6 @@ def academic_year_list(request):
     return render(request, "school/academic_year_list.html", {"page_obj": page_obj})
 
 
-def academic_year_create(request):
-    form = AcademicYearForm(request.POST or None)
-
-    if form.is_valid():
-        year = form.save()
-
-        if year.is_current:
-            AcademicYear.objects.exclude(pk=year.pk).update(is_current=False)
-
-        messages.success(request, "Academic year created successfully.")
-        return redirect("academic_year_list")
-
-    return render(
-        request,
-        "school/form.html",
-        {
-            "form": form,
-            "title": "Create Academic Year",
-            "back_url": "academic_year_list",
-        },
-    )
-
-
 # ============================================================
 # SEMESTERS
 # (Fee structures are configured separately — see below — since a

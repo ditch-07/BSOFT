@@ -9,7 +9,6 @@ urlpatterns = [
 
     # Academic years
     path("academic-years/", views.academic_year_list, name="academic_year_list"),
-    path("academic-years/new/", views.academic_year_create, name="academic_year_create"),
 
     # Semesters
     path("semesters/", views.semester_list, name="semester_list"),
