@@ -116,3 +116,38 @@
 </div>
 
 {% endblock %}
+
+{% block extra_js %}
+{% if form.name.field.widget.input_type == 'select' %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const yearSelect = document.getElementById('id_name');
+        const startDate = document.getElementById('id_start_date');
+        const endDate = document.getElementById('id_end_date');
+        const isCurrent = document.getElementById('id_is_current');
+
+        function updateDates() {
+            const year = yearSelect.value;
+            if (year) {
+                // Only auto-fill if dates are empty (new record)
+                if (!startDate.value) {
+                    startDate.value = `${year}-01-01`;
+                }
+                if (!endDate.value) {
+                    endDate.value = `${year}-12-31`;
+                }
+                // Auto-check "Is current" if year matches current year
+                if (isCurrent) {
+                    const currentYear = new Date().getFullYear().toString();
+                    isCurrent.checked = (year === currentYear);
+                }
+            }
+        }
+
+        yearSelect.addEventListener('change', updateDates);
+        // If initial value already set, fill dates
+        updateDates();
+    });
+</script>
+{% endif %}
+{% endblock %}

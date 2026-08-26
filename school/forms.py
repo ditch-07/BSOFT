@@ -1,5 +1,6 @@
 from django import forms
 from django.forms import inlineformset_factory
+from django.utils import timezone
 
 from .models import (
     AcademicYear,
@@ -31,6 +32,17 @@ class BootstrapFormMixin:
 # ============================================================
 
 class AcademicYearForm(BootstrapFormMixin, forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Generate year choices: 10 years back and 10 years forward
+        current_year = timezone.now().year
+        years = range(current_year - 10, current_year + 11)
+        choices = [(str(y), str(y)) for y in years]
+        self.fields['name'].widget = forms.Select(choices=choices)
+        # Set initial to current year for new records
+        if not self.instance.pk:
+            self.fields['name'].initial = str(current_year)
+
     class Meta:
         model = AcademicYear
         fields = ["name", "start_date", "end_date", "is_current"]
