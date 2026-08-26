@@ -164,14 +164,20 @@ class EnrollmentForm(BootstrapFormMixin, forms.ModelForm):
 
 class PaymentForm(BootstrapFormMixin, forms.ModelForm):
     """
-    Semester is deliberately excluded — payment_create() always derives it
-    from the student's active enrollment and sets it on the instance
-    before saving, so it should never be a field the admin picks by hand.
+    Semester field allows selecting which semester to pay for.
+    The queryset should be filtered to the student's enrollments in the view.
     """
+    semester = forms.ModelChoiceField(
+        queryset=Semester.objects.none(),
+        required=True,
+        empty_label="Select semester...",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
 
     class Meta:
         model = Payment
         fields = [
+            "semester",
             "receipt_number",
             "amount",
             "payment_date",
@@ -183,3 +189,9 @@ class PaymentForm(BootstrapFormMixin, forms.ModelForm):
             "payment_date": forms.DateInput(attrs={"type": "date"}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        semester_queryset = kwargs.pop("semester_queryset", None)
+        super().__init__(*args, **kwargs)
+        if semester_queryset is not None:
+            self.fields["semester"].queryset = semester_queryset

@@ -701,7 +701,8 @@ def student_detail(request, pk):
     
     if current_year:
         enrollments = student.enrollments.filter(
-            semester__academic_year=current_year, status=Enrollment.ACTIVE
+            semester__academic_year=current_year, 
+            status__in=[Enrollment.ACTIVE, Enrollment.COMPLETED]
         ).select_related("semester", "program").order_by("semester__number")
         
         for enrollment in enrollments:
@@ -792,57 +793,121 @@ def student_status_change(request, pk):
 @transaction.atomic
 def payment_create(request):
     student_id = request.GET.get("student") or request.POST.get("student_id")
+    selected_semester_id = request.GET.get("semester") or request.POST.get("semester")
 
     student = None
-    enrollment = None
+    enrollments = []
+    selected_enrollment = None
     today = timezone.localdate()
 
     if student_id:
         student = get_object_or_404(Student, pk=student_id, status=Student.ACTIVE)
 
-        enrollment = (
-            student.enrollments.filter(
-                status=Enrollment.ACTIVE,
-                semester__end_date__gte=today,
-            )
-            .select_related("program", "semester", "semester__academic_year")
-            .order_by("semester__start_date")
-            .first()
-        )
+        # Get all enrollments with financial data (charges, payments, or fee structure)
+        enrollments_qs = student.enrollments.select_related(
+            "program", "semester", "semester__academic_year"
+        ).order_by("-semester__academic_year__name", "-semester__number")
 
-    form = PaymentForm(request.POST or None)
+        # Filter to enrollments that have charges, payments, OR a fee structure configured
+        for e in enrollments_qs:
+            has_charges = StudentCharge.objects.filter(enrollment=e).exists()
+            has_payments = Payment.objects.filter(student=student, semester=e.semester).exists()
+            has_fee_structure = FeeStructure.objects.filter(
+                program=e.program,
+                year_level=e.year_level,
+                semester=e.semester
+            ).exists()
+            if has_charges or has_payments or has_fee_structure:
+                enrollments.append(e)
+
+        # Determine default semester (current active enrollment)
+        default_enrollment = None
+        for e in enrollments:
+            if e.status == Enrollment.ACTIVE and e.semester.end_date >= today:
+                default_enrollment = e
+                break
+        
+        # Fallback: first active enrollment, then first enrollment
+        if not default_enrollment:
+            for e in enrollments:
+                if e.status == Enrollment.ACTIVE:
+                    default_enrollment = e
+                    break
+        if not default_enrollment and enrollments:
+            default_enrollment = enrollments[0]
+
+        # Use selected semester if provided, otherwise default
+        if selected_semester_id:
+            try:
+                selected_enrollment = next(
+                    e for e in enrollments if str(e.semester.pk) == selected_semester_id
+                )
+            except StopIteration:
+                selected_enrollment = default_enrollment
+        else:
+            selected_enrollment = default_enrollment
+
+    form = PaymentForm(
+        request.POST or None,
+        semester_queryset=Semester.objects.filter(
+            pk__in=[e.semester.pk for e in enrollments]
+        ) if enrollments else Semester.objects.none(),
+    )
 
     if request.method == "POST":
         if not student:
             messages.error(request, "Please select a student first.")
-        elif not enrollment:
-            messages.error(request, "This student has no active enrollment.")
+        elif not selected_enrollment:
+            messages.error(request, "Please select a semester to record payment for.")
         elif form.is_valid():
             payment = form.save(commit=False)
             payment.student = student
-            payment.semester = enrollment.semester
+            payment.semester = form.cleaned_data["semester"]
             payment.save()
 
             messages.success(request, "Payment recorded successfully.")
-            return redirect(f"{reverse('payment_create')}?student={student.pk}")
+            return redirect(f"{reverse('payment_create')}?student={student.pk}&semester={payment.semester.pk}")
 
-    charged = paid = 0
-    balance = None
-
-    if student and enrollment:
+    charged = paid = balance = 0
+    if selected_enrollment:
         charged = (
             student.charges.filter(
-                fee_item__fee_structure__semester=enrollment.semester
+                fee_item__fee_structure__semester=selected_enrollment.semester
             ).aggregate(total=Sum("amount"))["total"]
             or 0
         )
         paid = (
-            student.payments.filter(semester=enrollment.semester).aggregate(
+            student.payments.filter(semester=selected_enrollment.semester).aggregate(
                 total=Sum("amount")
             )["total"]
             or 0
         )
         balance = charged - paid
+
+    # Build enrollment data for template
+    enrollment_data = []
+    for e in enrollments:
+        e_charged = (
+            student.charges.filter(
+                fee_item__fee_structure__semester=e.semester
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+        e_paid = (
+            student.payments.filter(semester=e.semester).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or 0
+        )
+        e_balance = e_charged - e_paid
+        enrollment_data.append({
+            "enrollment": e,
+            "charged": e_charged,
+            "paid": e_paid,
+            "balance": e_balance,
+            "is_selected": selected_enrollment and e.semester.pk == selected_enrollment.semester.pk,
+            "is_current": e.status == Enrollment.ACTIVE and e.semester.end_date >= today,
+        })
 
     return render(
         request,
@@ -850,7 +915,8 @@ def payment_create(request):
         {
             "form": form,
             "student": student,
-            "enrollment": enrollment,
+            "enrollment": selected_enrollment,
+            "enrollment_data": enrollment_data,
             "charged": charged,
             "paid": paid,
             "balance": balance,
