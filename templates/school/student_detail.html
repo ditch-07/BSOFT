@@ -34,6 +34,99 @@
     </div>
 </div>
 
+<!-- Academic Year Balance Summary Card -->
+<div class="card border-0 shadow-sm mb-4 {% if current_year %}{% else %}border-warning{% endif %}">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            {% if current_year %}
+                {{ current_year.name }} — Academic Year Balance
+            {% else %}
+                Academic Year Balance <span class="badge text-bg-warning ms-2">No Current Year Set</span>
+            {% endif %}
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if current_year and semester_balances %}
+            <div class="row g-3 mb-3">
+                {% for sb in semester_balances %}
+                <div class="col-md-6">
+                    <div class="card border-{% if sb.is_projected %}warning{% elif sb.balance > 0 %}danger{% else %}success{% endif %} h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">{{ sb.semester }}</h6>
+                                {% if sb.is_projected %}
+                                    <span class="badge text-bg-warning small">Projected</span>
+                                {% endif %}
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="small text-muted">Charged</div>
+                                    <div class="fw-bold">${{ sb.charged|floatformat:2 }}</div>
+                                    {% if sb.projected_charged > 0 and sb.charged == 0 %}
+                                    <div class="small text-warning">({{ sb.projected_charged|floatformat:2 }} projected)</div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted">Paid</div>
+                                    <div class="fw-bold text-success">${{ sb.paid|floatformat:2 }}</div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted">Balance</div>
+                                    <div class="fw-bold fs-5 
+                                        {% if sb.balance > 0 %}text-danger
+                                        {% elif sb.balance < 0 %}text-primary
+                                        {% else %}text-success{% endif %}">
+                                        ${{ sb.balance|floatformat:2 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <hr class="my-3">
+            
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted">Total Academic Year Balance:</span>
+                </div>
+                <div class="fw-bold fs-3 
+                    {% if total_year_balance > 0 %}text-danger
+                    {% elif total_year_balance < 0 %}text-primary
+                    {% else %}text-success{% endif %}">
+                    ${{ total_year_balance|floatformat:2 }}
+                </div>
+            </div>
+            
+            {% if total_year_balance > 0 %}
+            <div class="mt-2 small text-danger">
+                <i class="bi bi-exclamation-triangle"></i> Amount outstanding for {{ current_year.name }}
+            </div>
+            {% elif total_year_balance < 0 %}
+            <div class="mt-2 small text-primary">
+                <i class="bi bi-cash-coin"></i> Credit balance of ${{ total_year_balance|floatformat:2|slice:"1:" }}
+            </div>
+            {% else %}
+            <div class="mt-2 small text-success">
+                <i class="bi bi-check-circle"></i> Fully paid for {{ current_year.name }}
+            </div>
+            {% endif %}
+            
+        {% elif current_year %}
+            <div class="text-center py-4 text-muted">
+                No active enrollments in {{ current_year.name }}
+            </div>
+        {% else %}
+            <div class="text-center py-4 text-muted">
+                No current academic year configured. 
+                <a href="{% url 'academic_year_list' %}" class="text-decoration-none">Set one up</a>.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="row g-4">
 
     <div class="col-lg-4">
@@ -50,25 +143,12 @@
                 <div class="mb-2"><strong>National ID:</strong><br>{{ student.national_id|default:"—" }}</div>
             </div>
         </div>
-
-        <div class="card border-0 shadow-sm mt-4">
-            <div class="card-body">
-                <h6 class="text-muted mb-1">Owed This Academic Year</h6>
-                {% if total_owed_this_year > 0 %}
-                    <div class="fs-4 fw-bold text-danger">${{ total_owed_this_year|floatformat:2 }}</div>
-                {% elif total_owed_this_year == 0 %}
-                    <div class="fs-4 fw-bold text-success">$0.00 — Fully Paid</div>
-                {% else %}
-                    <div class="fs-4 fw-bold text-primary">Credit ${{ total_owed_this_year|floatformat:2|slice:"1:" }}</div>
-                {% endif %}
-            </div>
-        </div>
     </div>
 
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body">
-                <h5>Fee Tracking</h5>
+                <h5>All Semesters — Fee Tracking</h5>
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>

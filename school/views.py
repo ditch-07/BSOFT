@@ -694,14 +694,55 @@ def student_detail(request, pk):
 
     payments = student.payments.select_related("semester")
 
-    # Total still owed this academic year, for ACTIVE enrollments only
-    total_owed_this_year = Decimal("0")
+    # Current academic year semester balances (with projection for unconfigured semesters)
     current_year = AcademicYear.objects.filter(is_current=True).first()
+    semester_balances = []
+    total_year_balance = Decimal("0")
+    
     if current_year:
-        for enrollment in student.enrollments.filter(
+        enrollments = student.enrollments.filter(
             semester__academic_year=current_year, status=Enrollment.ACTIVE
-        ):
-            total_owed_this_year += student_balance(student, enrollment.semester)
+        ).select_related("semester", "program").order_by("semester__number")
+        
+        for enrollment in enrollments:
+            semester = enrollment.semester
+            
+            # Actual charges (from StudentCharge)
+            charged = student.charges.filter(
+                enrollment__semester=semester
+            ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+            
+            paid = student.payments.filter(semester=semester).aggregate(
+                total=Sum("amount")
+            )["total"] or Decimal("0")
+            
+            # Projected charges (from FeeStructure) if no charges exist
+            projected_charged = Decimal("0")
+            if charged == 0:
+                fee_structure = FeeStructure.objects.filter(
+                    program=enrollment.program,
+                    year_level=enrollment.year_level,
+                    semester=semester
+                ).prefetch_related("items").first()
+                if fee_structure:
+                    projected_charged = sum(
+                        (item.amount for item in fee_structure.items.all()), 
+                        Decimal("0")
+                    )
+            
+            # Use projected if no actual charges
+            effective_charged = charged if charged > 0 else projected_charged
+            effective_balance = effective_charged - paid
+            
+            semester_balances.append({
+                "semester": semester,
+                "charged": charged,
+                "projected_charged": projected_charged,
+                "paid": paid,
+                "balance": effective_balance,
+                "is_projected": charged == 0 and projected_charged > 0,
+            })
+            total_year_balance += effective_balance
 
     return render(
         request,
@@ -710,7 +751,9 @@ def student_detail(request, pk):
             "student": student,
             "balances": balances,
             "payments": payments,
-            "total_owed_this_year": total_owed_this_year,
+            "semester_balances": semester_balances,
+            "total_year_balance": total_year_balance,
+            "current_year": current_year,
         },
     )
 
