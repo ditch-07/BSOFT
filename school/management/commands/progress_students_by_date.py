@@ -163,7 +163,10 @@ class Command(BaseCommand):
                             total_progressed += 1
                             self.stdout.write(f"    {student.student_number}: Progressed to {target_semester} (Year {next_year_level})")
                         else:
-                            self.stdout.write(f"    {student.student_number}: Already enrolled in {target_semester}")
+                            # Already enrolled in target – mark source as completed
+                            current.status = Enrollment.COMPLETED
+                            current.save(update_fields=['status'])
+                            self.stdout.write(f"    {student.student_number}: Already enrolled in {target_semester} (marked old as completed)")
                 else:
                     total_progressed += 1
                     self.stdout.write(f"    {student.student_number}: Would progress to {target_semester} (Year {next_year_level})")

@@ -115,7 +115,7 @@
                         <td>{{ student.program.name }}</td>
                         <td>{{ student.intake_year.name }}</td>
                         <td>
-                            {% with enrollment=student.get_current_enrollment %}
+                            {% with enrollment=student.get_current_enrollment today %}
                                 {% if enrollment %}
                                     {{ enrollment.semester }}
                                     {% if enrollment.semester.end_date < today %}

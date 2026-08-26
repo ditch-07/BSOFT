@@ -681,6 +681,8 @@ def student_list(request):
     intake_year_filter = request.GET.get("intake_year", "")
     current_semester_only = request.GET.get("current_semester", "")
 
+    today = get_current_date()
+
     students = Student.objects.all()
     total_students = Student.objects.count() 
     if query:
@@ -700,7 +702,6 @@ def student_list(request):
         students = students.filter(intake_year_id=intake_year_filter)
 
     if current_semester_only:
-        today = get_current_date()
         current_sem = Semester.objects.filter(
             start_date__lte=today, end_date__gte=today
         ).first()
@@ -745,6 +746,7 @@ def student_list(request):
             "program_counts": program_counts,
             "intake_year_counts": intake_year_counts,
             "status_counts": {s["status"]: s["count"] for s in status_counts},
+            "today": today,
         },
     )
 

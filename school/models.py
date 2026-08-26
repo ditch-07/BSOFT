@@ -408,9 +408,9 @@ class Student(models.Model):
         3. Most recent past semester (latest end_date)
         Returns None if no active enrollments exist.
         """
-        from django.utils import timezone
+        from school.utils.time_utils import get_current_date
         
-        today = today or timezone.localdate()
+        today = today or get_current_date()
         
         # Get all active enrollments with semester data
         enrollments = self.enrollments.filter(
