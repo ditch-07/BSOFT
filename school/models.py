@@ -374,6 +374,37 @@ class Student(models.Model):
             f"{self.last_name}"
         )
 
+    def get_current_enrollment(self, today=None):
+        """
+        Determine the student's current enrollment based on priority:
+        1. Currently active semester (today between start_date and end_date)
+        2. Next upcoming semester (earliest start_date in the future)
+        3. Most recent past semester (latest end_date)
+        Returns None if no active enrollments exist.
+        """
+        from django.utils import timezone
+        
+        today = today or timezone.localdate()
+        
+        # Get all active enrollments with semester data
+        enrollments = self.enrollments.filter(
+            status=Enrollment.ACTIVE
+        ).select_related('semester')
+        
+        # 1. Currently active
+        for e in enrollments:
+            if e.semester.start_date <= today <= e.semester.end_date:
+                return e
+        
+        # 2. Future (next upcoming) - earliest start_date first
+        future = enrollments.filter(semester__start_date__gt=today).order_by('semester__start_date')
+        if future.exists():
+            return future.first()
+        
+        # 3. Past (most recent) - latest end_date first
+        past = enrollments.order_by('-semester__end_date')
+        return past.first() if past.exists() else None
+
 
 class StudentStatusLog(models.Model):
     student = models.ForeignKey(

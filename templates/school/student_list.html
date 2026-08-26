@@ -115,9 +115,12 @@
                         <td>{{ student.program.name }}</td>
                         <td>{{ student.intake_year.name }}</td>
                         <td>
-                            {% with enrollment=student.enrollments.all|first %}
+                            {% with enrollment=student.get_current_enrollment %}
                                 {% if enrollment %}
                                     {{ enrollment.semester }}
+                                    {% if enrollment.semester.end_date < today %}
+                                        <span class="badge text-bg-secondary small ms-1">Completed</span>
+                                    {% endif %}
                                 {% else %}
                                     <span class="text-muted">Not enrolled</span>
                                 {% endif %}

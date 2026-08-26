@@ -191,6 +191,28 @@ def dashboard(request):
                 if (program.id, year_level) not in configured_pairs:
                     unconfigured_fee_count += 1
 
+    # --- Auto-progression status ---
+    # Find semesters that have ended but may have students not yet progressed
+    ended_semesters = Semester.objects.filter(end_date__lt=today).order_by('-end_date')
+    auto_progress_eligible = 0
+    auto_progress_details = []
+    for sem in ended_semesters:
+        # Count active students in this ended semester
+        active_count = Enrollment.objects.filter(
+            semester=sem,
+            status=Enrollment.ACTIVE,
+            student__status=Student.ACTIVE,
+        ).count()
+        if active_count > 0:
+            auto_progress_eligible += active_count
+            # Check next semester
+            next_sem = Semester.objects.filter(start_date__gt=sem.start_date).order_by('start_date').first()
+            auto_progress_details.append({
+                'semester': sem,
+                'next_semester': next_sem,
+                'active_students': active_count,
+            })
+
     context = {
         "total_students": total_students,
         "current_year": current_year,
@@ -209,6 +231,8 @@ def dashboard(request):
         "fee_setup_semester": fee_setup_semester,
         "unconfigured_fee_count": unconfigured_fee_count,
         "today": today,
+        "auto_progress_eligible": auto_progress_eligible,
+        "auto_progress_details": auto_progress_details,
     }
     return render(request, "school/dashboard.html", context)
 
@@ -984,19 +1008,14 @@ def payment_create(request):
             if has_charges or has_payments or has_fee_structure:
                 enrollments.append(e)
 
-        # Determine default semester (current active enrollment)
-        default_enrollment = None
-        for e in enrollments:
-            if e.status == Enrollment.ACTIVE and e.semester.end_date >= today:
-                default_enrollment = e
-                break
+        # Determine default semester using the new get_current_enrollment method
+        default_enrollment = student.get_current_enrollment(today)
         
-        # Fallback: first active enrollment, then first enrollment
-        if not default_enrollment:
-            for e in enrollments:
-                if e.status == Enrollment.ACTIVE:
-                    default_enrollment = e
-                    break
+        # Ensure the default enrollment is in our filtered list (has financial data)
+        if default_enrollment and default_enrollment not in enrollments:
+            default_enrollment = None
+        
+        # Fallback: first enrollment from filtered list
         if not default_enrollment and enrollments:
             default_enrollment = enrollments[0]
 
