@@ -76,3 +76,9 @@ STATICFILES_DIRS = [
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Time Override for Testing
+# When True, the application will use a frozen datetime stored in the database
+# instead of real time. This is useful for testing semester logic, payment due dates, etc.
+# The frozen time is set via the Time Override UI at /time-override/
+ENABLE_TIME_OVERRIDE = True  # Set to False in production

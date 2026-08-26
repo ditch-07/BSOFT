@@ -51,6 +51,10 @@ urlpatterns = [
     # Payments
     path("payments/new/", views.payment_create, name="payment_create"),
     path("financial-records/", views.financial_records, name="financial_records"),
+
+    # Time Override (Testing)
+    path("time-override/", views.time_override_view, name="time_override"),
+
     path(
     "semesters/<int:semester_id>/progress/",
     views.bulk_progress_students,

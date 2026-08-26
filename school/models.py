@@ -3,6 +3,32 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q, Sum
+from django.utils import timezone
+
+
+class TimeOverride(models.Model):
+    """
+    Stores a fixed datetime to use instead of real time.
+    There should be only one row (singleton).
+    """
+    frozen_datetime = models.DateTimeField(null=True, blank=True)
+
+    @classmethod
+    def get_frozen_time(cls):
+        """Returns the frozen datetime, or None if not set."""
+        obj = cls.objects.first()
+        return obj.frozen_datetime if obj else None
+
+    @classmethod
+    def set_frozen_time(cls, dt):
+        """Set the frozen datetime (or None to clear)."""
+        obj, created = cls.objects.get_or_create(pk=1)
+        obj.frozen_datetime = dt
+        obj.save()
+
+    class Meta:
+        verbose_name = "Time Override"
+        verbose_name_plural = "Time Overrides"
 
 
 class AcademicYear(models.Model):

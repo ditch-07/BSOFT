@@ -10,6 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from .utils.time_utils import get_current_datetime, get_current_date
+
 from .forms import (
     AcademicYearForm,
     SemesterForm,
@@ -94,7 +96,7 @@ def create_academic_year_enrollments(student, start_semester, start_year_level):
 # ============================================================
 
 def dashboard(request):
-    today = timezone.localdate()
+    today = get_current_date()
 
     # --- Current academic period ---
     current_year = AcademicYear.objects.filter(is_current=True).first()
@@ -324,7 +326,7 @@ def financial_records(request):
         "grand_total_paid": grand_total_paid,
         "grand_total_outstanding": grand_total_outstanding,
         "grand_collection_rate": grand_collection_rate,
-        "today": timezone.localdate(),
+        "today": get_current_date(),
     }
     return render(request, "school/financial_records.html", context)
 
@@ -346,7 +348,7 @@ def student_search(request):
     )
 
     data = []
-    today = timezone.localdate()
+    today = get_current_date()
 
     for student in students:
         # Changed from start_date__lte to end_date__gte to include upcoming semesters
@@ -698,7 +700,7 @@ def student_list(request):
         students = students.filter(intake_year_id=intake_year_filter)
 
     if current_semester_only:
-        today = timezone.localdate()
+        today = get_current_date()
         current_sem = Semester.objects.filter(
             start_date__lte=today, end_date__gte=today
         ).first()
@@ -751,7 +753,7 @@ def student_list(request):
 def student_create(request):
     student_form = StudentForm(request.POST or None)
 
-    today = timezone.localdate()
+    today = get_current_date()
     # Offer the current semester AND any upcoming ones — registration
     # routinely happens before a semester starts, not just during it.
     semesters = Semester.objects.filter(
@@ -986,7 +988,7 @@ def payment_create(request):
     student = None
     enrollments = []
     selected_enrollment = None
-    today = timezone.localdate()
+    today = get_current_date()
 
     if student_id:
         student = get_object_or_404(Student, pk=student_id, status=Student.ACTIVE)
@@ -1188,3 +1190,47 @@ def bulk_progress_students(request, semester_id):
         f"{completed_count} students marked as completed/graduated."
     )
     return redirect("semester_list")
+
+
+def time_override_view(request):
+    """
+    View to set or clear the time override for testing.
+    Only accessible when ENABLE_TIME_OVERRIDE is True.
+    """
+    from django.conf import settings
+    
+    if not getattr(settings, 'ENABLE_TIME_OVERRIDE', False):
+        return redirect('dashboard')
+    
+    from school.models import TimeOverride
+    from django.contrib import messages
+    from django.utils import timezone
+    from datetime import datetime
+    
+    frozen = TimeOverride.get_frozen_time()
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'set':
+            dt_str = request.POST.get('frozen_datetime')
+            if dt_str:
+                try:
+                    dt = datetime.fromisoformat(dt_str)
+                    if timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt)
+                    TimeOverride.set_frozen_time(dt)
+                    messages.success(request, f"Time frozen to {dt}")
+                except ValueError:
+                    messages.error(request, "Invalid date/time format.")
+            else:
+                messages.error(request, "Please select a date/time.")
+        elif action == 'clear':
+            TimeOverride.set_frozen_time(None)
+            messages.success(request, "Time override cleared. Using real time.")
+        return redirect('time_override')
+    
+    context = {
+        'frozen': frozen,
+        'frozen_iso': frozen.isoformat(timespec='minutes') if frozen else '',
+    }
+    return render(request, 'school/time_override.html', context)
