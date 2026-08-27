@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-10">
+        <div class="mb-4">
+            <h2 class="fw-bold mb-1">{{ title }}</h2>
+            <p class="text-muted">Configure a single fee item across multiple programs and year levels at once. Existing fee items with the same name will be updated; new ones will be created. Year levels exceeding a program's duration will be skipped.</p>
+        </div>
+
+        <form method="post" id="bulkFeeForm">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- Programs Selection -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-3">Programs <span class="text-muted small">(select one or more)</span></h5>
+                    {% if form.programs.errors %}
+                        <div class="text-danger small mb-2">{{ form.programs.errors }}</div>
+                    {% endif %}
+                    <div class="row">
+                        {% for choice in form.programs %}
+                        <div class="col-md-4 mb-2">
+                            <div class="form-check">
+                                {{ choice.tag }}
+                                <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                    {{ choice.choice_label }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if form.programs.help_text %}
+                        <div class="form-text">{{ form.programs.help_text }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Year Levels Selection -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-3">Year Levels <span class="text-muted small">(select one or more)</span></h5>
+                    {% if form.year_levels.errors %}
+                        <div class="text-danger small mb-2">{{ form.year_levels.errors }}</div>
+                    {% endif %}
+                    <div class="row">
+                        {% for choice in form.year_levels %}
+                        <div class="col-md-2 mb-2">
+                            <div class="form-check">
+                                {{ choice.tag }}
+                                <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                    Year {{ choice.choice_label }}
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if form.year_levels.help_text %}
+                        <div class="form-text">{{ form.year_levels.help_text }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Fee Item Details -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-3">Fee Item Details</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.fee_name.id_for_label }}" class="form-label fw-semibold">{{ form.fee_name.label }}</label>
+                            {{ form.fee_name }}
+                            {% if form.fee_name.errors %}<div class="text-danger small">{{ form.fee_name.errors }}</div>{% endif %}
+                            {% if form.fee_name.help_text %}<div class="form-text">{{ form.fee_name.help_text }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.amount.id_for_label }}" class="form-label fw-semibold">{{ form.amount.label }}</label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
+                            {% if form.amount.help_text %}<div class="form-text">{{ form.amount.help_text }}</div>{% endif %}
+                        </div>
+                        <div class="col-12">
+                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">{{ form.description.label }}</label>
+                            {{ form.description }}
+                            {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
+                            {% if form.description.help_text %}<div class="form-text">{{ form.description.help_text }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-end">
+                <a href="{% url back_url_name back_semester_id %}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    Apply Bulk Configuration
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

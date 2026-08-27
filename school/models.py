@@ -166,6 +166,12 @@ class Semester(models.Model):
 
 
 class Program(models.Model):
+    CATEGORY_CHOICES = [
+        ("NC", "National Certificate"),
+        ("NQ", "National Qualification"),
+        ("OTHER", "Other"),
+    ]
+
     code = models.CharField(
         max_length=30,
         unique=True,
@@ -181,6 +187,12 @@ class Program(models.Model):
     )
 
     duration_years = models.PositiveSmallIntegerField()
+
+    category = models.CharField(
+        max_length=10,
+        choices=CATEGORY_CHOICES,
+        default="OTHER",
+    )
 
     active = models.BooleanField(
         default=True,

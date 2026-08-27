@@ -22,6 +22,7 @@ from .forms import (
     StudentStatusChangeForm,
     EnrollmentForm,
     PaymentForm,
+    BulkFeeForm,
 )
 
 from .models import (
@@ -653,6 +654,95 @@ def fee_structure_edit(request, pk):
             "back_semester_id": semester.pk,
             "filter_program": filter_program,
             "filter_year_level": filter_year_level,
+        },
+    )
+
+
+# ============================================================
+# BULK FEE CONFIGURATION
+# ============================================================
+
+@transaction.atomic
+def bulk_fee_configuration(request, semester_id):
+    """
+    Bulk configure fee structures for multiple programs and year levels simultaneously.
+    Creates or updates FeeStructure and FeeStructureItem entries.
+    """
+    semester = get_object_or_404(Semester, pk=semester_id)
+
+    if request.method == "POST":
+        form = BulkFeeForm(request.POST)
+        if form.is_valid():
+            programs = form.cleaned_data["programs"]
+            year_levels = [int(yl) for yl in form.cleaned_data["year_levels"]]
+            fee_name = form.cleaned_data["fee_name"]
+            amount = form.cleaned_data["amount"]
+            description = form.cleaned_data["description"]
+
+            created_count = 0
+            updated_count = 0
+            skipped_count = 0
+
+            for program in programs:
+                for year_level in year_levels:
+                    # Skip year levels that exceed program duration
+                    if year_level > program.duration_years:
+                        skipped_count += 1
+                        continue
+
+                    # Get or create FeeStructure
+                    fee_structure, fs_created = FeeStructure.objects.get_or_create(
+                        program=program,
+                        year_level=year_level,
+                        semester=semester,
+                    )
+
+                    # Get or create FeeStructureItem
+                    fee_item, item_created = FeeStructureItem.objects.get_or_create(
+                        fee_structure=fee_structure,
+                        name=fee_name,
+                        defaults={
+                            "amount": amount,
+                            "description": description,
+                        },
+                    )
+
+                    if item_created:
+                        created_count += 1
+                    else:
+                        # Update existing item's amount and description
+                        fee_item.amount = amount
+                        fee_item.description = description
+                        fee_item.save(update_fields=["amount", "description"])
+                        updated_count += 1
+
+            # Build success message
+            message_parts = []
+            if created_count:
+                message_parts.append(f"{created_count} fee item(s) created")
+            if updated_count:
+                message_parts.append(f"{updated_count} fee item(s) updated")
+            if skipped_count:
+                message_parts.append(f"{skipped_count} combination(s) skipped (year level exceeds program duration)")
+
+            if message_parts:
+                messages.success(request, "Bulk fee configuration completed: " + "; ".join(message_parts) + ".")
+            else:
+                messages.warning(request, "No fee items were configured. Please check your selections.")
+
+            return redirect("fee_structure_list", semester_id=semester.pk)
+    else:
+        form = BulkFeeForm()
+
+    return render(
+        request,
+        "school/bulk_fee_form.html",
+        {
+            "form": form,
+            "semester": semester,
+            "title": f"Bulk Fee Configuration — {semester}",
+            "back_url_name": "fee_structure_list",
+            "back_semester_id": semester.pk,
         },
     )
 

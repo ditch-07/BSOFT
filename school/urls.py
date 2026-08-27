@@ -27,6 +27,11 @@ urlpatterns = [
         name="fee_structure_create",
     ),
     path(
+        "semesters/<int:semester_id>/fee-structures/bulk/",
+        views.bulk_fee_configuration,
+        name="bulk_fee_configuration",
+    ),
+    path(
         "fee-structures/<int:pk>/edit/",
         views.fee_structure_edit,
         name="fee_structure_edit",

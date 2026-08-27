@@ -69,7 +69,7 @@ class SemesterForm(BootstrapFormMixin, forms.ModelForm):
 class ProgramForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Program
-        fields = ["code", "name", "description", "duration_years", "active"]
+        fields = ["code", "name", "description", "duration_years", "category", "active"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
         }
@@ -120,6 +120,81 @@ FeeStructureItemFormSet = inlineformset_factory(
 # Explicit prefix so the JS in fee_structure_form.html (which targets
 # #id_items-TOTAL_FORMS) matches regardless of Django's default naming.
 FeeStructureItemFormSet.get_default_prefix = classmethod(lambda cls: "items")
+
+
+# ============================================================
+# BULK FEE CONFIGURATION
+# ============================================================
+
+class BulkFeeForm(forms.Form):
+    """
+    Form for bulk configuring fee structures across multiple programs and year levels.
+    """
+    programs = forms.ModelMultipleChoiceField(
+        queryset=Program.objects.filter(active=True),
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        required=True,
+        help_text="Select one or more programs to configure fees for.",
+    )
+
+    year_levels = forms.MultipleChoiceField(
+        choices=[(i, str(i)) for i in range(1, 7)],
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
+        required=True,
+        help_text="Select year levels (1-6). Year levels exceeding a program's duration will be skipped.",
+    )
+
+    fee_name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Tuition"}),
+        required=True,
+        help_text="Name of the fee item (e.g., Tuition, Levy, Accommodation).",
+    )
+
+    amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "placeholder": "0.00"}),
+        required=True,
+        help_text="Amount for this fee item.",
+    )
+
+    description = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Optional description"}),
+        help_text="Optional description for the fee item.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add Bootstrap classes to checkbox fields
+        for field_name in ['programs', 'year_levels']:
+            self.fields[field_name].widget.attrs.update({"class": "form-check-input"})
+
+    def clean(self):
+        cleaned_data = super().clean()
+        programs = cleaned_data.get("programs", [])
+        year_levels = cleaned_data.get("year_levels", [])
+
+        if programs and year_levels:
+            # Check if at least one program/year_level combination is valid
+            valid_combinations = False
+            for program in programs:
+                for year_level_str in year_levels:
+                    year_level = int(year_level_str)
+                    if year_level <= program.duration_years:
+                        valid_combinations = True
+                        break
+                if valid_combinations:
+                    break
+
+            if not valid_combinations:
+                raise forms.ValidationError(
+                    "No valid program/year level combinations. Selected year levels exceed all selected programs' durations."
+                )
+
+        return cleaned_data
 
 
 # ============================================================
