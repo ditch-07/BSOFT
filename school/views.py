@@ -99,7 +99,10 @@ def dashboard(request):
     today = get_current_date()
 
     # --- Current academic period ---
-    current_year = AcademicYear.objects.filter(is_current=True).first()
+    current_year = AcademicYear.objects.filter(
+        start_date__lte=today,
+        end_date__gte=today
+    ).first()
     current_semester = Semester.objects.filter(
         start_date__lte=today,
         end_date__gte=today,
@@ -251,7 +254,11 @@ def financial_records(request):
     from itertools import groupby
 
     year_filter = request.GET.get("academic_year", "")
-    current_year = AcademicYear.objects.filter(is_current=True).first()
+    today = get_current_date()
+    current_year = AcademicYear.objects.filter(
+        start_date__lte=today,
+        end_date__gte=today
+    ).first()
     default_year_id = str(current_year.pk) if current_year else ""
     selected_year_id = year_filter or default_year_id
 
@@ -381,7 +388,10 @@ def academic_year_list(request):
     years = AcademicYear.objects.all().order_by("-name")
     paginator = Paginator(years, 20)
     page_obj = paginator.get_page(request.GET.get("page"))
-    return render(request, "school/academic_year_list.html", {"page_obj": page_obj})
+    return render(request, "school/academic_year_list.html", {
+        "page_obj": page_obj,
+        "today": get_current_date(),
+    })
 
 
 # ============================================================
@@ -864,7 +874,11 @@ def student_detail(request, pk):
     payments = student.payments.select_related("semester")
 
     # Current academic year semester balances (with projection for unconfigured semesters)
-    current_year = AcademicYear.objects.filter(is_current=True).first()
+    today = get_current_date()
+    current_year = AcademicYear.objects.filter(
+        start_date__lte=today,
+        end_date__gte=today
+    ).first()
     semester_balances = []
     total_year_balance = Decimal("0")
     

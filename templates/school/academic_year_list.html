@@ -43,21 +43,13 @@ Academic Years
                     </td>
 
                     <td>
-
-                        {% if year.is_current %}
-
-                            <span class="badge text-bg-success">
-                                Current
-                            </span>
-
+                        {% if year.start_date <= today and today <= year.end_date %}
+                            <span class="badge text-bg-success">Current</span>
+                        {% elif year.start_date > today %}
+                            <span class="badge text-bg-warning">Upcoming</span>
                         {% else %}
-
-                            <span class="badge text-bg-secondary">
-                                Previous
-                            </span>
-
+                            <span class="badge text-bg-secondary">Completed</span>
                         {% endif %}
-
                     </td>
 
                     <td>
