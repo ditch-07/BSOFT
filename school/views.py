@@ -402,10 +402,48 @@ def academic_year_list(request):
 # ============================================================
 
 def semester_list(request):
-    semesters = Semester.objects.select_related("academic_year").order_by("-academic_year__name", "number")
-    paginator = Paginator(semesters, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-    return render(request, "school/semester_list.html", {"page_obj": page_obj})
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    from .utils.time_utils import get_current_date
+
+    today = get_current_date()
+    all_semesters = Semester.objects.select_related('academic_year').order_by('-academic_year__name', 'number')
+
+    # Partition by status
+    active_sems = []
+    upcoming_sems = []
+    completed_sems = []
+
+    for sem in all_semesters:
+        status = sem.status  # uses frozen date via property
+        if status == 'ACTIVE':
+            active_sems.append(sem)
+        elif status == 'UPCOMING':
+            upcoming_sems.append(sem)
+        else:
+            completed_sems.append(sem)
+
+    # Sort each group by start_date
+    active_sems.sort(key=lambda s: s.start_date)
+    upcoming_sems.sort(key=lambda s: s.start_date)
+    completed_sems.sort(key=lambda s: s.start_date, reverse=True)  # most recent first
+
+    # Paginate completed (3 per page)
+    paginator = Paginator(completed_sems, 3)
+    page = request.GET.get('completed_page', 1)
+    try:
+        completed_page_obj = paginator.page(page)
+    except PageNotAnInteger:
+        completed_page_obj = paginator.page(1)
+    except EmptyPage:
+        completed_page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        'active_semesters': active_sems,
+        'upcoming_semesters': upcoming_sems,
+        'completed_page_obj': completed_page_obj,
+        'today': today,
+    }
+    return render(request, 'school/semester_list.html', context)
 
 
 def semester_create(request):
