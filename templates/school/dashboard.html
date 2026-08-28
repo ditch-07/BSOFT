@@ -39,14 +39,23 @@
 {% endif %}
 
 {% if auto_progress_eligible > 0 %}
-<div class="alert alert-warning d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <strong>{{ auto_progress_eligible }}</strong> student{{ auto_progress_eligible|pluralize }} in ended semester{{ auto_progress_details|length|pluralize }} need progression.
-        Run <code>python manage.py progress_students_by_date</code> to auto-progress them.
+<div class="alert alert-warning mb-4">
+    {% for detail in auto_progress_details %}
+    <div class="d-flex justify-content-between align-items-center {% if not forloop.last %}mb-2 pb-2 border-bottom{% endif %}">
+        <div>
+            <strong>{{ detail.active_students }}</strong> student{{ detail.active_students|pluralize }}
+            in <strong>{{ detail.semester }}</strong> (ended {{ detail.semester.end_date }}) need progression
+            {% if detail.next_semester %}into {{ detail.next_semester }}{% else %}— no upcoming semester exists yet{% endif %}.
+        </div>
+        {% if detail.next_semester %}
+        <form method="post" action="{% url 'bulk_progress_students' detail.semester.pk %}"
+              onsubmit="return confirm('Progress {{ detail.active_students }} students from {{ detail.semester }} into {{ detail.next_semester }}?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-dark text-nowrap">Progress Now</button>
+        </form>
+        {% endif %}
     </div>
-    <a href="#" class="btn btn-sm btn-dark" onclick="event.preventDefault(); alert('Run the management command: python manage.py progress_students_by_date')">
-        View Details
-    </a>
+    {% endfor %}
 </div>
 {% endif %}
 

@@ -715,19 +715,20 @@ def unconfigured_fee_structures(semester):
 def outstanding_students(semester, limit=None):
     """Return queryset of students with outstanding balances for a semester."""
     from django.db.models import F, Q
+    from django.db.models.functions import Coalesce
     
     students = Student.objects.filter(
         enrollments__semester=semester,
         enrollments__status=Enrollment.ACTIVE,
     ).annotate(
-        charged=Sum(
+        charged=Coalesce(Sum(
             "charges__amount",
             filter=Q(charges__fee_item__fee_structure__semester=semester),
-        ),
-        paid=Sum(
+        ), Decimal("0")),
+        paid=Coalesce(Sum(
             "payments__amount",
             filter=Q(payments__semester=semester),
-        ),
+        ), Decimal("0")),
     ).filter(
         charged__gt=F("paid")
     ).order_by("-charged")

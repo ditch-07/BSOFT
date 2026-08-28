@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .utils.time_utils import get_current_datetime, get_current_date
 
@@ -1722,6 +1723,7 @@ def payment_create(request):
     )
 
 @transaction.atomic
+@require_POST
 def bulk_progress_students(request, semester_id):
     """
     Progresses all active students from a source semester into the next upcoming semester.
