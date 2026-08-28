@@ -1,0 +1,41 @@
+/* =========================================
+   Global Alerts / Notifications
+   ========================================= */
+
+.alert {
+    border: 0;
+    border-left: 4px solid;
+    border-radius: 0;
+    padding: 14px 18px;
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+/* Error / Danger */
+.alert-danger {
+    background-color: #f4dddd;
+    border-left-color: #d85c5c;
+    color: #8f1717;
+}
+
+/* Warning */
+.alert-warning {
+    background-color: #f8efd6;
+    border-left-color: #d6a62e;
+    color: #765800;
+}
+
+/* Success */
+.alert-success {
+    background-color: #dff0e4;
+    border-left-color: #4e9b68;
+    color: #246039;
+}
+
+/* Info */
+.alert-info {
+    background-color: #dfeef5;
+    border-left-color: #4d91ad;
+    color: #285d70;
+}
