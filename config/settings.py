@@ -31,6 +31,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "school.middleware.LoginRequiredMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -83,3 +84,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # instead of real time. This is useful for testing semester logic, payment due dates, etc.
 # The frozen time is set via the Time Override UI at /time-override/
 ENABLE_TIME_OVERRIDE = True  # Set to False in production
+
+# Authentication
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard"
+LOGOUT_REDIRECT_URL = "login"

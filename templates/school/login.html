@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Login - NRZ Student Management</title>
+
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+    >
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .login-section {
+            min-height: 100vh;
+        }
+
+        .login-image {
+            max-width: 480px;
+        }
+
+        .form-control {
+            border-radius: 0.4rem;
+            padding: 0.85rem 1rem;
+        }
+
+        .form-control:focus {
+            box-shadow: none;
+            border-color: #0d6efd;
+        }
+
+        .login-btn {
+            padding: 0.8rem 2.5rem;
+            border-radius: 0.4rem;
+        }
+
+        .divider:after,
+        .divider:before {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #eee;
+        }
+
+        @media (max-width: 991px) {
+            .login-image-column {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<section class="login-section">
+    <div class="container-fluid h-100">
+        <div class="row min-vh-100 d-flex justify-content-center align-items-center">
+
+            <!-- Left side -->
+            <div class="col-lg-6 d-none d-lg-flex justify-content-center align-items-center login-image-column">
+                <div class="text-center">
+                    <img
+                        src="https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-login-form/draw2.webp"
+                        class="img-fluid login-image"
+                        alt="Student management illustration"
+                    >
+
+                    <h3 class="fw-bold mt-4">
+                        NRZ Student Management
+                    </h3>
+
+                    <p class="text-muted">
+                        Manage students, academics and finances in one place.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Right side -->
+            <div class="col-11 col-sm-9 col-md-7 col-lg-5 col-xl-4">
+
+                <div class="mb-4">
+                    <h2 class="fw-bold mb-2">
+                        Welcome back
+                    </h2>
+
+                    <p class="text-muted mb-0">
+                        Sign in to continue to the management system.
+                    </p>
+                </div>
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Username -->
+                    <div class="mb-4">
+                        <label
+                            for="{{ form.username.id_for_label }}"
+                            class="form-label fw-semibold"
+                        >
+                            Username
+                        </label>
+
+                        {{ form.username }}
+
+                        {% if form.username.errors %}
+                        <div class="text-danger small mt-1">
+                            {{ form.username.errors.0 }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Password -->
+                    <div class="mb-4">
+                        <label
+                            for="{{ form.password.id_for_label }}"
+                            class="form-label fw-semibold"
+                        >
+                            Password
+                        </label>
+
+                        {{ form.password }}
+
+                        {% if form.password.errors %}
+                        <div class="text-danger small mt-1">
+                            {{ form.password.errors.0 }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Login -->
+                    <div class="d-grid">
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-lg login-btn"
+                        >
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+
+                {% if form.non_field_errors or form.username.errors or form.password.errors %}
+                <div class="text-center mt-3">
+                    <small class="text-muted">
+                        Invalid credentials. Please try again.
+                    </small>
+                </div>
+                {% endif %}
+
+                <div class="text-center mt-5">
+                    <small class="text-muted">
+                        NRZ Student Management System
+                    </small>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
+```

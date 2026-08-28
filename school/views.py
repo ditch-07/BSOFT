@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -107,6 +108,7 @@ def create_academic_year_enrollments(student, start_semester, start_year_level):
 # DASHBOARD
 # ============================================================
 
+@login_required
 def dashboard(request):
     today = get_current_date()
 
@@ -224,6 +226,7 @@ def dashboard(request):
 # FINANCIAL RECORDS
 # ============================================================
 
+@permission_required("school.can_view_financial_reports", raise_exception=True)
 def financial_records(request):
     """
     Institution-wide financial records showing aggregate charged/paid/outstanding
@@ -314,6 +317,7 @@ def financial_records(request):
     return render(request, "school/financial_records.html", context)
 
 
+@permission_required("school.view_student", raise_exception=True)
 def student_search(request):
     query = request.GET.get("q", "").strip()
 
@@ -362,6 +366,7 @@ def student_search(request):
 # ============================================================
 
 
+@login_required
 def reports_index(request):
     """Reports landing page - lists all available reports."""
     return render(request, "school/reports/index.html", {"reports": REPORTS})
@@ -436,6 +441,7 @@ def _export_csv_response(filename, headers, rows):
     return response
 
 
+@permission_required("school.view_student", raise_exception=True)
 def enrollment_report(request):
     """Student enrollment summary by program, intake year, and status."""
     program_filter = _get_filtered_program(request)
@@ -499,6 +505,7 @@ def enrollment_report(request):
     return render(request, "school/reports/enrollment.html", context)
 
 
+@permission_required("school.can_view_outstanding_reports", raise_exception=True)
 def outstanding_report(request):
     """Students with outstanding balances for a semester."""
     today = get_current_date()
@@ -573,6 +580,7 @@ def outstanding_report(request):
     return render(request, "school/reports/outstanding.html", context)
 
 
+@permission_required("school.view_feestructure", raise_exception=True)
 def fee_audit_report(request):
     """Programs/year-levels missing fee structure configurations."""
     today = get_current_date()
@@ -612,6 +620,7 @@ def fee_audit_report(request):
     return render(request, "school/reports/fee_audit.html", context)
 
 
+@permission_required("school.can_view_financial_reports", raise_exception=True)
 def payment_methods_report(request):
     """Payment breakdown by method for a semester."""
     today = get_current_date()
@@ -662,6 +671,7 @@ def payment_methods_report(request):
     return render(request, "school/reports/payment_methods.html", context)
 
 
+@permission_required("school.can_view_financial_reports", raise_exception=True)
 def program_revenue_report(request):
     """Revenue comparison across programs for a semester."""
     today = get_current_date()
@@ -724,6 +734,7 @@ def program_revenue_report(request):
     return render(request, "school/reports/program_revenue.html", context)
 
 
+@permission_required("school.can_view_financial_reports", raise_exception=True)
 def daily_collections_report(request):
     """Daily collections / cashbook report."""
     today = get_current_date()
@@ -778,6 +789,7 @@ def daily_collections_report(request):
     return render(request, "school/reports/daily_collections.html", context)
 
 
+@permission_required("school.view_studentstatuslog", raise_exception=True)
 def status_history_report(request):
     """Student status change history."""
     today = get_current_date()
@@ -878,6 +890,7 @@ def status_history_report(request):
 # ACADEMIC YEARS
 # ============================================================
 
+@permission_required("school.view_academicyear", raise_exception=True)
 def academic_year_list(request):
     years = AcademicYear.objects.all().order_by("-name")
     paginator = Paginator(years, 20)
@@ -894,6 +907,7 @@ def academic_year_list(request):
 # semester now covers several Program/Year-Level fee structures.)
 # ============================================================
 
+@permission_required("school.view_semester", raise_exception=True)
 def semester_list(request):
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
     from .utils.time_utils import get_current_date
@@ -939,6 +953,7 @@ def semester_list(request):
     return render(request, 'school/semester_list.html', context)
 
 
+@permission_required("school.add_semester", raise_exception=True)
 def semester_create(request):
     form = SemesterForm(request.POST or None)
 
@@ -961,6 +976,7 @@ def semester_create(request):
     )
 
 
+@permission_required("school.change_semester", raise_exception=True)
 def semester_edit(request, pk):
     semester = get_object_or_404(Semester, pk=pk)
     form = SemesterForm(request.POST or None, instance=semester)
@@ -986,6 +1002,7 @@ def semester_edit(request, pk):
 # PROGRAMS (replaces Course)
 # ============================================================
 
+@permission_required("school.view_program", raise_exception=True)
 def program_list(request):
     programs = Program.objects.all().order_by("name")
     paginator = Paginator(programs, 20)
@@ -993,6 +1010,7 @@ def program_list(request):
     return render(request, "school/program_list.html", {"page_obj": page_obj})
 
 
+@permission_required("school.add_program", raise_exception=True)
 def program_create(request):
     form = ProgramForm(request.POST or None)
 
@@ -1017,6 +1035,7 @@ def program_create(request):
 # program/year-level in that semester.
 # ============================================================
 
+@permission_required("school.view_feestructure", raise_exception=True)
 def fee_structure_list(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
 
@@ -1087,6 +1106,7 @@ def fee_structure_list(request, semester_id):
 
 
 @transaction.atomic
+@permission_required("school.add_feestructure", raise_exception=True)
 def fee_structure_create(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
     fee_structure = FeeStructure(semester=semester)
@@ -1144,6 +1164,7 @@ def fee_structure_create(request, semester_id):
 
 
 @transaction.atomic
+@permission_required("school.change_feestructure", raise_exception=True)
 def fee_structure_edit(request, pk):
     fee_structure = get_object_or_404(FeeStructure, pk=pk)
     semester = fee_structure.semester
@@ -1194,6 +1215,7 @@ def fee_structure_edit(request, pk):
 # ============================================================
 
 @transaction.atomic
+@permission_required("school.add_feestructure", raise_exception=True)
 def bulk_fee_configuration(request, semester_id):
     """
     Bulk configure fee structures for multiple programs and year levels simultaneously.
@@ -1282,6 +1304,7 @@ def bulk_fee_configuration(request, semester_id):
 # STUDENTS
 # ============================================================
 
+@permission_required("school.view_student", raise_exception=True)
 def student_list(request):
     query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "")
@@ -1360,6 +1383,7 @@ def student_list(request):
 
 
 @transaction.atomic
+@permission_required("school.add_student", raise_exception=True)
 def student_create(request):
     student_form = StudentForm(request.POST or None)
 
@@ -1458,6 +1482,7 @@ def student_create(request):
     )
 
 
+@permission_required("school.view_student", raise_exception=True)
 def student_detail(request, pk):
     student = get_object_or_404(Student, pk=pk)
 
@@ -1563,6 +1588,7 @@ def student_detail(request, pk):
     )
 
 
+@permission_required("school.change_student", raise_exception=True)
 def student_status_change(request, pk):
     student = get_object_or_404(Student, pk=pk)
     form = StudentStatusChangeForm(request.POST or None, initial={"status": student.status})
@@ -1595,6 +1621,7 @@ def student_status_change(request, pk):
 # ============================================================
 
 @transaction.atomic
+@permission_required("school.can_record_payments", raise_exception=True)
 def payment_create(request):
     student_id = request.GET.get("student") or request.POST.get("student_id")
     selected_semester_id = request.GET.get("semester") or request.POST.get("semester")
@@ -1807,6 +1834,7 @@ def bulk_progress_students(request, semester_id):
     return redirect("semester_list")
 
 
+@user_passes_test(lambda u: u.is_superuser)
 def time_override_view(request):
     """
     View to set or clear the time override for testing.
@@ -1849,3 +1877,54 @@ def time_override_view(request):
         'frozen_iso': frozen.isoformat(timespec='minutes') if frozen else '',
     }
     return render(request, 'school/time_override.html', context)
+
+
+# ============================================================
+# USER MANAGEMENT (Admin only)
+# ============================================================
+
+@user_passes_test(lambda u: u.is_superuser)
+def user_list(request):
+    """List all users with their roles/groups."""
+    from django.contrib.auth.models import User, Group
+    
+    users = User.objects.all().prefetch_related('groups').order_by('-is_superuser', 'username')
+    
+    context = {
+        "users": users,
+    }
+    return render(request, "school/user_list.html", context)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def user_create(request):
+    """Create a new user and assign to a group."""
+    from django.contrib.auth.models import User, Group
+    from django import forms
+    
+    class UserCreateForm(forms.Form):
+        username = forms.CharField(max_length=150)
+        password = forms.CharField(widget=forms.PasswordInput, help_text="Temporary password - user should change on first login")
+        group = forms.ModelChoiceField(queryset=Group.objects.all(), required=False, help_text="Assign to a role group")
+        is_staff = forms.BooleanField(required=False, help_text="Can access Django admin")
+    
+    if request.method == "POST":
+        form = UserCreateForm(request.POST)
+        if form.is_valid():
+            user = User.objects.create_user(
+                username=form.cleaned_data["username"],
+                password=form.cleaned_data["password"],
+                is_staff=form.cleaned_data["is_staff"],
+            )
+            group = form.cleaned_data["group"]
+            if group:
+                user.groups.add(group)
+            messages.success(request, f"User '{user.username}' created successfully.")
+            return redirect("user_list")
+    else:
+        form = UserCreateForm()
+    
+    context = {
+        "form": form,
+    }
+    return render(request, "school/user_form.html", context)

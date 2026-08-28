@@ -404,6 +404,11 @@ class Student(models.Model):
             "last_name",
             "first_name",
         ]
+        permissions = [
+            ("can_view_financial_reports", "Can view financial reports"),
+            ("can_view_outstanding_reports", "Can view outstanding balances"),
+            ("can_record_payments", "Can record payments"),
+        ]
 
     def __str__(self):
         return (

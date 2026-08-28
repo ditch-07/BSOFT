@@ -1,9 +1,14 @@
 from django.urls import path
+from django.contrib.auth import views as auth_views
 
 from . import views
 
 
 urlpatterns = [
+    # Authentication
+    path("login/", auth_views.LoginView.as_view(template_name="school/login.html"), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
+
     # Dashboard
     path("", views.dashboard, name="dashboard"),
 
@@ -68,6 +73,10 @@ urlpatterns = [
 
     # Time Override (Testing)
     path("time-override/", views.time_override_view, name="time_override"),
+
+    # User Management (Admin only)
+    path("users/", views.user_list, name="user_list"),
+    path("users/new/", views.user_create, name="user_create"),
 
     path(
     "semesters/<int:semester_id>/progress/",
