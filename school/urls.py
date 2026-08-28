@@ -7,6 +7,16 @@ urlpatterns = [
     # Dashboard
     path("", views.dashboard, name="dashboard"),
 
+    # Reports
+    path("reports/", views.reports_index, name="reports_index"),
+    path("reports/enrollment/", views.enrollment_report, name="enrollment_report"),
+    path("reports/outstanding/", views.outstanding_report, name="outstanding_report"),
+    path("reports/fee-audit/", views.fee_audit_report, name="fee_audit_report"),
+    path("reports/payment-methods/", views.payment_methods_report, name="payment_methods_report"),
+    path("reports/program-revenue/", views.program_revenue_report, name="program_revenue_report"),
+    path("reports/daily-collections/", views.daily_collections_report, name="daily_collections_report"),
+    path("reports/status-history/", views.status_history_report, name="status_history_report"),
+
     # Academic years
     path("academic-years/", views.academic_year_list, name="academic_year_list"),
 

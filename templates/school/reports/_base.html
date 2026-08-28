@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if report %}{{ report.name }}{% else %}Reports{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-nav {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+.report-nav .nav-link {
+    color: #495057;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+.report-nav .nav-link:hover {
+    background: #e9ecef;
+    color: #212529;
+}
+.report-nav .nav-link.active {
+    background: #212529;
+    color: white !important;
+}
+.report-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.report-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.filter-form .form-select, .filter-form .form-control {
+    min-width: 180px;
+}
+@media print {
+    .report-nav, .filter-form, .btn, .pagination { display: none !important; }
+    .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; page-break-inside: avoid; }
+    .table { font-size: 0.85rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h2 class="fw-bold mb-1">{% if report %}{{ report.name }}{% else %}Reports{% endif %}</h2>
+        <p class="text-muted mb-0">
+            {% if report %}{{ report.desc }}{% else %}Select a report to view or export data{% endif %}
+        </p>
+    </div>
+    {% if report %}
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'reports_index' %}" class="btn btn-outline-secondary">← All Reports</a>
+        {% if request.GET %}
+        <a href="{{ request.path }}" class="btn btn-outline-secondary">Clear Filters</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if not report %}
+<!-- Reports Index Page -->
+<div class="row g-3">
+    {% for r in reports %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <a href="{% url r.view %}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm report-card h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-2">{{ r.name }}</h5>
+                    <p class="text-muted small mb-3">{{ r.desc }}</p>
+                    <span class="btn btn-sm btn-outline-primary">View Report →</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<!-- Report-specific content with sidebar nav -->
+<div class="row">
+    <aside class="col-12 col-lg-3 mb-4">
+        <div class="report-nav h-100 print-hidden">
+            <h6 class="fw-bold text-uppercase small text-muted mb-3 px-2">Reports</h6>
+            <nav class="nav flex-column">
+                {% for r in reports %}
+                <a class="nav-link {% if r.slug == report.slug %}active{% endif %}" 
+                   href="{% url r.view %}">
+                    {{ r.name }}
+                </a>
+                {% endfor %}
+            </nav>
+        </div>
+    </aside>
+    <main class="col-12 col-lg-9">
+        {% block report_content %}
+        {% endblock %}
+    </main>
+</div>
+{% endif %}
+{% endblock %}

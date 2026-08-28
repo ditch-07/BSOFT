@@ -37,7 +37,17 @@ from .models import (
     StudentCharge,
     Payment,
     student_balance,
+    semester_financials,
+    unconfigured_fee_structures,
+    outstanding_students,
+    payment_methods_breakdown,
+    program_revenue,
+    daily_collections,
+    enrollment_summary,
+    student_status_history,
 )
+
+from school.reports import REPORTS
 
 
 def create_academic_year_enrollments(student, start_semester, start_year_level):
@@ -114,43 +124,17 @@ def dashboard(request):
 
     # --- Financials for current semester ---
     if current_semester:
-        total_charged = StudentCharge.objects.filter(
-            fee_item__fee_structure__semester=current_semester
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        # Use shared helper for semester financials
+        fin = semester_financials(current_semester)
+        total_charged = fin["charged"]
+        total_paid = fin["paid"]
+        outstanding = fin["outstanding"]
+        collection_rate = fin["collection_rate"]
 
-        total_paid = Payment.objects.filter(
-            semester=current_semester
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-
-        outstanding = total_charged - total_paid
-        collection_rate = (
-            (total_paid / total_charged * 100) if total_charged > 0 else 0
-        )
-
-        active_this_semester = Student.objects.filter(
-            enrollments__semester=current_semester,
-            enrollments__status=Enrollment.ACTIVE,
-        ).annotate(
-            charged=Sum(
-                "charges__amount",
-                filter=Q(charges__fee_item__fee_structure__semester=current_semester),
-            ),
-            paid=Sum(
-                "payments__amount",
-                filter=Q(payments__semester=current_semester),
-            ),
-        )
-
-        students_with_balance = active_this_semester.filter(
-            charged__gt=F("paid")
-        ).count()
-
-        top_outstanding = (
-            active_this_semester
-            .annotate(balance=F("charged") - F("paid"))
-            .filter(balance__gt=0)
-            .order_by("-balance")[:5]
-        )
+        # Students with balance & top outstanding
+        outstanding_qs = outstanding_students(current_semester)
+        students_with_balance = outstanding_qs.count()
+        top_outstanding = outstanding_qs[:5]
     else:
         total_charged = total_paid = outstanding = Decimal("0")
         collection_rate = 0
@@ -187,15 +171,7 @@ def dashboard(request):
     unconfigured_fee_count = 0
     fee_setup_semester = current_semester or upcoming_semester
     if fee_setup_semester:
-        configured_pairs = set(
-            FeeStructure.objects.filter(semester=fee_setup_semester).values_list(
-                "program_id", "year_level"
-            )
-        )
-        for program in Program.objects.filter(active=True):
-            for year_level in range(1, program.duration_years + 1):
-                if (program.id, year_level) not in configured_pairs:
-                    unconfigured_fee_count += 1
+        unconfigured_fee_count = len(unconfigured_fee_structures(fee_setup_semester))
 
     # --- Auto-progression status ---
     # Find semesters that have ended but may have students not yet progressed
@@ -292,23 +268,22 @@ def financial_records(request):
             "collection_rate": collection_rate,
         })
 
-    year_groups = {}
-    for item in semester_data:
-        year = item["academic_year"]
-        if year not in year_groups:
-            year_groups[year] = []
-        year_groups[year].append(item)
-
-    year_totals = {}
-    for year, semesters in year_groups.items():
+    # Group by academic year and compute totals per year
+    year_groups = []
+    for year, semesters_iter in groupby(semester_data, key=lambda x: x["academic_year"]):
+        semesters = list(semesters_iter)
         charged = sum(s["total_charged"] for s in semesters)
         paid = sum(s["total_paid"] for s in semesters)
-        year_totals[year] = {
-            "charged": charged,
-            "paid": paid,
-            "outstanding": sum(s["outstanding"] for s in semesters),
-            "collection_rate": (paid / charged * 100) if charged > 0 else 0,
-        }
+        year_groups.append({
+            "year": year,
+            "semesters": semesters,
+            "totals": {
+                "charged": charged,
+                "paid": paid,
+                "outstanding": sum(s["outstanding"] for s in semesters),
+                "collection_rate": (paid / charged * 100) if charged > 0 else 0,
+            }
+        })
 
     all_years = AcademicYear.objects.all().order_by("-name")
 
@@ -316,16 +291,15 @@ def financial_records(request):
     if selected_year_id:
         selected_year = all_years.filter(pk=selected_year_id).first()
 
-    grand_total_charged = sum(t["charged"] for t in year_totals.values())
-    grand_total_paid = sum(t["paid"] for t in year_totals.values())
-    grand_total_outstanding = sum(t["outstanding"] for t in year_totals.values())
+    grand_total_charged = sum(g["totals"]["charged"] for g in year_groups)
+    grand_total_paid = sum(g["totals"]["paid"] for g in year_groups)
+    grand_total_outstanding = sum(g["totals"]["outstanding"] for g in year_groups)
     grand_collection_rate = (
         (grand_total_paid / grand_total_charged * 100) if grand_total_charged > 0 else 0
     )
 
     context = {
         "year_groups": year_groups,
-        "year_totals": year_totals,
         "all_years": all_years,
         "selected_year_id": selected_year_id,
         "selected_year": selected_year,
@@ -340,6 +314,510 @@ def financial_records(request):
 
 
 def student_search(request):
+    query = request.GET.get("q", "").strip()
+
+    if len(query) < 2:
+        return JsonResponse({"students": []})
+
+    students = (
+        Student.objects.filter(status=Student.ACTIVE)
+        .filter(
+            Q(student_number__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+        )
+        .order_by("last_name", "first_name")[:10]
+    )
+
+    data = []
+    today = get_current_date()
+
+    for student in students:
+        # Changed from start_date__lte to end_date__gte to include upcoming semesters
+        enrollment = (
+            student.enrollments.filter(
+                status=Enrollment.ACTIVE,
+                semester__end_date__gte=today,
+            )
+            .select_related("program", "semester", "semester__academic_year")
+            .order_by("semester__start_date")
+            .first()
+        )
+        data.append(
+            {
+                "id": student.id,
+                "student_number": student.student_number,
+                "name": f"{student.first_name} {student.last_name}",
+                "program": enrollment.program.name if enrollment else "Not enrolled",
+                "semester": str(enrollment.semester) if enrollment else "No active semester",
+            }
+        )
+
+    return JsonResponse({"students": data})
+
+
+# ============================================================
+# REPORTS
+# ============================================================
+
+
+def reports_index(request):
+    """Reports landing page - lists all available reports."""
+    return render(request, "school/reports/index.html", {"reports": REPORTS})
+
+
+def _get_filtered_semester(request, default_semester=None):
+    """Helper to get selected semester from request, with default to current/upcoming."""
+    today = get_current_date()
+    semester_id = request.GET.get("semester")
+    
+    if semester_id:
+        try:
+            return Semester.objects.select_related("academic_year").get(pk=semester_id)
+        except Semester.DoesNotExist:
+            pass
+    
+    if default_semester:
+        return default_semester
+    
+    # Default to current or upcoming semester
+    current = Semester.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+    if current:
+        return current
+    
+    return Semester.objects.filter(start_date__gt=today).order_by("start_date").first()
+
+
+def _get_filtered_year(request, default_year=None):
+    """Helper to get selected academic year from request."""
+    year_id = request.GET.get("academic_year")
+    
+    if year_id:
+        try:
+            return AcademicYear.objects.get(pk=year_id)
+        except AcademicYear.DoesNotExist:
+            pass
+    
+    if default_year:
+        return default_year
+    
+    today = get_current_date()
+    return AcademicYear.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+
+
+def _get_filtered_program(request):
+    """Helper to get selected program from request."""
+    program_id = request.GET.get("program")
+    if program_id:
+        try:
+            return Program.objects.get(pk=program_id)
+        except Program.DoesNotExist:
+            pass
+    return None
+
+
+def _export_csv_response(filename, headers, rows):
+    """Helper to create CSV HttpResponse."""
+    import csv
+    from django.http import HttpResponse
+    
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return response
+
+
+def enrollment_report(request):
+    """Student enrollment summary by program, intake year, and status."""
+    program_filter = _get_filtered_program(request)
+    intake_year_filter = request.GET.get("intake_year")
+    status_filter = request.GET.get("status")
+    export_format = request.GET.get("format")
+    
+    # Build queryset using helper
+    data = enrollment_summary(
+        program=program_filter,
+        intake_year=intake_year_filter,
+        status=status_filter,
+    )
+    
+    # Add program/intake_year objects for display
+    program_ids = set(d["program__id"] for d in data)
+    intake_year_ids = set(d["intake_year__id"] for d in data)
+    
+    programs = {p.id: p for p in Program.objects.filter(id__in=program_ids)}
+    intake_years = {y.id: y for y in AcademicYear.objects.filter(id__in=intake_year_ids)}
+    
+    for row in data:
+        row["program_obj"] = programs.get(row["program__id"])
+        row["intake_year_obj"] = intake_years.get(row["intake_year__id"])
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Program", "Program Code", "Intake Year", "Status", "Student Count"]
+        rows = [
+            [
+                r["program_obj"].name if r["program_obj"] else "Unknown",
+                r["program_obj"].code if r["program_obj"] else "",
+                r["intake_year_obj"].name if r["intake_year_obj"] else "Unknown",
+                dict(Student.STATUS_CHOICES).get(r["status"], r["status"]),
+                r["count"],
+            ]
+            for r in data
+        ]
+        return _export_csv_response("enrollment_summary.csv", headers, rows)
+    
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(data, 25)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    all_programs = Program.objects.filter(active=True).order_by("name")
+    all_intake_years = AcademicYear.objects.all().order_by("-name")
+    
+    context = {
+        "page_obj": page_obj,
+        "program_filter": program_filter,
+        "intake_year_filter": intake_year_filter,
+        "status_filter": status_filter,
+        "all_programs": all_programs,
+        "all_intake_years": all_intake_years,
+        "status_choices": Student.STATUS_CHOICES,
+        "today": get_current_date(),
+    }
+    return render(request, "school/reports/enrollment.html", context)
+
+
+def outstanding_report(request):
+    """Students with outstanding balances for a semester."""
+    today = get_current_date()
+    current_semester = Semester.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+    
+    semester = _get_filtered_semester(request, current_semester)
+    program_filter = _get_filtered_program(request)
+    export_format = request.GET.get("format")
+    
+    students_qs = outstanding_students(semester)
+    if program_filter:
+        students_qs = students_qs.filter(program=program_filter)
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = [
+            "Student Number", "Name", "Program", "Semester",
+            "Charged", "Paid", "Outstanding", "Collection %"
+        ]
+        rows = []
+        for s in students_qs:
+            charged = s.charged or Decimal("0")
+            paid = s.paid or Decimal("0")
+            rows.append([
+                s.student_number,
+                f"{s.first_name} {s.last_name}",
+                s.program.name,
+                str(semester),
+                f"{charged:.2f}",
+                f"{paid:.2f}",
+                f"{charged - paid:.2f}",
+                f"{(paid / charged * 100) if charged > 0 else 0:.1f}",
+            ])
+        return _export_csv_response(
+            f"outstanding_balances_{semester.academic_year.name}_sem{semester.number}.csv",
+            headers, rows
+        )
+    
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(students_qs, 25)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    # Compute totals for summary cards
+    total_charged = sum(s.charged or Decimal("0") for s in students_qs)
+    total_paid = sum(s.paid or Decimal("0") for s in students_qs)
+    total_outstanding = total_charged - total_paid
+    avg_outstanding = (total_outstanding / students_qs.count()) if students_qs.count() > 0 else Decimal("0")
+    
+    all_semesters = Semester.objects.select_related("academic_year").order_by(
+        "-academic_year__name", "number"
+    )
+    all_programs = Program.objects.filter(active=True).order_by("name")
+    
+    context = {
+        "semester": semester,
+        "page_obj": page_obj,
+        "program_filter": program_filter,
+        "all_semesters": all_semesters,
+        "all_programs": all_programs,
+        "today": today,
+        "total_charged": total_charged,
+        "total_paid": total_paid,
+        "total_outstanding": total_outstanding,
+        "avg_outstanding": avg_outstanding,
+        "total_students": students_qs.count(),
+    }
+    return render(request, "school/reports/outstanding.html", context)
+
+
+def fee_audit_report(request):
+    """Programs/year-levels missing fee structure configurations."""
+    today = get_current_date()
+    current_semester = Semester.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+    
+    semester = _get_filtered_semester(request, current_semester)
+    export_format = request.GET.get("format")
+    
+    missing = unconfigured_fee_structures(semester)
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Program", "Program Code", "Year Level", "Semester", "Academic Year"]
+        rows = [
+            [m["program"].name, m["program"].code, m["year_level"], str(semester), semester.academic_year.name]
+            for m in missing
+        ]
+        return _export_csv_response(
+            f"fee_audit_{semester.academic_year.name}_sem{semester.number}.csv",
+            headers, rows
+        )
+    
+    all_semesters = Semester.objects.select_related("academic_year").order_by(
+        "-academic_year__name", "number"
+    )
+    
+    context = {
+        "semester": semester,
+        "missing": missing,
+        "all_semesters": all_semesters,
+        "today": today,
+    }
+    return render(request, "school/reports/fee_audit.html", context)
+
+
+def payment_methods_report(request):
+    """Payment breakdown by method for a semester."""
+    today = get_current_date()
+    current_semester = Semester.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+    
+    semester = _get_filtered_semester(request, current_semester)
+    export_format = request.GET.get("format")
+    
+    breakdown = payment_methods_breakdown(semester)
+    
+    # Get display names for methods
+    method_choices = dict(Payment.PAYMENT_METHODS)
+    for item in breakdown:
+        item["method_display"] = method_choices.get(item["method"], item["method"])
+    
+    # Compute totals for summary cards
+    total_transactions = sum(item["count"] or 0 for item in breakdown)
+    total_amount = sum(item["total"] for item in breakdown)
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Method", "Transaction Count", "Total Amount"]
+        rows = [
+            [item["method_display"], item["count"] or 0, f"{item['total']:.2f}"]
+            for item in breakdown
+        ]
+        return _export_csv_response(
+            f"payment_methods_{semester.academic_year.name}_sem{semester.number}.csv",
+            headers, rows
+        )
+    
+    all_semesters = Semester.objects.select_related("academic_year").order_by(
+        "-academic_year__name", "number"
+    )
+    
+    context = {
+        "semester": semester,
+        "breakdown": breakdown,
+        "all_semesters": all_semesters,
+        "today": today,
+        "total_transactions": total_transactions,
+        "total_amount": total_amount,
+    }
+    return render(request, "school/reports/payment_methods.html", context)
+
+
+def program_revenue_report(request):
+    """Revenue comparison across programs for a semester."""
+    today = get_current_date()
+    current_semester = Semester.objects.filter(
+        start_date__lte=today, end_date__gte=today
+    ).first()
+    
+    semester = _get_filtered_semester(request, current_semester)
+    export_format = request.GET.get("format")
+    
+    revenue_data = program_revenue(semester)
+    
+    for item in revenue_data:
+        charged = item["charged"] or Decimal("0")
+        paid = item["paid"] or Decimal("0")
+        item["outstanding"] = charged - paid
+        item["collection_rate"] = (paid / charged * 100) if charged > 0 else 0
+    
+    # Compute totals for summary cards
+    total_charged = sum(item["charged"] or Decimal("0") for item in revenue_data)
+    total_paid = sum(item["paid"] or Decimal("0") for item in revenue_data)
+    total_outstanding = sum(item["outstanding"] for item in revenue_data)
+    overall_collection_rate = (total_paid / total_charged * 100) if total_charged > 0 else 0
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Program", "Program Code", "Charged", "Paid", "Outstanding", "Collection %"]
+        rows = [
+            [
+                item["fee_item__fee_structure__program__name"],
+                item["fee_item__fee_structure__program__code"],
+                f"{item['charged']:.2f}",
+                f"{item['paid']:.2f}",
+                f"{item['outstanding']:.2f}",
+                f"{item['collection_rate']:.1f}",
+            ]
+            for item in revenue_data
+        ]
+        return _export_csv_response(
+            f"program_revenue_{semester.academic_year.name}_sem{semester.number}.csv",
+            headers, rows
+        )
+    
+    all_semesters = Semester.objects.select_related("academic_year").order_by(
+        "-academic_year__name", "number"
+    )
+    
+    context = {
+        "semester": semester,
+        "revenue_data": revenue_data,
+        "all_semesters": all_semesters,
+        "today": today,
+        "total_charged": total_charged,
+        "total_paid": total_paid,
+        "total_outstanding": total_outstanding,
+        "overall_collection_rate": overall_collection_rate,
+    }
+    return render(request, "school/reports/program_revenue.html", context)
+
+
+def daily_collections_report(request):
+    """Daily collections / cashbook report."""
+    today = get_current_date()
+    date_filter = request.GET.get("date")
+    
+    if date_filter:
+        try:
+            from datetime import datetime
+            filter_date = datetime.strptime(date_filter, "%Y-%m-%d").date()
+        except ValueError:
+            filter_date = today
+    else:
+        filter_date = today
+    
+    export_format = request.GET.get("format")
+    
+    payments = daily_collections(filter_date)
+    total = payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    avg_transaction = (total / payments.count()) if payments.count() > 0 else Decimal("0")
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Receipt", "Student", "Student Number", "Semester", "Method", "Amount", "Reference", "Date"]
+        rows = [
+            [
+                p.receipt_number,
+                f"{p.student.first_name} {p.student.last_name}",
+                p.student.student_number,
+                str(p.semester),
+                p.get_method_display(),
+                f"{p.amount:.2f}",
+                p.reference or "",
+                p.payment_date.isoformat(),
+            ]
+            for p in payments
+        ]
+        rows.append(["", "", "", "", "TOTAL", f"{total:.2f}", "", ""])
+        return _export_csv_response(
+            f"daily_collections_{filter_date.isoformat()}.csv",
+            headers, rows
+        )
+    
+    context = {
+        "filter_date": filter_date,
+        "payments": payments,
+        "total": total,
+        "avg_transaction": avg_transaction,
+        "today": today,
+    }
+    return render(request, "school/reports/daily_collections.html", context)
+
+
+def status_history_report(request):
+    """Student status change history."""
+    today = get_current_date()
+    student_filter = request.GET.get("student")
+    start_date_filter = request.GET.get("start_date")
+    end_date_filter = request.GET.get("end_date")
+    export_format = request.GET.get("format")
+    
+    student = None
+    if student_filter:
+        try:
+            student = Student.objects.get(pk=student_filter)
+        except Student.DoesNotExist:
+            pass
+    
+    logs = student_status_history(
+        student=student,
+        start_date=start_date_filter,
+        end_date=end_date_filter,
+    )
+    
+    # CSV Export
+    if export_format == "csv":
+        headers = ["Date Changed", "Student", "Student Number", "Program", "Status", "Note"]
+        rows = [
+            [
+                log.date_changed.strftime("%Y-%m-%d %H:%M"),
+                f"{log.student.first_name} {log.student.last_name}",
+                log.student.student_number,
+                log.student.program.name,
+                log.get_status_display(),
+                log.note or "",
+            ]
+            for log in logs
+        ]
+        return _export_csv_response("status_history.csv", headers, rows)
+    
+    # Pagination
+    from django.core.paginator import Paginator
+    paginator = Paginator(logs, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    all_students = Student.objects.select_related("program").order_by("last_name", "first_name")
+    
+    context = {
+        "page_obj": page_obj,
+        "student_filter": student,
+        "start_date_filter": start_date_filter,
+        "end_date_filter": end_date_filter,
+        "all_students": all_students,
+        "today": today,
+    }
+    return render(request, "school/reports/status_history.html", context)
     query = request.GET.get("q", "").strip()
 
     if len(query) < 2:

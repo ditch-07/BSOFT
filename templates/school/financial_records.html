@@ -51,10 +51,10 @@
 </div>
 
 {% if year_groups %}
-    {% for year, semesters in year_groups.items %}
+    {% for group in year_groups %}
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-light">
-            <h5 class="mb-0">{{ year.name }} - Annual Summary</h5>
+            <h5 class="mb-0">{{ group.year.name }} - Annual Summary</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -69,7 +69,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for s in semesters %}
+                        {% for s in group.semesters %}
                         <tr>
                             <td>{{ s.semester }}</td>
                             <td class="text-end fw-bold">${{ s.total_charged|floatformat:2 }}</td>
@@ -82,11 +82,11 @@
                         {% endfor %}
                         <!-- Year total row -->
                         <tr class="table-secondary fw-bold">
-                            <td>{{ year.name }} TOTAL</td>
-                            <td class="text-end">${{ year_totals.year.charged|floatformat:2 }}</td>
-                            <td class="text-end text-success">${{ year_totals.year.paid|floatformat:2 }}</td>
-                            <td class="text-end text-danger">${{ year_totals.year.outstanding|floatformat:2 }}</td>
-                            <td class="text-end">{{ year_totals.year.collection_rate|floatformat:1 }}%</td>
+                            <td>{{ group.year.name }} TOTAL</td>
+                            <td class="text-end">${{ group.totals.charged|floatformat:2 }}</td>
+                            <td class="text-end text-success">${{ group.totals.paid|floatformat:2 }}</td>
+                            <td class="text-end text-danger">${{ group.totals.outstanding|floatformat:2 }}</td>
+                            <td class="text-end">{{ group.totals.collection_rate|floatformat:1 }}%</td>
                         </tr>
                     </tbody>
                 </table>

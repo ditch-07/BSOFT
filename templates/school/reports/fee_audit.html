@@ -1,0 +1,107 @@
+{% extends "school/reports/_base.html" %}
+
+{% block title %}Fee Structure Audit{% endblock %}
+
+{% block report_content %}
+{% with report=reports.3 %}
+
+<!-- Filters -->
+<form method="get" class="card border-0 shadow-sm mb-4 filter-form print-hidden">
+    <div class="card-body">
+        <div class="row g-3 align-items-end flex-wrap">
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold small">Semester</label>
+                <select name="semester" class="form-select" onchange="this.form.submit()">
+                    {% for s in all_semesters %}
+                    <option value="{{ s.pk }}" {% if semester and semester.pk == s.pk %}selected{% endif %}>
+                        {{ s }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <div class="d-flex gap-2">
+                    <a href="?format=csv{% if semester %}&semester={{ semester.pk }}{% endif %}" 
+                       class="btn btn-outline-success w-100">
+                        📥 CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if semester %}
+<!-- Summary Card -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h5 class="mb-1">Missing Fee Structures</h5>
+                <p class="text-muted mb-0">For <strong>{{ semester }}</strong> ({{ semester.academic_year.name }})</p>
+            </div>
+            <div class="text-end">
+                <div class="display-6 fw-bold text-danger">{{ missing|length }}</div>
+                <small class="text-muted">program/year-level combinations</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if missing %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Program</th>
+                        <th>Code</th>
+                        <th>Year Level</th>
+                        <th>Semester</th>
+                        <th>Academic Year</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in missing %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.program.name }}</td>
+                        <td>{{ item.program.code }}</td>
+                        <td class="fw-bold">Year {{ item.year_level }}</td>
+                        <td>Semester {{ semester.number }}</td>
+                        <td>{{ semester.academic_year.name }}</td>
+                        <td class="text-end">
+                            <a href="{% url 'fee_structure_create' semester.pk %}?program={{ item.program.pk }}&year_level={{ item.year_level }}"
+                               class="btn btn-sm btn-primary">
+                                Configure
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <div class="text-success fs-1 mb-3">✓</div>
+            <h5 class="mb-2">All fee structures configured!</h5>
+            <p class="text-muted">Every active program/year-level has a fee structure for {{ semester }}.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <p class="text-muted mb-0">Select a semester to audit fee structure configurations.</p>
+    </div>
+</div>
+{% endif %}
+
+{% endwith %}
+{% endblock %}

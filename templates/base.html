@@ -95,9 +95,41 @@
             <hr>
             <div class="sidebar-heading mb-1">Reports</div>
             <div class="nav flex-column gap-1">
+                <a href="{% url 'reports_index' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
+                    All Reports
+                </a>
                 <a href="{% url 'financial_records' %}"
                    class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
                     Financial Records
+                </a>
+                <a href="{% url 'enrollment_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
+                    Enrollment Summary
+                </a>
+                <a href="{% url 'outstanding_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
+                    Outstanding Balances
+                </a>
+                <a href="{% url 'fee_audit_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
+                    Fee Structure Audit
+                </a>
+                <a href="{% url 'payment_methods_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
+                    Payment Methods
+                </a>
+                <a href="{% url 'program_revenue_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
+                    Program Revenue
+                </a>
+                <a href="{% url 'daily_collections_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
+                    Daily Collections
+                </a>
+                <a href="{% url 'status_history_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
+                    Status Change History
                 </a>
             </div>
 

@@ -677,3 +677,127 @@ def student_balance(student, semester):
     )
 
     return charged - paid
+
+
+def semester_financials(semester):
+    """Return charged/paid/outstanding/collection_rate for a semester."""
+    charged = StudentCharge.objects.filter(
+        fee_item__fee_structure__semester=semester
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+    paid = Payment.objects.filter(semester=semester).aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0")
+
+    return {
+        "charged": charged,
+        "paid": paid,
+        "outstanding": charged - paid,
+        "collection_rate": (paid / charged * 100) if charged > 0 else 0,
+    }
+
+
+def unconfigured_fee_structures(semester):
+    """Return list of (program, year_level) pairs missing fee structure for semester."""
+    configured_pairs = set(
+        FeeStructure.objects.filter(semester=semester).values_list(
+            "program_id", "year_level"
+        )
+    )
+    missing = []
+    for program in Program.objects.filter(active=True):
+        for year_level in range(1, program.duration_years + 1):
+            if (program.id, year_level) not in configured_pairs:
+                missing.append({"program": program, "year_level": year_level})
+    return missing
+
+
+def outstanding_students(semester, limit=None):
+    """Return queryset of students with outstanding balances for a semester."""
+    from django.db.models import F, Q
+    
+    students = Student.objects.filter(
+        enrollments__semester=semester,
+        enrollments__status=Enrollment.ACTIVE,
+    ).annotate(
+        charged=Sum(
+            "charges__amount",
+            filter=Q(charges__fee_item__fee_structure__semester=semester),
+        ),
+        paid=Sum(
+            "payments__amount",
+            filter=Q(payments__semester=semester),
+        ),
+    ).filter(
+        charged__gt=F("paid")
+    ).order_by("-charged")
+    
+    if limit:
+        students = students[:limit]
+    return students
+
+
+def payment_methods_breakdown(semester):
+    """Return payment totals grouped by method for a semester."""
+    return Payment.objects.filter(semester=semester).values("method").annotate(
+        total=Sum("amount"),
+        count=Sum("amount", default=0)
+    ).order_by("-total")
+
+
+def program_revenue(semester):
+    """Return revenue grouped by program for a semester."""
+    return StudentCharge.objects.filter(
+        fee_item__fee_structure__semester=semester
+    ).values(
+        "fee_item__fee_structure__program__id",
+        "fee_item__fee_structure__program__name",
+        "fee_item__fee_structure__program__code"
+    ).annotate(
+        charged=Sum("amount"),
+        paid=Sum(
+            "student__payments__amount",
+            filter=Q(student__payments__semester=semester)
+        )
+    ).order_by("-charged")
+
+
+def daily_collections(date=None):
+    """Return payments for a specific date (default today)."""
+    from school.utils.time_utils import get_current_date
+    if date is None:
+        date = get_current_date()
+    return Payment.objects.filter(payment_date=date).select_related(
+        "student", "semester", "semester__academic_year"
+    )
+
+
+def enrollment_summary(program=None, intake_year=None, status=None):
+    """Return enrollment counts grouped by program/intake_year/status."""
+    from django.db.models import Count
+    
+    students = Student.objects.all()
+    if program:
+        students = students.filter(program=program)
+    if intake_year:
+        students = students.filter(intake_year=intake_year)
+    if status:
+        students = students.filter(status=status.upper())
+    
+    return students.values(
+        "program__id", "program__name", "program__code",
+        "intake_year__id", "intake_year__name",
+        "status"
+    ).annotate(count=Count("id")).order_by("program__name", "intake_year__name", "status")
+
+
+def student_status_history(student=None, start_date=None, end_date=None):
+    """Return StudentStatusLog entries with optional filters."""
+    logs = StudentStatusLog.objects.select_related("student", "student__program")
+    if student:
+        logs = logs.filter(student=student)
+    if start_date:
+        logs = logs.filter(date_changed__date__gte=start_date)
+    if end_date:
+        logs = logs.filter(date_changed__date__lte=end_date)
+    return logs.order_by("-date_changed")
