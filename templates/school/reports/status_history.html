@@ -1,10 +1,9 @@
 {% extends "school/reports/_base.html" %}
+{% load school_tags %}
 
 {% block title %}Status Change History{% endblock %}
 
 {% block report_content %}
-{% with report=reports.7 %}
-
 <!-- Filters -->
 <form method="get" class="card border-0 shadow-sm mb-4 filter-form print-hidden">
     <div class="card-body">
@@ -119,5 +118,4 @@
     {% endif %}
 </div>
 
-{% endwith %}
 {% endblock %}

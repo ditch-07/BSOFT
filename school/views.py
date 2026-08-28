@@ -492,6 +492,8 @@ def enrollment_report(request):
         "all_intake_years": all_intake_years,
         "status_choices": Student.STATUS_CHOICES,
         "today": get_current_date(),
+        "report": next((r for r in REPORTS if r["view"] == "enrollment_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/enrollment.html", context)
 
@@ -564,6 +566,8 @@ def outstanding_report(request):
         "total_outstanding": total_outstanding,
         "avg_outstanding": avg_outstanding,
         "total_students": students_qs.count(),
+        "report": next((r for r in REPORTS if r["view"] == "outstanding_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/outstanding.html", context)
 
@@ -601,6 +605,8 @@ def fee_audit_report(request):
         "missing": missing,
         "all_semesters": all_semesters,
         "today": today,
+        "report": next((r for r in REPORTS if r["view"] == "fee_audit_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/fee_audit.html", context)
 
@@ -649,6 +655,8 @@ def payment_methods_report(request):
         "today": today,
         "total_transactions": total_transactions,
         "total_amount": total_amount,
+        "report": next((r for r in REPORTS if r["view"] == "payment_methods_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/payment_methods.html", context)
 
@@ -709,6 +717,8 @@ def program_revenue_report(request):
         "total_paid": total_paid,
         "total_outstanding": total_outstanding,
         "overall_collection_rate": overall_collection_rate,
+        "report": next((r for r in REPORTS if r["view"] == "program_revenue_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/program_revenue.html", context)
 
@@ -761,6 +771,8 @@ def daily_collections_report(request):
         "total": total,
         "avg_transaction": avg_transaction,
         "today": today,
+        "report": next((r for r in REPORTS if r["view"] == "daily_collections_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/daily_collections.html", context)
 
@@ -816,6 +828,8 @@ def status_history_report(request):
         "end_date_filter": end_date_filter,
         "all_students": all_students,
         "today": today,
+        "report": next((r for r in REPORTS if r["view"] == "status_history_report"), None),
+        "reports": REPORTS,
     }
     return render(request, "school/reports/status_history.html", context)
     query = request.GET.get("q", "").strip()
