@@ -138,6 +138,12 @@
             <div class="sidebar-heading mb-1">System</div>
             <div class="nav flex-column gap-1">
                 <a class="sidebar-link" href="/admin/">Administration</a>
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="sidebar-link btn btn-link p-0 text-start" style="width: 100%; border: none; background: none;">
+                        Logout
+                    </button>
+                </form>
             </div>
 
             {% if ENABLE_TIME_OVERRIDE %}
