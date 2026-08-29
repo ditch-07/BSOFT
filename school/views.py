@@ -1310,7 +1310,6 @@ def student_list(request):
     status_filter = request.GET.get("status", "")
     program_filter = request.GET.get("program", "")
     year_level_filter = request.GET.get("year_level", "")
-    current_semester_only = request.GET.get("current_semester", "")
 
     today = get_current_date()
 
@@ -1318,9 +1317,9 @@ def student_list(request):
     total_students = Student.objects.count()
     if query:
         students = students.filter(
-            Q(student_number__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query)
+            Q(student_number__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query)
         )
 
     if program_filter:
@@ -1328,16 +1327,14 @@ def student_list(request):
 
     # --- Status filter logic ---
     if status_filter == "all":
-        # No status filter - show all
         pass
     elif status_filter:
-        # Filter by specific status
         students = students.filter(status=status_filter.upper())
     else:
-        # Default: show only Active and Deferred
+        # Default: Active + Deferred
         students = students.filter(status__in=[Student.ACTIVE, Student.DEFERRED])
 
-    # Filter by year level of active enrollment (current or upcoming)
+    # Year level filter
     if year_level_filter:
         students = students.filter(
             enrollments__status=Enrollment.ACTIVE,
@@ -1345,24 +1342,15 @@ def student_list(request):
             enrollments__year_level=year_level_filter
         ).distinct()
 
-    if current_semester_only:
-        current_sem = Semester.objects.filter(
-            start_date__lte=today, end_date__gte=today
-        ).first()
-        if current_sem:
-            students = students.filter(enrollments__semester=current_sem)
-
     # Program counts for filter pills
     program_counts = Student.objects.values("program__id", "program__name").annotate(
         count=Count("id")
     ).order_by("program__name")
 
-    # Get status counts
     status_counts = Student.objects.values("status").annotate(
         count=Count("id")
     ).order_by("status")
 
-    # Max year level for dropdown (based on program durations)
     max_year_level = Program.objects.aggregate(max_duration=Max("duration_years"))["max_duration"] or 6
 
     students = students.select_related("program", "intake_year").prefetch_related(
@@ -1372,25 +1360,21 @@ def student_list(request):
     paginator = Paginator(students, 10)
     page_obj = paginator.get_page(request.GET.get("page"))
 
-    return render(
-        request,
-        "school/student_list.html",
-        {
-            "total_students": total_students,
-            "filtered_count": filtered_count,
-            "page_obj": page_obj,
-            "query": query,
-            "status_filter": status_filter,
-            "program_filter": program_filter,
-            "year_level_filter": year_level_filter,
-            "current_semester_only": current_semester_only,
-            "status_choices": Student.STATUS_CHOICES,
-            "program_counts": program_counts,
-            "status_counts": {s["status"]: s["count"] for s in status_counts},
-            "max_year_level": max_year_level,
-            "today": today,
-        },
-    )
+    context = {
+        "total_students": total_students,
+        "filtered_count": filtered_count,
+        "page_obj": page_obj,
+        "query": query,
+        "status_filter": status_filter,
+        "program_filter": program_filter,
+        "year_level_filter": year_level_filter,
+        "status_choices": Student.STATUS_CHOICES,
+        "program_counts": program_counts,
+        "status_counts": {s["status"]: s["count"] for s in status_counts},
+        "max_year_level": max_year_level,
+        "today": today,
+    }
+    return render(request, "school/student_list.html", context)
 
 
 @transaction.atomic
