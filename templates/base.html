@@ -202,6 +202,9 @@
         <a href="{% url 'student_list' %}" class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-people"></i> Students
         </a>
+        <a href="{% url 'archive_list' %}" class="sidebar-link {% if 'archive' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-archive"></i> Archive
+        </a>
         <a href="{% url 'payment_create' %}" class="sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-credit-card"></i> Payments
         </a>

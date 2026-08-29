@@ -1696,6 +1696,131 @@ def student_status_change(request, pk):
 
 
 # ============================================================
+# STUDENT ARCHIVE
+# ============================================================
+
+@permission_required("school.view_student", raise_exception=True)
+def archive_list(request):
+    """Searchable list of all students (all statuses) for archive access."""
+    query = request.GET.get("q", "").strip()
+    students = Student.objects.select_related("program", "intake_year")
+
+    if query:
+        students = students.filter(
+            Q(student_number__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query)
+        )
+
+    students = students.order_by("last_name", "first_name")
+
+    # Paginate 10 per page
+    paginator = Paginator(students, 10)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(request, "school/student_archive_list.html", {
+        "page_obj": page_obj,
+        "query": query,
+        "total": students.count(),
+    })
+
+
+@permission_required("school.view_student", raise_exception=True)
+def archive_search(request):
+    """Live search for student archive - returns JSON."""
+    query = request.GET.get("q", "").strip()
+    if len(query) < 2:
+        return JsonResponse({"students": []})
+
+    students = Student.objects.filter(
+        Q(student_number__icontains=query) |
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query)
+    ).order_by("last_name", "first_name")[:10]
+
+    data = []
+    for student in students:
+        data.append({
+            "id": student.id,
+            "student_number": student.student_number,
+            "name": f"{student.first_name} {student.last_name}",
+            "program": student.program.name,
+            "status": student.get_status_display(),
+        })
+
+    return JsonResponse({"students": data})
+
+
+@permission_required("school.view_student", raise_exception=True)
+def archive_detail(request, pk):
+    """Read-only detail of a student's complete record."""
+    student = get_object_or_404(Student.objects.select_related("program", "intake_year"), pk=pk)
+
+    # --- Academic timeline ---
+    enrollments = student.enrollments.select_related(
+        "semester", "semester__academic_year", "program"
+    ).order_by("semester__academic_year__name", "semester__number")
+
+    # Years attended (distinct academic years)
+    years_attended = sorted(set(e.semester.academic_year.name for e in enrollments))
+
+    # Join year
+    join_year = student.intake_year.name
+
+    # Completion / expected completion
+    completion_year = None
+    expected_completion_year = None
+    if student.status == Student.COMPLETED:
+        last_enrollment = enrollments.last()
+        if last_enrollment:
+            completion_year = last_enrollment.semester.academic_year.name
+    else:
+        try:
+            start_year = int(student.intake_year.name)
+            expected_completion_year = str(start_year + student.program.duration_years - 1)
+        except ValueError:
+            expected_completion_year = "—"
+
+    # --- Financial summary (all time) ---
+    total_charged = student.charges.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    total_paid = student.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    balance = total_charged - total_paid
+
+    # --- Semester-by-semester breakdown for display ---
+    semester_breakdown = []
+    for enrollment in enrollments:
+        sem = enrollment.semester
+        charged = student.charges.filter(enrollment=enrollment).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0")
+        paid = student.payments.filter(semester=sem).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0")
+        semester_breakdown.append({
+            "semester": sem,
+            "year_level": enrollment.year_level,
+            "enrollment_status": enrollment.get_status_display(),
+            "charged": charged,
+            "paid": paid,
+            "balance": charged - paid,
+        })
+
+    context = {
+        "student": student,
+        "enrollments": enrollments,
+        "years_attended": years_attended,
+        "join_year": join_year,
+        "completion_year": completion_year,
+        "expected_completion_year": expected_completion_year,
+        "total_charged": total_charged,
+        "total_paid": total_paid,
+        "balance": balance,
+        "semester_breakdown": semester_breakdown,
+    }
+    return render(request, "school/student_archive_detail.html", context)
+
+
+# ============================================================
 # PAYMENTS
 # ============================================================
 

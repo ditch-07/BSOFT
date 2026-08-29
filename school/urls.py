@@ -67,6 +67,11 @@ urlpatterns = [
         name="student_status_change",
     ),
 
+    # Student Archive
+    path("students/archive/", views.archive_list, name="archive_list"),
+    path("students/archive/search/", views.archive_search, name="archive_search"),
+    path("students/archive/<int:pk>/", views.archive_detail, name="archive_detail"),
+
     # Payments
     path("payments/new/", views.payment_create, name="payment_create"),
     path("financial-records/", views.financial_records, name="financial_records"),
