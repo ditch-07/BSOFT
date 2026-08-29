@@ -735,9 +735,11 @@ def outstanding_students(semester, limit=None):
             "payments__amount",
             filter=Q(payments__semester=semester),
         ), Decimal("0")),
+    ).annotate(
+        balance=F("charged") - F("paid")
     ).filter(
         charged__gt=F("paid")
-    ).order_by("-charged")
+    ).order_by("-balance")
     
     if limit:
         students = students[:limit]
