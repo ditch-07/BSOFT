@@ -1469,6 +1469,22 @@ def student_create(request):
                     note="Initial registration.",
                 )
 
+                # Audit log
+                from school.utils.audit import log_action
+                log_action(
+                    user=request.user,
+                    action='REGISTER',
+                    student=student,
+                    summary=f"Registered student {student.first_name} {student.last_name}",
+                    details={
+                        'student_number': student.student_number,
+                        'program': student.program.name,
+                        'intake_year': student.intake_year.name,
+                        'year_level': year_level,
+                    },
+                    category='STUDENT'
+                )
+
                 messages.success(request, "Student registered and enrolled successfully.")
                 return redirect("student_detail", pk=student.pk)
         else:
@@ -1598,7 +1614,7 @@ def student_detail(request, pk):
     )
 
 
-def cancel_unpaid_future_charges(student, today=None):
+def cancel_unpaid_future_charges(student, user=None, today=None):
     """
     Deletes all StudentCharge records for a withdrawn student
     if the associated semester has not yet ended.
@@ -1612,7 +1628,22 @@ def cancel_unpaid_future_charges(student, today=None):
     )
 
     # Delete all charges linked to these enrollments
-    StudentCharge.objects.filter(enrollment__in=active_enrollments).delete()
+    deleted_count, _ = StudentCharge.objects.filter(enrollment__in=active_enrollments).delete()
+
+    if deleted_count > 0:
+        # Log the adjustment
+        from school.utils.audit import log_action
+        log_action(
+            user=user,
+            action='WITHDRAWAL',
+            student=student,
+            summary=f"Cleared {deleted_count} future charges for withdrawn student",
+            details={
+                'semesters_affected': [e.semester_id for e in active_enrollments],
+                'charges_removed': deleted_count,
+            },
+            category='FINANCIAL'
+        )
 
 
 @permission_required("school.change_student", raise_exception=True)
@@ -1621,18 +1652,34 @@ def student_status_change(request, pk):
     form = StudentStatusChangeForm(request.POST or None, initial={"status": student.status})
 
     if form.is_valid():
+        old_status = student.status
         new_status = form.cleaned_data["status"]
         student.status = new_status
         student.save(update_fields=["status"])
 
         # Handle withdrawal financials - remove unpaid charges for future/current semesters
         if new_status == Student.WITHDRAWN:
-            cancel_unpaid_future_charges(student)
+            cancel_unpaid_future_charges(student, user=request.user)
 
         StudentStatusLog.objects.create(
             student=student,
             status=student.status,
             note=form.cleaned_data["note"],
+        )
+
+        # Audit log for status change
+        from school.utils.audit import log_action
+        log_action(
+            user=request.user,
+            action='STATUS_CHANGE',
+            student=student,
+            summary=f"Status changed from {dict(Student.STATUS_CHOICES).get(old_status)} to {dict(Student.STATUS_CHOICES).get(new_status)}",
+            details={
+                'old_status': old_status,
+                'new_status': new_status,
+                'note': form.cleaned_data["note"],
+            },
+            category='STUDENT'
         )
 
         messages.success(request, f"Status updated to {student.get_status_display()}.")
@@ -1722,6 +1769,23 @@ def payment_create(request):
             payment.student = student
             payment.semester = form.cleaned_data["semester"]
             payment.save()
+
+            # Audit log
+            from school.utils.audit import log_action
+            log_action(
+                user=request.user,
+                action='PAYMENT',
+                student=student,
+                summary=f"Payment of {payment.amount} recorded for {payment.semester}",
+                details={
+                    'receipt': payment.receipt_number,
+                    'amount': str(payment.amount),
+                    'semester': str(payment.semester),
+                    'method': payment.get_method_display(),
+                    'reference': payment.reference,
+                },
+                category='FINANCIAL'
+            )
 
             messages.success(request, "Payment recorded successfully.")
             return redirect(f"{reverse('payment_create')}?student={student.pk}&semester={payment.semester.pk}")
@@ -1960,3 +2024,23 @@ def user_create(request):
         "form": form,
     }
     return render(request, "school/user_form.html", context)
+
+
+# ============================================================
+# AUDIT LOG
+# ============================================================
+
+@permission_required("school.view_auditlog", raise_exception=True)
+def audit_log_list(request):
+    """Audit trail list view with pagination."""
+    from school.models import AuditLog
+    
+    logs = AuditLog.objects.select_related("user", "student").all()
+    
+    paginator = Paginator(logs, 7)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    context = {
+        "page_obj": page_obj,
+    }
+    return render(request, "school/audit_log_list.html", context)

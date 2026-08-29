@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q, Sum
@@ -807,3 +808,45 @@ def student_status_history(student=None, start_date=None, end_date=None):
     if end_date:
         logs = logs.filter(date_changed__date__lte=end_date)
     return logs.order_by("-date_changed")
+
+
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('REGISTER', 'Student Registration'),
+        ('STATUS_CHANGE', 'Status Change'),
+        ('PAYMENT', 'Payment Recorded'),
+        ('WITHDRAWAL', 'Withdrawal Adjustment'),
+        ('FEE_STRUCTURE', 'Fee Structure Change'),
+        ('ENROLLMENT', 'Enrollment Change'),
+        ('OTHER', 'Other'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('STUDENT', 'Student'),
+        ('FINANCIAL', 'Financial'),
+        ('SYSTEM', 'System'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    student = models.ForeignKey(
+        'Student',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    summary = models.CharField(max_length=255)
+    details = models.JSONField(default=dict, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='STUDENT')
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.get_action_display()} by {self.user} at {self.timestamp}"

@@ -78,6 +78,9 @@ urlpatterns = [
     path("users/", views.user_list, name="user_list"),
     path("users/new/", views.user_create, name="user_create"),
 
+    # Audit Log
+    path("audit-log/", views.audit_log_list, name="audit_log_list"),
+
     path(
     "semesters/<int:semester_id>/progress/",
     views.bulk_progress_students,

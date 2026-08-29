@@ -35,6 +35,7 @@ class Command(BaseCommand):
                 "can_view_outstanding_reports",
                 "can_record_payments",
                 "view_student",
+                "view_auditlog",
             ]
         )
         finance.permissions.set(finance_perms)
