@@ -985,6 +985,12 @@ def semester_create(request):
 @permission_required("school.change_semester", raise_exception=True)
 def semester_edit(request, pk):
     semester = get_object_or_404(Semester, pk=pk)
+    
+    # Prevent editing completed semesters
+    if semester.status == 'COMPLETED':
+        messages.error(request, "Completed semesters cannot be edited.")
+        return redirect('semester_list')
+    
     form = SemesterForm(request.POST or None, instance=semester)
 
     if form.is_valid():

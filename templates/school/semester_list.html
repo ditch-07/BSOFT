@@ -107,16 +107,19 @@
             </thead>
             <tbody>
                 {% for semester in completed_page_obj %}
-                <tr>
+                <tr class="table-secondary">
                     <td>{{ semester.academic_year.name }}</td>
                     <td class="fw-bold">Semester {{ semester.number }}</td>
                     <td>{{ semester.start_date }}</td>
                     <td>{{ semester.end_date }}</td>
                     <td><span class="badge text-bg-secondary">Completed</span></td>
                     <td class="text-end">
-                        <a href="{% url 'fee_structure_list' semester.pk %}" class="btn btn-sm btn-outline-secondary">Fees</a>
-                        <a href="{% url 'bulk_fee_configuration' semester.pk %}" class="btn btn-sm btn-outline-info">Bulk Fees</a>
-                        <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Completed semesters are locked">
+                            <i class="bi bi-lock-fill me-1"></i> Fees
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info" disabled title="Completed semesters are locked">
+                            <i class="bi bi-lock-fill me-1"></i> Bulk Fees
+                        </button>
                     </td>
                 </tr>
                 {% empty %}
