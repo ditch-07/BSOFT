@@ -100,6 +100,13 @@
                 padding-top: 56px;
             }
         }
+    .sidebar-link .chevron-icon {
+            transition: transform 0.2s ease;
+            font-size: 0.7rem;
+        }
+        .sidebar-link[aria-expanded="true"] .chevron-icon {
+            transform: rotate(90deg);
+        }
     </style>
 </head>
 <body>
@@ -152,44 +159,58 @@
     </div>
 
     <hr>
+    <!-- Sidebar: Reports (collapsible) -->
     <div class="sidebar-heading mb-1">Reports</div>
-    <div class="nav flex-column gap-1">
-        <a href="{% url 'reports_index' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
-            All Reports
+    <div class="nav flex-column gap-1 mb-3">
+        <a class="sidebar-link d-flex justify-content-between align-items-center"
+           data-bs-toggle="collapse"
+           href="#reportsSubmenu"
+           role="button"
+           aria-expanded="false"
+           aria-controls="reportsSubmenu">
+            <span>All Reports</span>
+            <span class="chevron-icon">▶</span>
         </a>
-        <a href="{% url 'financial_records' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
-            Financial Records
-        </a>
-        <a href="{% url 'enrollment_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
-            Enrollment Summary
-        </a>
-        <a href="{% url 'outstanding_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
-            Outstanding Balances
-        </a>
-        <a href="{% url 'fee_audit_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
-            Fee Structure Audit
-        </a>
-        <a href="{% url 'payment_methods_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
-            Payment Methods
-        </a>
-        <a href="{% url 'program_revenue_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
-            Program Revenue
-        </a>
-        <a href="{% url 'daily_collections_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
-            Daily Collections
-        </a>
-        <a href="{% url 'status_history_report' %}"
-           class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
-            Status Change History
-        </a>
+        <div class="collapse" id="reportsSubmenu">
+            <div class="nav flex-column gap-1 ps-3">
+                <a href="{% url 'reports_index' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
+                    📊 Reports Index
+                </a>
+                <a href="{% url 'financial_records' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
+                    Financial Records
+                </a>
+                <a href="{% url 'enrollment_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
+                    Enrollment Summary
+                </a>
+                <a href="{% url 'outstanding_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
+                    Outstanding Balances
+                </a>
+                <a href="{% url 'fee_audit_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
+                    Fee Structure Audit
+                </a>
+                <a href="{% url 'payment_methods_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
+                    Payment Methods
+                </a>
+                <a href="{% url 'program_revenue_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
+                    Program Revenue
+                </a>
+                <a href="{% url 'daily_collections_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
+                    Daily Collections
+                </a>
+                <a href="{% url 'status_history_report' %}"
+                   class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
+                    Status Change History
+                </a>
+            </div>
+        </div>
     </div>
 
     <hr>
@@ -230,5 +251,28 @@
 </main>
 
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggle = document.querySelector('[data-bs-toggle="collapse"][href="#reportsSubmenu"]');
+            const collapseEl = document.getElementById('reportsSubmenu');
+
+            if (toggle && collapseEl) {
+                // Restore state from localStorage
+                const isOpen = localStorage.getItem('reportsSubmenuOpen') === 'true';
+                if (isOpen) {
+                    collapseEl.classList.add('show');
+                    toggle.setAttribute('aria-expanded', 'true');
+                }
+
+                // Listen for collapse events to save state
+                collapseEl.addEventListener('shown.bs.collapse', function() {
+                    localStorage.setItem('reportsSubmenuOpen', 'true');
+                });
+                collapseEl.addEventListener('hidden.bs.collapse', function() {
+                    localStorage.setItem('reportsSubmenuOpen', 'false');
+                });
+            }
+        });
+    </script>
 </body>
 </html>
