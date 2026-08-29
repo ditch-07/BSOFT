@@ -1598,14 +1598,36 @@ def student_detail(request, pk):
     )
 
 
+def cancel_unpaid_future_charges(student, today=None):
+    """
+    Deletes all StudentCharge records for a withdrawn student
+    if the associated semester has not yet ended.
+    """
+    today = today or get_current_date()
+
+    # Get all enrollments for semesters that are NOT ended (end_date >= today)
+    active_enrollments = student.enrollments.filter(
+        semester__end_date__gte=today,
+        status=Enrollment.ACTIVE  # only active enrollments (not already completed)
+    )
+
+    # Delete all charges linked to these enrollments
+    StudentCharge.objects.filter(enrollment__in=active_enrollments).delete()
+
+
 @permission_required("school.change_student", raise_exception=True)
 def student_status_change(request, pk):
     student = get_object_or_404(Student, pk=pk)
     form = StudentStatusChangeForm(request.POST or None, initial={"status": student.status})
 
     if form.is_valid():
-        student.status = form.cleaned_data["status"]
+        new_status = form.cleaned_data["status"]
+        student.status = new_status
         student.save(update_fields=["status"])
+
+        # Handle withdrawal financials - remove unpaid charges for future/current semesters
+        if new_status == Student.WITHDRAWN:
+            cancel_unpaid_future_charges(student)
 
         StudentStatusLog.objects.create(
             student=student,
