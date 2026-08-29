@@ -282,6 +282,9 @@
         <a href="{% url 'backup_index' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup_index' %}active{% endif %}">
             <i class="bi bi-hdd-stack"></i> Backup & Restore
         </a>
+        <a href="{% url 'backup_settings' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup_settings' %}active{% endif %}">
+            <i class="bi bi-gear"></i> Backup Settings
+        </a>
         <a href="{% url 'audit_log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'audit_log_list' %}active{% endif %}">
             <i class="bi bi-journal-text"></i> Audit Trail
         </a>
@@ -348,6 +351,8 @@
         }
     });
 </script>
+
+{% block extra_js %}{% endblock %}
 
 </body>
 </html>

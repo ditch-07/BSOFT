@@ -850,3 +850,64 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} by {self.user} at {self.timestamp}"
+
+
+class BackupConfig(models.Model):
+    """
+    Singleton configuration for backup settings.
+    """
+    backup_path = models.CharField(
+        max_length=500,
+        default='',
+        help_text="Absolute path to backup directory (e.g., /media/usb/backups or D:\\backups)"
+    )
+    auto_backup_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable automatic daily backups"
+    )
+    retention_days = models.PositiveIntegerField(
+        default=7,
+        help_text="Number of days to keep backup files"
+    )
+    strict_mode = models.BooleanField(
+        default=True,
+        help_text="When ON, dashboard will alert if backup media is not available"
+    )
+
+    class Meta:
+        verbose_name = "Backup Configuration"
+        verbose_name_plural = "Backup Configuration"
+
+    def __str__(self):
+        return "Backup Configuration"
+
+    @classmethod
+    def get_config(cls):
+        """Get or create the singleton config."""
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+    def get_backup_path(self):
+        """Return the configured backup path, falling back to settings.BACKUP_DIR."""
+        if self.backup_path:
+            return self.backup_path
+        from django.conf import settings
+        return settings.BACKUP_DIR
+
+    def is_backup_available(self):
+        """Check if the backup path exists and is writable."""
+        import os
+        path = self.get_backup_path()
+        if not path:
+            return False
+        try:
+            if not os.path.exists(path):
+                os.makedirs(path, exist_ok=True)
+            # Test writability by creating a temporary file
+            test_file = os.path.join(path, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            return True
+        except Exception:
+            return False

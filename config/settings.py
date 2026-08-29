@@ -51,6 +51,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "school.context_processors.time_override_enabled",
+                "school.context_processors.backup_config",
             ],
         },
     },

@@ -93,6 +93,7 @@ urlpatterns = [
     path("backups/download/<path:filename>/", views.backup_download, name="backup_download"),
     path("backups/restore/<path:filename>/", views.backup_restore, name="backup_restore"),
     path("backups/upload/", views.backup_upload, name="backup_upload"),
+    path("backup/settings/", views.backup_settings, name="backup_settings"),
 
     path(
     "semesters/<int:semester_id>/progress/",

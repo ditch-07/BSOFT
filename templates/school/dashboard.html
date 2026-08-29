@@ -4,6 +4,25 @@
 
 {% block content %}
 
+{% if backup_config.strict_mode and not backup_available %}
+<div class="alert alert-danger alert-dismissible fade show flash-alert" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Backup media missing!</strong>
+    Please insert your backup drive ({{ backup_config.get_backup_path }}) and
+    <a href="{% url 'backup_index' %}" class="alert-link">check backups</a>.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<style>
+.flash-alert {
+    animation: flash 1s ease-in-out infinite alternate;
+}
+@keyframes flash {
+    from { opacity: 0.7; }
+    to { opacity: 1; background-color: #f8d7da; border-color: #f5c6cb; }
+}
+</style>
+{% endif %}
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="fw-bold mb-1">Dashboard</h2>

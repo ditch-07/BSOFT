@@ -48,6 +48,7 @@ from .models import (
     daily_collections,
     enrollment_summary,
     student_status_history,
+    BackupConfig,
 )
 
 from school.reports import REPORTS
@@ -2205,22 +2206,26 @@ def audit_log_list(request):
 @user_passes_test(lambda u: u.is_superuser)
 def backup_index(request):
     """List all backups with size and date."""
-    backup_dir = settings.BACKUP_DIR
+    config = BackupConfig.get_config()
+    backup_dir = config.get_backup_path()
     backups = []
-    
+
     if os.path.exists(backup_dir):
         for filename in sorted(os.listdir(backup_dir), reverse=True):
             filepath = os.path.join(backup_dir, filename)
-            if os.path.isfile(filepath):
+            if os.path.isfile(filepath) and filename.endswith('.sqlite3'):
                 stat = os.stat(filepath)
                 backups.append({
                     'name': filename,
                     'size': stat.st_size,
                     'modified': datetime.fromtimestamp(stat.st_mtime),
                 })
-    
+
     context = {
         'backups': backups,
+        'config': config,
+        'backup_available': config.is_backup_available(),
+        'backup_path': backup_dir,
     }
     return render(request, "school/backup_index.html", context)
 
@@ -2229,12 +2234,20 @@ def backup_index(request):
 @require_POST
 def backup_create(request):
     """Create a new backup of the current database."""
+    config = BackupConfig.get_config()
     db_path = settings.DATABASES['default']['NAME']
-    backup_dir = settings.BACKUP_DIR
+    backup_dir = config.get_backup_path()
     
     if not os.path.exists(db_path):
         messages.error(request, "Database file not found.")
         return redirect('backup_index')
+    
+    if not os.path.exists(backup_dir):
+        try:
+            os.makedirs(backup_dir, exist_ok=True)
+        except Exception as e:
+            messages.error(request, f"Cannot create backup directory: {e}")
+            return redirect('backup_index')
     
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_name = f"backup_{timestamp}.sqlite3"
@@ -2252,7 +2265,8 @@ def backup_create(request):
 @user_passes_test(lambda u: u.is_superuser)
 def backup_download(request, filename):
     """Download a backup file."""
-    backup_dir = settings.BACKUP_DIR
+    config = BackupConfig.get_config()
+    backup_dir = config.get_backup_path()
     # Sanitize filename to prevent directory traversal
     filename = os.path.basename(filename)
     filepath = os.path.join(backup_dir, filename)
@@ -2269,8 +2283,9 @@ def backup_download(request, filename):
 @require_POST
 def backup_restore(request, filename):
     """Restore a backup, creating a safety backup first."""
+    config = BackupConfig.get_config()
     db_path = settings.DATABASES['default']['NAME']
-    backup_dir = settings.BACKUP_DIR
+    backup_dir = config.get_backup_path()
     
     # Sanitize filename
     filename = os.path.basename(filename)
@@ -2301,6 +2316,16 @@ def backup_upload(request):
     if request.method != 'POST':
         return redirect('backup_index')
     
+    config = BackupConfig.get_config()
+    backup_dir = config.get_backup_path()
+    
+    if not os.path.exists(backup_dir):
+        try:
+            os.makedirs(backup_dir, exist_ok=True)
+        except Exception as e:
+            messages.error(request, f"Cannot create backup directory: {e}")
+            return redirect('backup_index')
+    
     uploaded_file = request.FILES.get('backup_file')
     if not uploaded_file:
         messages.error(request, "No file selected.")
@@ -2323,7 +2348,6 @@ def backup_upload(request):
     if not safe_name.endswith(allowed_extensions):
         safe_name += '.sqlite3'
     
-    backup_dir = settings.BACKUP_DIR
     backup_path = os.path.join(backup_dir, safe_name)
     
     # Handle duplicate names
@@ -2343,3 +2367,38 @@ def backup_upload(request):
         messages.error(request, f"Upload failed: {e}")
     
     return redirect('backup_index')
+
+
+from django import forms
+
+class BackupSettingsForm(forms.ModelForm):
+    class Meta:
+        model = BackupConfig
+        fields = ['backup_path', 'auto_backup_enabled', 'retention_days', 'strict_mode']
+        widgets = {
+            'backup_path': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '/path/to/backup'}),
+            'retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+            'auto_backup_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'strict_mode': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def backup_settings(request):
+    """View to update backup configuration."""
+    config = BackupConfig.get_config()
+
+    if request.method == 'POST':
+        form = BackupSettingsForm(request.POST, instance=config)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Backup settings updated.")
+            return redirect('backup_settings')
+    else:
+        form = BackupSettingsForm(instance=config)
+
+    return render(request, 'school/backup_settings.html', {
+        'form': form,
+        'config': config,
+        'backup_available': config.is_backup_available(),
+    })
