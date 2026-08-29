@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required, permission_required, 
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F, Q, Sum, Count
+from django.db.models import F, Q, Sum, Count, Max
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1309,13 +1309,13 @@ def student_list(request):
     query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "")
     program_filter = request.GET.get("program", "")
-    intake_year_filter = request.GET.get("intake_year", "")
+    year_level_filter = request.GET.get("year_level", "")
     current_semester_only = request.GET.get("current_semester", "")
 
     today = get_current_date()
 
     students = Student.objects.all()
-    total_students = Student.objects.count() 
+    total_students = Student.objects.count()
     if query:
         students = students.filter(
             Q(student_number__icontains=query)
@@ -1329,8 +1329,13 @@ def student_list(request):
     if status_filter:
         students = students.filter(status=status_filter.upper())
 
-    if intake_year_filter:
-        students = students.filter(intake_year_id=intake_year_filter)
+    # Filter by year level of active enrollment (current or upcoming)
+    if year_level_filter:
+        students = students.filter(
+            enrollments__status=Enrollment.ACTIVE,
+            enrollments__semester__end_date__gte=today,
+            enrollments__year_level=year_level_filter
+        ).distinct()
 
     if current_semester_only:
         current_sem = Semester.objects.filter(
@@ -1339,20 +1344,18 @@ def student_list(request):
         if current_sem:
             students = students.filter(enrollments__semester=current_sem)
 
-    # Get programs with student counts for filter dropdown
+    # Program counts for filter pills
     program_counts = Student.objects.values("program__id", "program__name").annotate(
         count=Count("id")
     ).order_by("program__name")
-
-    # Get intake years with student counts
-    intake_year_counts = Student.objects.values("intake_year__id", "intake_year__name").annotate(
-        count=Count("id")
-    ).order_by("-intake_year__name")
 
     # Get status counts
     status_counts = Student.objects.values("status").annotate(
         count=Count("id")
     ).order_by("status")
+
+    # Max year level for dropdown (based on program durations)
+    max_year_level = Program.objects.aggregate(max_duration=Max("duration_years"))["max_duration"] or 6
 
     students = students.select_related("program", "intake_year").prefetch_related(
         "enrollments__semester"
@@ -1371,12 +1374,12 @@ def student_list(request):
             "query": query,
             "status_filter": status_filter,
             "program_filter": program_filter,
-            "intake_year_filter": intake_year_filter,
+            "year_level_filter": year_level_filter,
             "current_semester_only": current_semester_only,
             "status_choices": Student.STATUS_CHOICES,
             "program_counts": program_counts,
-            "intake_year_counts": intake_year_counts,
             "status_counts": {s["status"]: s["count"] for s in status_counts},
+            "max_year_level": max_year_level,
             "today": today,
         },
     )
@@ -1485,6 +1488,11 @@ def student_create(request):
 @permission_required("school.view_student", raise_exception=True)
 def student_detail(request, pk):
     student = get_object_or_404(Student, pk=pk)
+    today = get_current_date()
+    
+    # Current enrollment and year level
+    current_enrollment = student.get_current_enrollment(today)
+    current_year_level = current_enrollment.year_level if current_enrollment else None
 
     semesters = Semester.objects.select_related("academic_year")
 
@@ -1584,6 +1592,8 @@ def student_detail(request, pk):
             "semester_balances": semester_balances,
             "total_year_balance": total_year_balance,
             "current_year": current_year,
+            "current_enrollment": current_enrollment,
+            "current_year_level": current_year_level,
         },
     )
 

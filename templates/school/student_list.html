@@ -26,26 +26,28 @@
     </div>
 </div>
 
-<!-- 2. Compact Search + Filters (One row) -->
+<!-- 2. Compact Search + Filters -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-center">
-            <!-- Search bar (full width) -->
+            <!-- Search bar -->
             <div class="col-md-4">
                 <input type="text" name="q" class="form-control" placeholder="Search by number or name..." value="{{ query }}">
             </div>
             
-            <!-- Intake Year & Status Dropdowns (Compact) -->
+            <!-- Year Level Dropdown (NEW) -->
             <div class="col-md-2">
-                <select name="intake_year" class="form-select" onchange="this.form.submit()">
-                    <option value="">All Years</option>
-                    {% for y in intake_year_counts %}
-                    <option value="{{ y.intake_year__id }}" {% if intake_year_filter == y.intake_year__id|stringformat:"s" %}selected{% endif %}>
-                        {{ y.intake_year__name }}
+                <select name="year_level" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Year Levels</option>
+                    {% for y in "123456"|make_list|slice:max_year_level %}
+                    <option value="{{ forloop.counter }}" {% if year_level_filter == forloop.counter|stringformat:"s" %}selected{% endif %}>
+                        Year {{ forloop.counter }}
                     </option>
                     {% endfor %}
                 </select>
             </div>
+
+            <!-- Status Dropdown -->
             <div class="col-md-2">
                 <select name="status" class="form-select" onchange="this.form.submit()">
                     <option value="">All Statuses</option>
@@ -72,14 +74,14 @@
     </div>
 </div>
 
-<!-- 3. Trade/Program Filter Pills (The "Value" you asked for) -->
+<!-- 3. Program Filter Pills -->
 <div class="mb-4">
     <div class="d-flex flex-wrap gap-2">
         <a href="{% url 'student_list' %}" class="btn btn-outline-primary {% if not program_filter %}active{% endif %}">
             All Programs ({{ total_students }})
         </a>
         {% for p in program_counts %}
-        <a href="?program={{ p.program__id }}&q={{ query }}&intake_year={{ intake_year_filter }}&status={{ status_filter }}" 
+        <a href="?program={{ p.program__id }}&q={{ query }}&year_level={{ year_level_filter }}&status={{ status_filter }}&current_semester={{ current_semester_only }}"
            class="btn btn-outline-primary {% if program_filter == p.program__id|stringformat:"s" %}active{% endif %}">
             {{ p.program__name }} ({{ p.count }})
         </a>
@@ -87,7 +89,7 @@
     </div>
 </div>
 
-<!-- 4. Table (Keep logic as is) -->
+<!-- 4. Table -->
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <div class="table-responsive">
@@ -97,7 +99,7 @@
                         <th>Student Number</th>
                         <th>Name</th>
                         <th>Program</th>
-                        <th>Intake Year</th>
+                        <th>Year Level</th>                   <!-- Changed from Intake Year -->
                         <th>Current Semester</th>
                         <th>Status</th>
                         <th class="text-end">Actions</th>
@@ -113,7 +115,15 @@
                             </a>
                         </td>
                         <td>{{ student.program.name }}</td>
-                        <td>{{ student.intake_year.name }}</td>
+                        <td>
+                            {% with enrollment=student.get_current_enrollment %}
+                                {% if enrollment %}
+                                    {{ enrollment.year_level }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
                         <td>
                             {% with enrollment=student.get_current_enrollment %}
                                 {% if enrollment %}
@@ -138,19 +148,15 @@
                             {% endif %}
                         </td>
                         <td class="text-end">
-                            <a href="{% url 'student_detail' student.pk %}" class="btn btn-sm btn-outline-secondary">
-                                View
-                            </a>
-                            <a href="{% url 'payment_create' %}?student={{ student.pk }}" class="btn btn-sm btn-outline-success">
-                                Payment
-                            </a>
+                            <a href="{% url 'student_detail' student.pk %}" class="btn btn-sm btn-outline-secondary">View</a>
+                            <a href="{% url 'payment_create' %}?student={{ student.pk }}" class="btn btn-sm btn-outline-success">Payment</a>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center text-muted py-4">
                             No students found.
-                            {% if not query and not status_filter and not program_filter and not intake_year_filter %}
+                            {% if not query and not status_filter and not program_filter and not year_level_filter and not current_semester_only %}
                                 <a href="{% url 'student_create' %}">Register the first one</a>.
                             {% endif %}
                         </td>
@@ -160,12 +166,13 @@
             </table>
         </div>
 
+        <!-- Pagination -->
         {% if page_obj.paginator.num_pages > 1 %}
         <nav class="mt-3">
             <ul class="pagination justify-content-center mb-0">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&intake_year={{ intake_year_filter }}&current_semester={{ current_semester_only }}">Previous</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&year_level={{ year_level_filter }}&current_semester={{ current_semester_only }}">Previous</a>
                     </li>
                 {% endif %}
                 <li class="page-item disabled">
@@ -173,7 +180,7 @@
                 </li>
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&intake_year={{ intake_year_filter }}&current_semester={{ current_semester_only }}">Next</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&program={{ program_filter }}&year_level={{ year_level_filter }}&current_semester={{ current_semester_only }}">Next</a>
                     </li>
                 {% endif %}
             </ul>

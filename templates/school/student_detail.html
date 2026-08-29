@@ -134,13 +134,31 @@
             <div class="card-body">
                 <h5>Student Information</h5>
                 <hr>
-                <div class="mb-2"><strong>Student Number:</strong><br>{{ student.student_number }}</div>
-                <div class="mb-2"><strong>Program:</strong><br>{{ student.program.name }}</div>
-                <div class="mb-2"><strong>Intake Year:</strong><br>{{ student.intake_year.name }}</div>
-                <div class="mb-2"><strong>Date of Birth:</strong><br>{{ student.date_of_birth|default:"—" }}</div>
-                <div class="mb-2"><strong>Guardian:</strong><br>{{ student.guardian_name|default:"—" }}</div>
-                <div class="mb-2"><strong>Phone:</strong><br>{{ student.guardian_phone|default:"—" }}</div>
-                <div class="mb-2"><strong>National ID:</strong><br>{{ student.national_id|default:"—" }}</div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-2"><strong>Student Number:</strong><br>{{ student.student_number }}</div>
+                        <div class="mb-2"><strong>Program:</strong><br>{{ student.program.name }}</div>
+                        <div class="mb-2"><strong>Intake Year:</strong><br>{{ student.intake_year.name }}</div>
+                        <div class="mb-2"><strong>Current Year Level:</strong><br>
+                            {{ current_year_level|default:"—" }}
+                            {% if current_year_level %}
+                                <span class="badge bg-info text-dark ms-1">Year {{ current_year_level }}</span>
+                            {% endif %}
+                            {% if current_enrollment %}
+                                <div class="small text-muted mt-1">{{ current_enrollment.semester }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-2"><strong>Gender:</strong><br>{{ student.gender|default:"—" }}</div>
+                        <div class="mb-2"><strong>Date of Birth:</strong><br>{{ student.date_of_birth|default:"—" }}</div>
+                        <div class="mb-2"><strong>Student Phone:</strong><br>{{ student.student_phone|default:"—" }}</div>
+                        <div class="mb-2"><strong>Guardian:</strong><br>{{ student.guardian_name|default:"—" }}</div>
+                        <div class="mb-2"><strong>Guardian Phone:</strong><br>{{ student.guardian_phone|default:"—" }}</div>
+                        <div class="mb-2"><strong>National ID:</strong><br>{{ student.national_id|default:"—" }}</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
