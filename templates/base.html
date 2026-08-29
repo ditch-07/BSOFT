@@ -10,6 +10,43 @@
     <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     <style>
+        /* Reset body to avoid extra spacing */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+
+        /* Fixed navbar */
+        .navbar.fixed-top {
+            z-index: 1030;
+            height: 56px; /* standard navbar height */
+        }
+
+        /* Fixed sidebar – sits below navbar, left side */
+        .sidebar-fixed {
+            position: fixed;
+            top: 56px;           /* navbar height */
+            left: 0;
+            bottom: 0;
+            width: 16.6667%;     /* matches col-md-2 */
+            overflow-y: auto;
+            z-index: 1020;
+            background-color: #fff;
+            border-right: 1px solid #dee2e6;
+            padding: 1rem;
+        }
+
+        /* Main content – scrolls independently */
+        .main-content {
+            margin-left: 16.6667%;
+            margin-top: 56px;    /* below navbar */
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        /* Sidebar link styling (unchanged) */
         .sidebar-link {
             display: block;
             color: #495057;
@@ -36,11 +73,39 @@
             font-weight: 700;
             padding: 0 12px;
         }
+
+        /* Adjust alert spacing inside main */
+        .main-content .alert {
+            margin-top: 0;
+        }
+
+        /* Small screens: make sidebar full width? We'll keep it fixed for simplicity,
+           but you can add responsive overrides if needed. */
+        @media (max-width: 768px) {
+            .sidebar-fixed {
+                width: 100%;
+                height: auto;
+                position: relative;
+                top: 0;
+                border-right: none;
+                border-bottom: 1px solid #dee2e6;
+            }
+            .main-content {
+                margin-left: 0;
+                margin-top: 0;
+                height: auto;
+                overflow-y: visible;
+            }
+            body {
+                padding-top: 56px;
+            }
+        }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-dark bg-dark shadow-sm">
+<!-- Fixed navbar -->
+<nav class="navbar navbar-dark bg-dark shadow-sm fixed-top">
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">
             NRZ STUDENT MANAGEMENT
@@ -53,128 +118,116 @@
     </div>
 </nav>
 
-<div class="container-fluid">
-    <div class="row">
-
-        <aside class="col-md-2 bg-white border-end min-vh-100 p-3">
-
-            <div class="nav flex-column gap-1 mb-3">
-                <a href="{% url 'dashboard' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                    Dashboard
-                </a>
-                <a href="{% url 'student_list' %}"
-                   class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
-                    Students
-                </a>
-                <a href="{% url 'payment_create' %}"
-                   class="sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
-                    Payments
-                </a>
-            </div>
-
-            <div class="sidebar-heading mb-1">Academic Setup</div>
-            <div class="nav flex-column gap-1 mb-3">
-                <a href="{% url 'academic_year_list' %}"
-                   class="sidebar-link {% if 'academic_year' in request.resolver_match.url_name %}active{% endif %}">
-                    Academic Years
-                </a>
-                <a href="{% url 'semester_list' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'semester_list' or request.resolver_match.url_name == 'semester_create' or request.resolver_match.url_name == 'semester_edit' %}active{% endif %}">
-                    Semesters
-                </a>
-                <a href="{% url 'program_list' %}"
-                   class="sidebar-link {% if 'program' in request.resolver_match.url_name %}active{% endif %}">
-                    Programs
-                </a>
-                <a href="{% url 'semester_list' %}"
-                   class="sidebar-link">
-                    Fee Structures
-                </a>
-            </div>
-
-            <hr>
-            <div class="sidebar-heading mb-1">Reports</div>
-            <div class="nav flex-column gap-1">
-                <a href="{% url 'reports_index' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
-                    All Reports
-                </a>
-                <a href="{% url 'financial_records' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
-                    Financial Records
-                </a>
-                <a href="{% url 'enrollment_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
-                    Enrollment Summary
-                </a>
-                <a href="{% url 'outstanding_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
-                    Outstanding Balances
-                </a>
-                <a href="{% url 'fee_audit_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
-                    Fee Structure Audit
-                </a>
-                <a href="{% url 'payment_methods_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
-                    Payment Methods
-                </a>
-                <a href="{% url 'program_revenue_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
-                    Program Revenue
-                </a>
-                <a href="{% url 'daily_collections_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
-                    Daily Collections
-                </a>
-                <a href="{% url 'status_history_report' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
-                    Status Change History
-                </a>
-            </div>
-
-            <hr>
-            <div class="sidebar-heading mb-1">System</div>
-            <div class="nav flex-column gap-1">
-                <a class="sidebar-link" href="/admin/">Administration</a>
-                <form action="{% url 'logout' %}" method="post">
-                    {% csrf_token %}
-                    <button type="submit" class="sidebar-link btn btn-link p-0 text-start" style="width: 100%; border: none; background: none;">
-                        Logout
-                    </button>
-                </form>
-            </div>
-
-            {% if ENABLE_TIME_OVERRIDE %}
-            <hr>
-            <div class="sidebar-heading mb-1">Testing</div>
-            <div class="nav flex-column gap-1">
-                <a href="{% url 'time_override' %}"
-                   class="sidebar-link {% if request.resolver_match.url_name == 'time_override' %}active{% endif %}">
-                    ⏰ Time Override
-                </a>
-            </div>
-            {% endif %}
-
-        </aside>
-
-        <main class="col-md-10 p-4">
-
-            {% for message in messages %}
-                <div class="alert alert-{% if 'error' in message.tags %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            {% endfor %}
-
-            {% block content %}
-            {% endblock %}
-
-        </main>
-
+<!-- Fixed sidebar -->
+<aside class="sidebar-fixed">
+    <div class="nav flex-column gap-1 mb-3">
+        <a href="{% url 'dashboard' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            Dashboard
+        </a>
+        <a href="{% url 'student_list' %}"
+           class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
+            Students
+        </a>
+        <a href="{% url 'payment_create' %}"
+           class="sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+            Payments
+        </a>
     </div>
-</div>
+
+    <div class="sidebar-heading mb-1">Academic Setup</div>
+    <div class="nav flex-column gap-1 mb-3">
+        <a href="{% url 'semester_list' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'semester_list' or request.resolver_match.url_name == 'semester_create' or request.resolver_match.url_name == 'semester_edit' %}active{% endif %}">
+            Semesters
+        </a>
+        <a href="{% url 'program_list' %}"
+           class="sidebar-link {% if 'program' in request.resolver_match.url_name %}active{% endif %}">
+            Programs
+        </a>
+        <a href="{% url 'semester_list' %}"
+           class="sidebar-link">
+            Fee Structures
+        </a>
+    </div>
+
+    <hr>
+    <div class="sidebar-heading mb-1">Reports</div>
+    <div class="nav flex-column gap-1">
+        <a href="{% url 'reports_index' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
+            All Reports
+        </a>
+        <a href="{% url 'financial_records' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
+            Financial Records
+        </a>
+        <a href="{% url 'enrollment_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
+            Enrollment Summary
+        </a>
+        <a href="{% url 'outstanding_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
+            Outstanding Balances
+        </a>
+        <a href="{% url 'fee_audit_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
+            Fee Structure Audit
+        </a>
+        <a href="{% url 'payment_methods_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
+            Payment Methods
+        </a>
+        <a href="{% url 'program_revenue_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
+            Program Revenue
+        </a>
+        <a href="{% url 'daily_collections_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
+            Daily Collections
+        </a>
+        <a href="{% url 'status_history_report' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
+            Status Change History
+        </a>
+    </div>
+
+    <hr>
+    <div class="sidebar-heading mb-1">System</div>
+    <div class="nav flex-column gap-1">
+        <a class="sidebar-link" href="/admin/">Administration</a>
+        <form action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit" class="sidebar-link btn btn-link p-0 text-start" style="width: 100%; border: none; background: none;">
+                Logout
+            </button>
+        </form>
+    </div>
+
+    {% if ENABLE_TIME_OVERRIDE %}
+    <hr>
+    <div class="sidebar-heading mb-1">Testing</div>
+    <div class="nav flex-column gap-1">
+        <a href="{% url 'time_override' %}"
+           class="sidebar-link {% if request.resolver_match.url_name == 'time_override' %}active{% endif %}">
+            ⏰ Time Override
+        </a>
+    </div>
+    {% endif %}
+</aside>
+
+<!-- Scrollable main content -->
+<main class="main-content">
+    {% for message in messages %}
+        <div class="alert alert-{% if 'error' in message.tags %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+
+    {% block content %}
+    {% endblock %}
+</main>
 
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
 </body>
