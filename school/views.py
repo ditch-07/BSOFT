@@ -1759,6 +1759,36 @@ def archive_search(request):
     return JsonResponse({"students": data})
 
 
+# ============================================================
+# STUDENT LIST - SEARCH (JSON)
+# ============================================================
+
+@permission_required("school.view_student", raise_exception=True)
+def student_list_search(request):
+    """Live search for student list - returns all students (any status) matching query."""
+    query = request.GET.get("q", "").strip()
+    if len(query) < 2:
+        return JsonResponse({"students": []})
+
+    students = Student.objects.filter(
+        Q(student_number__icontains=query) |
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query)
+    ).order_by("last_name", "first_name")[:10]
+
+    data = []
+    for student in students:
+        data.append({
+            "id": student.id,
+            "student_number": student.student_number,
+            "name": f"{student.first_name} {student.last_name}",
+            "program": student.program.name,
+            "status": student.get_status_display(),
+        })
+
+    return JsonResponse({"students": data})
+
+
 @permission_required("school.view_student", raise_exception=True)
 def archive_detail(request, pk):
     """Read-only detail of a student's complete record."""

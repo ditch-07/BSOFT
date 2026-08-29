@@ -60,6 +60,7 @@ urlpatterns = [
     path("students/", views.student_list, name="student_list"),
     path("students/new/", views.student_create, name="student_create"),
     path("students/search/", views.student_search, name="student_search"),
+    path("students/list-search/", views.student_list_search, name="student_list_search"),
     path("students/<int:pk>/", views.student_detail, name="student_detail"),
     path(
         "students/<int:pk>/status/",
