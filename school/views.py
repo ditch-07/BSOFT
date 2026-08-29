@@ -6,11 +6,12 @@ from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F, Q, Sum, Count, Max
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.conf import settings
 
 from .utils.time_utils import get_current_datetime, get_current_date
 
@@ -50,6 +51,10 @@ from .models import (
 )
 
 from school.reports import REPORTS
+
+import os
+import shutil
+from datetime import datetime
 
 
 def create_academic_year_enrollments(student, start_semester, start_year_level):
@@ -2191,3 +2196,150 @@ def audit_log_list(request):
         "page_obj": page_obj,
     }
     return render(request, "school/audit_log_list.html", context)
+
+
+# ============================================================
+# BACKUP & RESTORE (Superuser only)
+# ============================================================
+
+@user_passes_test(lambda u: u.is_superuser)
+def backup_index(request):
+    """List all backups with size and date."""
+    backup_dir = settings.BACKUP_DIR
+    backups = []
+    
+    if os.path.exists(backup_dir):
+        for filename in sorted(os.listdir(backup_dir), reverse=True):
+            filepath = os.path.join(backup_dir, filename)
+            if os.path.isfile(filepath):
+                stat = os.stat(filepath)
+                backups.append({
+                    'name': filename,
+                    'size': stat.st_size,
+                    'modified': datetime.fromtimestamp(stat.st_mtime),
+                })
+    
+    context = {
+        'backups': backups,
+    }
+    return render(request, "school/backup_index.html", context)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+@require_POST
+def backup_create(request):
+    """Create a new backup of the current database."""
+    db_path = settings.DATABASES['default']['NAME']
+    backup_dir = settings.BACKUP_DIR
+    
+    if not os.path.exists(db_path):
+        messages.error(request, "Database file not found.")
+        return redirect('backup_index')
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_name = f"backup_{timestamp}.sqlite3"
+    backup_path = os.path.join(backup_dir, backup_name)
+    
+    try:
+        shutil.copy2(db_path, backup_path)
+        messages.success(request, f"Backup created: {backup_name}")
+    except Exception as e:
+        messages.error(request, f"Backup failed: {e}")
+    
+    return redirect('backup_index')
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def backup_download(request, filename):
+    """Download a backup file."""
+    backup_dir = settings.BACKUP_DIR
+    # Sanitize filename to prevent directory traversal
+    filename = os.path.basename(filename)
+    filepath = os.path.join(backup_dir, filename)
+    
+    if not os.path.exists(filepath):
+        messages.error(request, "Backup file not found.")
+        return redirect('backup_index')
+    
+    response = FileResponse(open(filepath, 'rb'), as_attachment=True, filename=filename)
+    return response
+
+
+@user_passes_test(lambda u: u.is_superuser)
+@require_POST
+def backup_restore(request, filename):
+    """Restore a backup, creating a safety backup first."""
+    db_path = settings.DATABASES['default']['NAME']
+    backup_dir = settings.BACKUP_DIR
+    
+    # Sanitize filename
+    filename = os.path.basename(filename)
+    backup_path = os.path.join(backup_dir, filename)
+    
+    if not os.path.exists(backup_path):
+        messages.error(request, "Backup file not found.")
+        return redirect('backup_index')
+    
+    # Create safety backup first
+    safety_name = f"safety_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sqlite3"
+    safety_path = os.path.join(backup_dir, safety_name)
+    
+    try:
+        if os.path.exists(db_path):
+            shutil.copy2(db_path, safety_path)
+        shutil.copy2(backup_path, db_path)
+        messages.success(request, f"Database restored from {filename}. Safety backup created: {safety_name}")
+    except Exception as e:
+        messages.error(request, f"Restore failed: {e}")
+    
+    return redirect('backup_index')
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def backup_upload(request):
+    """Upload a backup file from local machine."""
+    if request.method != 'POST':
+        return redirect('backup_index')
+    
+    uploaded_file = request.FILES.get('backup_file')
+    if not uploaded_file:
+        messages.error(request, "No file selected.")
+        return redirect('backup_index')
+    
+    # Validate file extension
+    allowed_extensions = ('.sqlite3', '.db')
+    if not uploaded_file.name.endswith(allowed_extensions):
+        messages.error(request, "Invalid file type. Only .sqlite3 or .db files are allowed.")
+        return redirect('backup_index')
+    
+    # Sanitize filename
+    original_name = os.path.basename(uploaded_file.name)
+    # Replace any problematic characters
+    safe_name = "".join(c for c in original_name if c.isalnum() or c in ('-', '_', '.')).rstrip()
+    if not safe_name:
+        safe_name = f"uploaded_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sqlite3"
+    
+    # Ensure it has the right extension
+    if not safe_name.endswith(allowed_extensions):
+        safe_name += '.sqlite3'
+    
+    backup_dir = settings.BACKUP_DIR
+    backup_path = os.path.join(backup_dir, safe_name)
+    
+    # Handle duplicate names
+    counter = 1
+    base_name, ext = os.path.splitext(safe_name)
+    while os.path.exists(backup_path):
+        safe_name = f"{base_name}_{counter}{ext}"
+        backup_path = os.path.join(backup_dir, safe_name)
+        counter += 1
+    
+    try:
+        with open(backup_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+        messages.success(request, f"Backup uploaded: {safe_name}")
+    except Exception as e:
+        messages.error(request, f"Upload failed: {e}")
+    
+    return redirect('backup_index')

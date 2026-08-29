@@ -279,6 +279,9 @@
     <div class="sidebar-heading"><i class="bi bi-gear"></i> System</div>
     <div class="nav flex-column gap-1">
         <a class="sidebar-link" href="/admin/"><i class="bi bi-shield-lock"></i> Administration</a>
+        <a href="{% url 'backup_index' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup_index' %}active{% endif %}">
+            <i class="bi bi-hdd-stack"></i> Backup & Restore
+        </a>
         <a href="{% url 'audit_log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'audit_log_list' %}active{% endif %}">
             <i class="bi bi-journal-text"></i> Audit Trail
         </a>

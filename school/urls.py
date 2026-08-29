@@ -87,6 +87,13 @@ urlpatterns = [
     # Audit Log
     path("audit-log/", views.audit_log_list, name="audit_log_list"),
 
+    # Backup & Restore (Superuser only)
+    path("backups/", views.backup_index, name="backup_index"),
+    path("backups/create/", views.backup_create, name="backup_create"),
+    path("backups/download/<path:filename>/", views.backup_download, name="backup_download"),
+    path("backups/restore/<path:filename>/", views.backup_restore, name="backup_restore"),
+    path("backups/upload/", views.backup_upload, name="backup_upload"),
+
     path(
     "semesters/<int:semester_id>/progress/",
     views.bulk_progress_students,
