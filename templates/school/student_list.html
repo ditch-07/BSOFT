@@ -14,12 +14,6 @@
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card border-0 shadow-sm text-center p-3">
-            <h3 class="mb-0">{{ total_students }}</h3>
-            <small class="text-muted">Total Students</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm text-center p-3">
             <h3 class="mb-0">{{ filtered_count }}</h3>
             <small class="text-muted">Filtered Results</small>
         </div>
@@ -50,7 +44,12 @@
             <!-- Status Dropdown -->
             <div class="col-md-2">
                 <select name="status" class="form-select" onchange="this.form.submit()">
-                    <option value="">All Statuses</option>
+                    <option value="" {% if status_filter == "" %}selected{% endif %}>
+                        Active & Deferred
+                    </option>
+                    <option value="all" {% if status_filter == "all" %}selected{% endif %}>
+                        All Statuses
+                    </option>
                     {% for value, label in status_choices %}
                     <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
                         {{ label }}
@@ -99,8 +98,8 @@
                         <th>Student Number</th>
                         <th>Name</th>
                         <th>Program</th>
-                        <th>Year Level</th>                   <!-- Changed from Intake Year -->
-                        <th>Current Semester</th>
+                        <th>Year Level</th>
+                        <th>Phone</th>
                         <th>Status</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -124,18 +123,7 @@
                                 {% endif %}
                             {% endwith %}
                         </td>
-                        <td>
-                            {% with enrollment=student.get_current_enrollment %}
-                                {% if enrollment %}
-                                    {{ enrollment.semester }}
-                                    {% if enrollment.semester.end_date < today %}
-                                        <span class="badge text-bg-secondary small ms-1">Completed</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="text-muted">Not enrolled</span>
-                                {% endif %}
-                            {% endwith %}
-                        </td>
+                        <td>{{ student.student_phone|default:"—" }}</td>
                         <td>
                             {% if student.status == "ACTIVE" %}
                                 <span class="badge text-bg-success">Active</span>

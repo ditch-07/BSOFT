@@ -1326,8 +1326,16 @@ def student_list(request):
     if program_filter:
         students = students.filter(program_id=program_filter)
 
-    if status_filter:
+    # --- Status filter logic ---
+    if status_filter == "all":
+        # No status filter - show all
+        pass
+    elif status_filter:
+        # Filter by specific status
         students = students.filter(status=status_filter.upper())
+    else:
+        # Default: show only Active and Deferred
+        students = students.filter(status__in=[Student.ACTIVE, Student.DEFERRED])
 
     # Filter by year level of active enrollment (current or upcoming)
     if year_level_filter:

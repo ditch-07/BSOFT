@@ -282,6 +282,12 @@
         <a href="{% url 'audit_log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'audit_log_list' %}active{% endif %}">
             <i class="bi bi-journal-text"></i> Audit Trail
         </a>
+        <a href="{% url 'user_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}">
+            <i class="bi bi-people"></i> Users
+        </a>
+        <a href="{% url 'user_create' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_create' %}active{% endif %}">
+            <i class="bi bi-person-plus"></i> Add User
+        </a>
         <form action="{% url 'logout' %}" method="post">
             {% csrf_token %}
             <button type="submit" class="sidebar-link btn btn-link p-0 text-start" style="width:100%; border:none; background:none;">
