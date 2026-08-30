@@ -1976,7 +1976,7 @@ def payment_create(request):
             )
 
             messages.success(request, "Payment recorded successfully.")
-            return redirect(f"{reverse('payment_create')}?student={student.pk}&semester={payment.semester.pk}")
+            return redirect("student_detail", pk=student.pk)
 
     charged = paid = balance = 0
     if selected_enrollment:

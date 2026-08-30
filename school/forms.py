@@ -286,7 +286,6 @@ class PaymentForm(BootstrapFormMixin, forms.ModelForm):
             "receipt_number",
             "amount",
             "payment_date",
-            "method",
             "reference",
             "notes",
         ]
