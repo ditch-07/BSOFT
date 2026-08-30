@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Create Program{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+
+        <div class="mb-4">
+            <h2 class="fw-bold mb-1">Create Program</h2>
+            <p class="text-muted">e.g. "NC Electrical Engineering" — a 2 or 3 year National Certificate.</p>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="row">
+                        {% for field in form %}
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">
+                                {{ field.label }}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                            {% for error in field.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'program_list' %}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary px-4">Create Program</button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const placeholders = {
+        'id_code': 'e.g. NC-ELECTRICAL',
+        'id_name': 'e.g. NC Electrical Engineering',
+        'id_description': 'Optional description',
+        'id_duration_years': '2 or 3',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Update select empty options
+    document.querySelectorAll('select').forEach(select => {
+        const firstOption = select.querySelector('option[value=""]');
+        if (firstOption && !firstOption.disabled) {
+            firstOption.disabled = true;
+            firstOption.selected = true;
+        }
+    });
+});
+</script>
+{% endblock %}

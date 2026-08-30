@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Time Override{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h4 class="mb-0">⏰ Time Override (Testing Only)</h4>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">
+            Set a fixed date/time to test semester logic, payment due dates, etc.
+            The override persists across server restarts until you clear it.
+        </p>
+        
+        <form method="post" class="row g-3 mb-4">
+            {% csrf_token %}
+            <div class="col-auto">
+                <label class="form-label">Frozen Date & Time</label>
+                <input type="datetime-local" name="frozen_datetime" 
+                       value="{{ frozen_iso }}" class="form-control">
+            </div>
+            <div class="col-auto align-self-end">
+                <button type="submit" name="action" value="set" class="btn btn-primary">
+                    Set
+                </button>
+                <button type="submit" name="action" value="clear" class="btn btn-outline-danger">
+                    Clear
+                </button>
+            </div>
+        </form>
+        
+        {% if frozen %}
+        <div class="alert alert-info">
+            <strong>Currently frozen to:</strong> {{ frozen }}
+            <br><small>All datetime functions will return this value.</small>
+        </div>
+        {% else %}
+        <div class="alert alert-success">
+            <strong>No time override active.</strong> Using real system time.
+        </div>
+        {% endif %}
+        
+        <div class="mt-3">
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

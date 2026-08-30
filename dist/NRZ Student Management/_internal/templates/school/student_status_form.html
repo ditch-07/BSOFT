@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Change Status{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-6">
+        <div class="mb-4">
+            <h2 class="fw-bold mb-1">Change Status</h2>
+            <p class="text-muted">{{ student }} — currently {{ student.get_status_display }}</p>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-end">
+                <a href="{% url 'student_detail' student.pk %}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary px-4">Update Status</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update select empty options
+    document.querySelectorAll('select').forEach(select => {
+        const firstOption = select.querySelector('option[value=""]');
+        if (firstOption && !firstOption.disabled) {
+            firstOption.disabled = true;
+            firstOption.selected = true;
+        }
+    });
+});
+</script>
+{% endblock %}

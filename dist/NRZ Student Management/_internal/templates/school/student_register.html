@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit Student{% else %}Register Student{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-xl-9">
+
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold mb-1">{% if is_edit %}Edit Student{% else %}Register Student{% endif %}</h2>
+                    {% if is_edit %}
+                        <p class="text-muted">Update student details below.</p>
+                    {% else %}
+                        <p class="text-muted">Register the student and enrol them in their starting semester.</p>
+                    {% endif %}
+                </div>
+                <a href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-4">Student Information</h5>
+                    <div class="row">
+                        {% for field in form %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">
+                                    {{ field.label }}
+                                </label>
+                                {{ field }}
+                                {% for error in field.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                                {% if field.name == "program" %}
+                                    <div class="form-text">Determines available year levels and fee structure.</div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {% if not is_edit %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h5 class="mb-1">Starting Enrollment</h5>
+                    <p class="text-muted small mb-4">
+                        The student will automatically be charged according to the fee
+                        structure configured for their program, year level, and semester.
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Starting Year Level</label>
+                            <select name="year_level" class="form-select" required>
+                                <option value="" selected disabled>Select year level</option>
+                                {% for level in year_level_choices %}
+                                    <option value="{{ level }}">Year {{ level }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Usually Year 1, unless the student is transferring in.</div>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Starting Semester</label>
+                            <select name="semester" class="form-select" required>
+                                <option value="" selected disabled>Select semester</option>
+                                {% for semester in semesters %}
+                                    <option value="{{ semester.pk }}">
+                                        {{ semester }}
+                                        {% if semester.status == "ACTIVE" %}(current){% elif semester.status == "UPCOMING" %}(upcoming){% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if not semesters %}
+                                <div class="text-danger small">
+                                    No current or upcoming semester exists — <a href="{% url 'semester_create' %}">create one first</a>.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary px-4">{% if is_edit %}Save Changes{% else %}Register Student{% endif %}</button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add placeholders to form fields
+    const placeholders = {
+        'id_student_number': 'e.g. STU00125',
+        'id_first_name': 'Enter first name',
+        'id_last_name': 'Enter last name',
+        'id_national_id': 'National ID (optional)',
+        'id_date_of_birth': 'YYYY-MM-DD',
+        'id_gender': '',
+        'id_guardian_name': "Guardian's full name",
+        'id_guardian_phone': '+263 77 123 4567',
+        'id_student_phone': '+263 77 123 4567',
+        'id_address': 'Physical address',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Add form-control class to any field missing it
+    document.querySelectorAll('.form-control:not([class*="form-control"]), .form-select:not([class*="form-select"])').forEach(el => {
+        if (el.tagName === 'SELECT') {
+            el.classList.add('form-select');
+        } else if (el.tagName === 'TEXTAREA') {
+            el.classList.add('form-control');
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+            el.classList.add('form-check-input');
+        } else {
+            el.classList.add('form-control');
+        }
+    });
+});
+</script>
+{% endblock %}

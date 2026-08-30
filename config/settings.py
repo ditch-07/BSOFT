@@ -1,10 +1,23 @@
 from pathlib import Path
 import os
 
+from config.paths import APP_DIR, DATA_DIR, STATIC_DIR, TEMPLATES_DIR
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-BACKUP_DIR = os.path.join(BASE_DIR, 'backups')
-os.makedirs(BACKUP_DIR, exist_ok=True)
+# Use separate data directory that works both in development and packaged
+# In development: project/data
+# In packaged: ProgramData/NRZ Student Management (or env var)
+APP_DATA_DIR = Path(
+    os.environ.get(
+        "NRZ_DATA_DIR",
+        DATA_DIR
+    )
+)
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+BACKUP_DIR = APP_DATA_DIR / "backups"
+BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 SECRET_KEY = "nrz-local-development-key"
 DEBUG = True
@@ -43,7 +56,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [TEMPLATES_DIR],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -62,7 +75,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "data" / "school.sqlite3",
+        "NAME": APP_DATA_DIR / "school.sqlite3",
     }
 }
 
@@ -79,7 +92,7 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
+    STATIC_DIR,
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

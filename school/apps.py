@@ -1,13 +1,18 @@
 from django.apps import AppConfig
+import sys
+import os
 
 
 class SchoolConfig(AppConfig):
     name = 'school'
 
     def ready(self):
+        # Skip scheduler during PyInstaller analysis or when explicitly disabled
+        if getattr(sys, 'frozen', False) or os.environ.get('NRZ_DISABLE_SCHEDULER') == '1':
+            return
+
         # Auto-seed academic years on startup
         # Only run in main process (not during migrations, tests, etc.)
-        import os
         if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_AUTORELOAD'):
             try:
                 self._seed_academic_years()

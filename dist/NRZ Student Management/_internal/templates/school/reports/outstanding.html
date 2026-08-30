@@ -1,0 +1,154 @@
+{% extends "school/reports/_base.html" %}
+{% load school_tags %}
+
+{% block title %}Outstanding Balances{% endblock %}
+
+{% block report_content %}
+<!-- Filters -->
+<form method="get" class="card border-0 shadow-sm mb-4 filter-form print-hidden">
+    <div class="card-body">
+        <div class="row g-3 align-items-end flex-wrap">
+            <div class="col-12 col-md-5">
+                <label class="form-label fw-semibold small">Semester</label>
+                <select name="semester" class="form-select" onchange="this.form.submit()">
+                    {% for s in all_semesters %}
+                    <option value="{{ s.pk }}" {% if semester and semester.pk == s.pk %}selected{% endif %}>
+                        {{ s }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold small">Program</label>
+                <select name="program" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Programs</option>
+                    {% for p in all_programs %}
+                    <option value="{{ p.pk }}" {% if program_filter and program_filter.pk == p.pk %}selected{% endif %}>
+                        {{ p.name }} ({{ p.code }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3">
+                <div class="d-flex gap-2">
+                    <a href="?format=csv{% if semester %}&semester={{ semester.pk }}{% endif %}{% if program_filter %}&program={{ program_filter.pk }}{% endif %}" 
+                       class="btn btn-outline-success w-100">
+                        📥 CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Summary Cards -->
+{% if semester %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Semester</div>
+            <div class="fw-bold">{{ semester }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Students with Balance</div>
+            <div class="display-6 fw-bold text-danger">{{ total_students }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center p-3">
+            <div class="text-muted small">Total Outstanding</div>
+            <div class="display-6 fw-bold text-danger">
+                ${{ total_outstanding|floatformat:2 }}
+            </div>
+        </div>
+    </div>
+<div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm text-center p-3">
+                <div class="text-muted small">Avg Outstanding</div>
+                <div class="display-6 fw-bold">
+                    ${{ avg_outstanding|floatformat:2 }}
+                </div>
+            </div>
+        </div>
+</div>
+{% endif %}
+
+<!-- Results Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Student Number</th>
+                        <th>Name</th>
+                        <th>Program</th>
+                        <th class="text-end">Charged</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Outstanding</th>
+                        <th class="text-end">Collection %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in page_obj %}
+                    {% with charged=student.charged|default:0 paid=student.paid|default:0 %}
+                    <tr>
+                        <td class="fw-bold">{{ student.student_number }}</td>
+                        <td>
+                            <a href="{% url 'student_detail' student.pk %}" class="text-decoration-none">
+                                {{ student.first_name }} {{ student.last_name }}
+                            </a>
+                        </td>
+                        <td>{{ student.program.name }}</td>
+                        <td class="text-end">${{ charged|floatformat:2 }}</td>
+                        <td class="text-end text-success">${{ paid|floatformat:2 }}</td>
+                        <td class="text-end {% if charged|sub:paid > 0 %}text-danger fw-bold{% else %}text-success{% endif %}">
+                            ${{ charged|sub:paid|floatformat:2 }}
+                        </td>
+                        <td class="text-end">
+                            {% if charged > 0 %}
+                                {{ paid|div:charged|mul:100|floatformat:1 }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            No students with outstanding balances{% if semester %} for {{ semester }}{% endif %}.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer bg-white">
+        <nav>
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if semester %}&semester={{ semester.pk }}{% endif %}{% if program_filter %}&program={{ program_filter.pk }}{% endif %}">Previous</a>
+                </li>
+                {% endif %}
+                <li class="page-item disabled">
+                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} students)</span>
+                </li>
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if semester %}&semester={{ semester.pk }}{% endif %}{% if program_filter %}&program={{ program_filter.pk }}{% endif %}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
