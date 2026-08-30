@@ -357,6 +357,12 @@ class Student(models.Model):
     gender = models.CharField(
         max_length=20,
         blank=True,
+        choices=[
+            ('MALE', 'Male'),
+            ('FEMALE', 'Female'),
+            ('OTHER', 'Other'),
+            ('NOT_SPECIFIED', 'Prefer not to say'),
+        ],
     )
 
     guardian_name = models.CharField(
