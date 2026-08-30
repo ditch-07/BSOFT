@@ -172,7 +172,8 @@ class Command(BaseCommand):
                 create_academic_year_enrollments(
                     student=student,
                     start_semester=semester,
-                    start_year_level=1
+                    start_year_level=1,
+                    program=student.program
                 )
                 self.stdout.write(f"  {student_number}: Created academic year enrollments")
 

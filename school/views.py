@@ -58,11 +58,13 @@ import shutil
 from datetime import datetime
 
 
-def create_academic_year_enrollments(student, start_semester, start_year_level):
+def create_academic_year_enrollments(student, start_semester, start_year_level, program=None):
     """
     Create enrollments and charges for all semesters in the academic year
     of `start_semester` from that semester onward.
     """
+    if program is None:
+        program = student.program
     academic_year = start_semester.academic_year
     semesters = Semester.objects.filter(
         academic_year=academic_year,
@@ -74,14 +76,14 @@ def create_academic_year_enrollments(student, start_semester, start_year_level):
 
     for sem in semesters:
         # Cap year level at program duration
-        if current_year_level > student.program.duration_years:
+        if current_year_level > program.duration_years:
             break
 
         enrollment, created = Enrollment.objects.get_or_create(
             student=student,
             semester=sem,
             defaults={
-                'program': student.program,
+                'program': program,
                 'year_level': current_year_level,
                 'status': Enrollment.ACTIVE,
             }
@@ -90,7 +92,7 @@ def create_academic_year_enrollments(student, start_semester, start_year_level):
             enrollments_created += 1
 
         fee_structure = FeeStructure.objects.filter(
-            program=student.program,
+            program=program,
             year_level=current_year_level,
             semester=sem
         ).prefetch_related('items').first()
@@ -1490,7 +1492,8 @@ def student_create(request):
                 create_academic_year_enrollments(
                     student=student,
                     start_semester=semester,
-                    start_year_level=year_level
+                    start_year_level=year_level,
+                    program=student_form.instance.program
                 )
 
                 StudentStatusLog.objects.create(
@@ -2104,7 +2107,8 @@ def bulk_progress_students(request, semester_id):
             create_academic_year_enrollments(
                 student=student,
                 start_semester=target_semester,
-                start_year_level=next_year_level
+                start_year_level=next_year_level,
+                program=program
             )
 
     messages.success(

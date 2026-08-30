@@ -157,7 +157,8 @@ class Command(BaseCommand):
                             create_academic_year_enrollments(
                                 student=student,
                                 start_semester=target_semester,
-                                start_year_level=next_year_level
+                                start_year_level=next_year_level,
+                                program=program
                             )
 
                             total_progressed += 1

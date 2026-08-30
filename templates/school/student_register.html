@@ -8,12 +8,19 @@
     <div class="col-xl-9">
 
         <div class="mb-4">
-            <h2 class="fw-bold mb-1">{% if is_edit %}Edit Student{% else %}Register Student{% endif %}</h2>
-            {% if is_edit %}
-                <p class="text-muted">Update student details below.</p>
-            {% else %}
-                <p class="text-muted">Register the student and enrol them in their starting semester.</p>
-            {% endif %}
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold mb-1">{% if is_edit %}Edit Student{% else %}Register Student{% endif %}</h2>
+                    {% if is_edit %}
+                        <p class="text-muted">Update student details below.</p>
+                    {% else %}
+                        <p class="text-muted">Register the student and enrol them in their starting semester.</p>
+                    {% endif %}
+                </div>
+                <a href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back
+                </a>
+            </div>
         </div>
 
         <form method="post">
