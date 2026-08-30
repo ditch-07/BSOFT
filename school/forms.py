@@ -20,11 +20,14 @@ class BootstrapFormMixin:
         for field in self.fields.values():
             widget = field.widget
             if isinstance(widget, forms.Select):
-                widget.attrs["class"] = "form-select"
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = (existing + " form-select").strip()
             elif isinstance(widget, forms.CheckboxInput):
-                widget.attrs["class"] = "form-check-input"
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = (existing + " form-check-input").strip()
             else:
-                widget.attrs["class"] = "form-control"
+                existing = widget.attrs.get("class", "")
+                widget.attrs["class"] = (existing + " form-control").strip()
 
 
 # ============================================================
@@ -47,8 +50,14 @@ class AcademicYearForm(BootstrapFormMixin, forms.ModelForm):
         model = AcademicYear
         fields = ["name", "start_date", "end_date", "is_current"]
         widgets = {
-            "start_date": forms.DateInput(attrs={"type": "date"}),
-            "end_date": forms.DateInput(attrs={"type": "date"}),
+            "start_date": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
+            "end_date": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
         }
 
 
@@ -57,8 +66,14 @@ class SemesterForm(BootstrapFormMixin, forms.ModelForm):
         model = Semester
         fields = ["academic_year", "number", "start_date", "end_date"]
         widgets = {
-            "start_date": forms.DateInput(attrs={"type": "date"}),
-            "end_date": forms.DateInput(attrs={"type": "date"}),
+            "start_date": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
+            "end_date": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
         }
 
 
@@ -219,7 +234,10 @@ class StudentForm(BootstrapFormMixin, forms.ModelForm):
             "status",
         ]
         widgets = {
-            "date_of_birth": forms.DateInput(attrs={"type": "date"}),
+            "date_of_birth": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
             "address": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -273,7 +291,10 @@ class PaymentForm(BootstrapFormMixin, forms.ModelForm):
             "notes",
         ]
         widgets = {
-            "payment_date": forms.DateInput(attrs={"type": "date"}),
+            "payment_date": forms.DateInput(
+                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                format="%Y-%m-%d",
+            ),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
 

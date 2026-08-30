@@ -9,6 +9,8 @@
 
     <!-- Bootstrap core CSS -->
     <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+    <!-- Flatpickr (local vendor) -->
+    <link rel="stylesheet" href="{% static 'vendor/flatpickr/flatpickr.min.css' %}">
     <!-- Bootstrap Icons (CDN - offline fallback: place in static/vendor/bootstrap-icons/) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <!-- Your custom app styles -->
@@ -329,6 +331,8 @@
 
 <!-- Bootstrap JS -->
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+<!-- Flatpickr (local vendor) -->
+<script src="{% static 'vendor/flatpickr/flatpickr.min.js' %}"></script>
 
 <!-- Keep reports submenu state -->
 <script>
@@ -348,6 +352,20 @@
             collapseEl.addEventListener('hidden.bs.collapse', function() {
                 localStorage.setItem('reportsSubmenuOpen', 'false');
             });
+        }
+        
+        // Initialize flatpickr for all .datepicker inputs
+        if (typeof flatpickr !== 'undefined') {
+            console.log('Flatpickr loaded, initializing...');
+            flatpickr(".datepicker", {
+                altInput: true,
+                altFormat: "d/m/Y",
+                dateFormat: "Y-m-d",
+                allowInput: true,
+            });
+            console.log('Flatpickr initialized on', document.querySelectorAll('.datepicker').length, 'elements');
+        } else {
+            console.error('Flatpickr NOT loaded!');
         }
     });
 </script>
