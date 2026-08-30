@@ -16,7 +16,7 @@
                 <div class="card-body p-4">
                     {% for field in form %}
                     <div class="mb-3">
-                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+                        <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">{{ field.label }}</label>
                         {{ field }}
                         {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                         {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}

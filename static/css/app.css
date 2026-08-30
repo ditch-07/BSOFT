@@ -9,11 +9,17 @@
     margin-bottom: 0.45rem;
 }
 
+/* Required field indicator */
+.form-label.required::after {
+    content: " *";
+    color: #dc3545;
+}
+
 /* Text inputs, selects and textareas */
 .form-control,
 .form-select {
     min-height: 46px;
-    border: 1px solid #adb5bd;
+    border: 1px solid #6c757d;
     background-color: #fdfdfd;
     border-radius: 6px;
     color: #212529;
@@ -32,7 +38,7 @@ textarea.form-control {
 /* Make the field feel interactive */
 .form-control:hover,
 .form-select:hover {
-    border-color: #868e96;
+    border-color: #495057;
     background-color: #ffffff;
 }
 
