@@ -1390,6 +1390,32 @@ def student_list(request):
 
 
 @transaction.atomic
+@permission_required("school.change_student", raise_exception=True)
+def student_edit(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    student_form = StudentForm(request.POST or None, instance=student)
+
+    if request.method == "POST":
+        if student_form.is_valid():
+            student_form.save()
+            messages.success(request, "Student details updated successfully.")
+            return redirect("student_detail", pk=student.pk)
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    return render(
+        request,
+        "school/student_register.html",
+        {
+            "form": student_form,
+            "student": student,
+            "is_edit": True,
+            "title": f"Edit Student — {student}",
+        },
+    )
+
+
+@transaction.atomic
 @permission_required("school.add_student", raise_exception=True)
 def student_create(request):
     student_form = StudentForm(request.POST or None)
