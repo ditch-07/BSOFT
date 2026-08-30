@@ -49,6 +49,16 @@ def wait_for_server(host, port, timeout=30):
     return False
 
 
+def run_migrations():
+    """Run Django migrations to ensure database tables exist."""
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    execute_from_command_line([
+        "manage.py",
+        "migrate",
+        "--noinput",
+    ])
+
+
 def start_django():
     # Set the data directory before Django settings are loaded
     data_dir = get_data_dir()
@@ -65,6 +75,11 @@ def start_django():
 
 
 def main():
+    # Run migrations first (idempotent, safe to run every time)
+    print("Running database migrations...")
+    run_migrations()
+    print("Migrations complete.")
+    
     django_thread = threading.Thread(
         target=start_django,
         daemon=True,

@@ -6,7 +6,7 @@
 #define AppPublisher "NRZ"
 #define AppExeName "NRZ Student Management.exe"
 #define SourceDir "dist\NRZ Student Management"
-#define DataDir "{commonappdata}\{#AppName}"
+#define DataDir "{commonappdata}\NRZ Student Management"
 
 [Setup]
 AppName={#AppName}
@@ -16,7 +16,7 @@ DefaultDirName={pf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=installer
 OutputBaseFilename=NRZ_Student_Management_Setup_{#AppVersion}
-SetupIconFile={#SourceDir}\NRZ Student Management.exe
+; SetupIconFile={#SourceDir}\NRZ Student Management.exe
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -27,6 +27,8 @@ CreateAppDir=yes
 AllowNoIcons=yes
 AppCopyright=Copyright © 2026 NRZ
 AppModifyPath={pf}\{#AppName}\unins000.exe
+; Enable detailed logging - use SetupLogging directive
+SetupLogging=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -39,10 +41,8 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 ; Main executable and all dependencies
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Create writable data directory in ProgramData
-; This is where the SQLite database and backups will live
-Source: "data\*"; DestDir: "{#DataDir}"; Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist
-Source: "backups\*"; DestDir: "{#DataDir}\backups"; Flags: ignoreversion recursesubdirs createallsubdirs onlyifdoesntexist
+; Note: data/ and backups/ are NOT included - they will be created fresh in ProgramData
+; The SQLite database will be created automatically by Django on first run
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
@@ -67,25 +67,84 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; F
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueName: "NRZ_DATA_DIR"; ValueType: expandsz
 
 [Code]
-; Custom function to set up data directory permissions if needed
+var
+  InstallLogPath: string;
+
 function InitializeSetup(): Boolean;
+var
+  SourcePath: string;
+begin
+  Result := True;
+  
+  // Verify source directory exists
+  SourcePath := ExpandConstant('{#SourceDir}');
+  if not DirExists(SourcePath) then
+  begin
+    MsgBox('ERROR: Source directory not found: ' + SourcePath + #13#10 + 
+           'Please run the build script first to create the dist folder.', 
+           mbCriticalError, MB_OK);
+    Result := False;
+  end;
+  
+  // Verify main executable exists
+  if not FileExists(SourcePath + '\NRZ Student Management.exe') then
+  begin
+    MsgBox('ERROR: Main executable not found: ' + SourcePath + '\NRZ Student Management.exe' + #13#10 +
+           'Please run: pyinstaller nrz_student_management.spec --noconfirm', 
+           mbCriticalError, MB_OK);
+    Result := False;
+  end;
+end;
+
+function ShouldSkipFile(SourceName, DestName: string; var Skip: Boolean): Boolean;
+begin
+  Result := False;
+  Skip := False;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  DataDir: string;
+  ErrCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+  end
+  else if CurStep = ssPostInstall then
+  begin
+    DataDir := ExpandConstant('{#DataDir}');
+    if not DirExists(DataDir) then
+    begin
+      ForceDirectories(DataDir);
+    end;
+    
+    DataDir := DataDir + '\backups';
+    if not DirExists(DataDir) then
+    begin
+      ForceDirectories(DataDir);
+    end;
+    
+    // Set permissions on data directory for all users
+    try
+      Exec('icacls.exe', ExpandConstant('{#DataDir}') + ' /grant "Users:(OI)(CI)F" /T', '', SW_HIDE, ewWaitUntilTerminated, ErrCode);
+    except
+    end;
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
 end;
 
-; Ensure data directory exists with correct permissions
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  DataDir: string;
+function InitializeUninstall(): Boolean;
 begin
-  if CurStep = ssPostInstall then
-  begin
-    DataDir := ExpandConstant('{#DataDir}');
-    if not DirExists(DataDir) then
-      ForceDirectories(DataDir);
-    
-    DataDir := DataDir + '\backups';
-    if not DirExists(DataDir) then
-      ForceDirectories(DataDir);
-  end;
+  Result := True;
 end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+end;
+
+begin
+end.
