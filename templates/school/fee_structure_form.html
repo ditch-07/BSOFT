@@ -23,7 +23,7 @@
 
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
-                    <h5 class="mb-3">Program &amp; Year Level</h5>
+                    <h5 class="mb-3">Program & Year Level</h5>
                     <div class="row">
                         {% for field in form %}
                         <div class="col-md-6 mb-3">
@@ -90,59 +90,101 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const formset = document.getElementById('feeFormset');
-        const totalForms = document.getElementById('id_items-TOTAL_FORMS');
-        const addBtn = document.getElementById('addFeeRow');
+document.addEventListener('DOMContentLoaded', function () {
+    // Add placeholders to fee structure form fields
+    const placeholders = {
+        'id_program': 'Select program',
+        'id_year_level': 'Select year level',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Update select empty options
+    document.querySelectorAll('select').forEach(select => {
+        const firstOption = select.querySelector('option[value=""]');
+        if (firstOption && !firstOption.disabled) {
+            firstOption.disabled = true;
+            firstOption.selected = true;
+        }
+    });
+    
+    // Add placeholders to fee formset fields
+    function addPlaceholdersToFormset() {
+        document.querySelectorAll('#feeFormset .fee-row').forEach(row => {
+            const nameInput = row.querySelector('input[name$="-name"]');
+            const descInput = row.querySelector('input[name$="-description"]');
+            const amountInput = row.querySelector('input[name$="-amount"]');
+            
+            if (nameInput && !nameInput.placeholder) nameInput.placeholder = 'e.g. Tuition';
+            if (descInput && !descInput.placeholder) descInput.placeholder = 'Description';
+            if (amountInput && !amountInput.placeholder) amountInput.placeholder = '0.00';
+        });
+    }
+    
+    addPlaceholdersToFormset();
+    
+    const formset = document.getElementById('feeFormset');
+    const totalForms = document.getElementById('id_items-TOTAL_FORMS');
+    const addBtn = document.getElementById('addFeeRow');
 
-        function getNewRow() {
-            const rows = formset.querySelectorAll('.fee-row');
-            const lastRow = rows[rows.length - 1];
-            const newRow = lastRow.cloneNode(true);
-            const index = parseInt(totalForms.value);
+    function getNewRow() {
+        const rows = formset.querySelectorAll('.fee-row');
+        const lastRow = rows[rows.length - 1];
+        const newRow = lastRow.cloneNode(true);
+        const index = parseInt(totalForms.value);
 
-            newRow.querySelectorAll('[name]').forEach(el => {
-                el.name = el.name.replace(/-\d+-/, `-${index}-`);
-                el.id = el.id.replace(/-\d+-/, `-${index}-`);
-                if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
-                    if (el.type !== 'checkbox') el.value = '';
-                }
-            });
-
-            const deleteField = newRow.querySelector('input[name$="-DELETE"]');
-            if (deleteField) deleteField.closest('.form-check')?.remove();
-
-            const removeBtn = newRow.querySelector('.remove-fee-row');
-            if (removeBtn) {
-                removeBtn.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    newRow.remove();
-                });
-            } else {
-                const cell = newRow.querySelector('.col-md-1');
-                cell.innerHTML = '<button type="button" class="btn btn-sm btn-danger remove-fee-row">&times;</button>';
-                cell.querySelector('.remove-fee-row').addEventListener('click', function (e) {
-                    e.preventDefault();
-                    newRow.remove();
-                });
+        newRow.querySelectorAll('[name]').forEach(el => {
+            el.name = el.name.replace(/-\d+-/, `-${index}-`);
+            el.id = el.id.replace(/-\d+-/, `-${index}-`);
+            if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
+                if (el.type !== 'checkbox') el.value = '';
             }
+        });
 
-            totalForms.value = index + 1;
-            return newRow;
+        const deleteField = newRow.querySelector('input[name$="-DELETE"]');
+        if (deleteField) deleteField.closest('.form-check')?.remove();
+
+        const removeBtn = newRow.querySelector('.remove-fee-row');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                newRow.remove();
+            });
+        } else {
+            const cell = newRow.querySelector('.col-md-1');
+            cell.innerHTML = '<button type="button" class="btn btn-sm btn-danger remove-fee-row">&times;</button>';
+            cell.querySelector('.remove-fee-row').addEventListener('click', function (e) {
+                e.preventDefault();
+                newRow.remove();
+            });
         }
 
-        addBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-            formset.appendChild(getNewRow());
-        });
+        totalForms.value = index + 1;
+        return newRow;
+    }
 
-        formset.querySelectorAll('.remove-fee-row').forEach(btn => {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                this.closest('.fee-row').remove();
-            });
+    addBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const newRow = getNewRow();
+        formset.appendChild(newRow);
+        addPlaceholdersToFormset();
+    });
+
+    formset.querySelectorAll('.remove-fee-row').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            this.closest('.fee-row').remove();
         });
     });
+});
 </script>
 {% endblock %}

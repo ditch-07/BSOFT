@@ -53,7 +53,7 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-semibold">Starting Year Level</label>
                             <select name="year_level" class="form-select" required>
-                                <option value="">Select year level</option>
+                                <option value="" selected disabled>Select year level</option>
                                 {% for level in year_level_choices %}
                                     <option value="{{ level }}">Year {{ level }}</option>
                                 {% endfor %}
@@ -64,7 +64,7 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-semibold">Starting Semester</label>
                             <select name="semester" class="form-select" required>
-                                <option value="">Select semester</option>
+                                <option value="" selected disabled>Select semester</option>
                                 {% for semester in semesters %}
                                     <option value="{{ semester.pk }}">
                                         {{ semester }}
@@ -91,4 +91,44 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add placeholders to form fields
+    const placeholders = {
+        'id_student_number': 'e.g. STU00125',
+        'id_first_name': 'Enter first name',
+        'id_last_name': 'Enter last name',
+        'id_national_id': 'National ID (optional)',
+        'id_date_of_birth': 'YYYY-MM-DD',
+        'id_gender': '',
+        'id_guardian_name': "Guardian's full name",
+        'id_guardian_phone': '+263 77 123 4567',
+        'id_student_phone': '+263 77 123 4567',
+        'id_address': 'Physical address',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Add form-control class to any field missing it
+    document.querySelectorAll('.form-control:not([class*="form-control"]), .form-select:not([class*="form-select"])').forEach(el => {
+        if (el.tagName === 'SELECT') {
+            el.classList.add('form-select');
+        } else if (el.tagName === 'TEXTAREA') {
+            el.classList.add('form-control');
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+            el.classList.add('form-check-input');
+        } else {
+            el.classList.add('form-control');
+        }
+    });
+});
+</script>
 {% endblock %}

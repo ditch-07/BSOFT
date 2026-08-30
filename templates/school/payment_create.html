@@ -203,6 +203,29 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+    
+    // Add placeholders to form fields
+    const placeholders = {
+        'id_amount': '0.00',
+        'id_reference': 'Optional reference',
+        'id_notes': 'Optional notes',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Update select empty options
+    document.querySelectorAll('select').forEach(select => {
+        const firstOption = select.querySelector('option[value=""]');
+        if (firstOption && !firstOption.disabled) {
+            firstOption.disabled = true;
+            firstOption.selected = true;
+        }
+    });
 });
 </script>
 

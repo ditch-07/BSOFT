@@ -1,41 +1,124 @@
 /* =========================================
-   Global Alerts / Notifications
+   FORM CONTROLS
    ========================================= */
 
-.alert {
-    border: 0;
-    border-left: 4px solid;
-    border-radius: 0;
-    padding: 14px 18px;
-    margin-bottom: 1.25rem;
-    font-size: 0.95rem;
+.form-label {
+    color: #212529;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.45rem;
+}
+
+/* Text inputs, selects and textareas */
+.form-control,
+.form-select {
+    min-height: 46px;
+    border: 1px solid #adb5bd;
+    background-color: #fdfdfd;
+    border-radius: 6px;
+    color: #212529;
+    box-shadow: none;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
+}
+
+/* Textarea shouldn't have forced height */
+textarea.form-control {
+    min-height: 100px;
+}
+
+/* Make the field feel interactive */
+.form-control:hover,
+.form-select:hover {
+    border-color: #868e96;
+    background-color: #ffffff;
+}
+
+/* Strong keyboard/click focus */
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+    outline: none;
+}
+
+/* Placeholder text */
+.form-control::placeholder {
+    color: #6c757d;
+    opacity: 1;
+}
+
+/* Select placeholder */
+.form-select {
+    cursor: pointer;
+}
+
+/* Select empty option styling */
+.form-select option[value=""] {
+    color: #6c757d;
+}
+
+/* Disabled fields */
+.form-control:disabled,
+.form-select:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+
+/* Validation */
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545;
+}
+
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.12);
+}
+
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: #198754;
+}
+
+/* Input group addon */
+.input-group-text {
+    background-color: #f8f9fa;
+    border: 1px solid #adb5bd;
+    color: #495057;
     font-weight: 500;
 }
 
-/* Error / Danger */
-.alert-danger {
-    background-color: #f4dddd;
-    border-left-color: #d85c5c;
-    color: #8f1717;
+/* Form text / help text */
+.form-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.35rem;
 }
 
-/* Warning */
-.alert-warning {
-    background-color: #f8efd6;
-    border-left-color: #d6a62e;
-    color: #765800;
+/* Checkbox / Radio */
+.form-check-input {
+    border: 1px solid #adb5bd;
+    width: 1.15rem;
+    height: 1.15rem;
+    margin-top: 0.15rem;
 }
 
-/* Success */
-.alert-success {
-    background-color: #dff0e4;
-    border-left-color: #4e9b68;
-    color: #246039;
+.form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
 }
 
-/* Info */
-.alert-info {
-    background-color: #dfeef5;
-    border-left-color: #4d91ad;
-    color: #285d70;
+.form-check-input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+}
+
+.form-check-label {
+    color: #212529;
+    font-size: 0.9rem;
 }

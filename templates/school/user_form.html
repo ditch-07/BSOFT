@@ -53,4 +53,32 @@
         </form>
     </div>
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const placeholders = {
+        'id_username': 'e.g. jdoe',
+        'id_password': 'Enter temporary password',
+    };
+    
+    Object.entries(placeholders).forEach(([id, placeholder]) => {
+        const el = document.getElementById(id);
+        if (el && placeholder) {
+            el.placeholder = placeholder;
+        }
+    });
+    
+    // Update select empty options
+    document.querySelectorAll('select').forEach(select => {
+        const firstOption = select.querySelector('option[value=""]');
+        if (firstOption && !firstOption.disabled) {
+            firstOption.disabled = true;
+            firstOption.selected = true;
+        }
+    });
+});
+</script>
 {% endblock %}
