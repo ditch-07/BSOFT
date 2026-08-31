@@ -36,9 +36,26 @@
                     <td>{{ semester.end_date }}</td>
                     <td><span class="badge text-bg-success">Active</span></td>
                     <td class="text-end">
-                        <a href="{% url 'fee_structure_list' semester.pk %}" class="btn btn-sm btn-outline-secondary">Fees</a>
-                        <a href="{% url 'bulk_fee_configuration' semester.pk %}" class="btn btn-sm btn-outline-info">Bulk Fees</a>
-                        <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <div class="btn-group" role="group">
+                            <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil me-1"></i>Edit
+                            </a>
+                            <button class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span class="visually-hidden">Toggle Dropdown</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'fee_structure_list' semester.pk %}">
+                                        <i class="bi bi-cash me-2"></i>Manage Fees
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'bulk_fee_configuration' semester.pk %}">
+                                        <i class="bi bi-speedometer2 me-2"></i>Bulk Configure
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -75,9 +92,26 @@
                     <td>{{ semester.end_date }}</td>
                     <td><span class="badge text-bg-warning">Upcoming</span></td>
                     <td class="text-end">
-                        <a href="{% url 'fee_structure_list' semester.pk %}" class="btn btn-sm btn-outline-secondary">Fees</a>
-                        <a href="{% url 'bulk_fee_configuration' semester.pk %}" class="btn btn-sm btn-outline-info">Bulk Fees</a>
-                        <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <div class="btn-group" role="group">
+                            <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil me-1"></i>Edit
+                            </a>
+                            <button class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span class="visually-hidden">Toggle Dropdown</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'fee_structure_list' semester.pk %}">
+                                        <i class="bi bi-cash me-2"></i>Manage Fees
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'bulk_fee_configuration' semester.pk %}">
+                                        <i class="bi bi-speedometer2 me-2"></i>Bulk Configure
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -114,11 +148,8 @@
                     <td>{{ semester.end_date }}</td>
                     <td><span class="badge text-bg-secondary">Completed</span></td>
                     <td class="text-end">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Completed semesters are locked">
-                            <i class="bi bi-lock-fill me-1"></i> Fees
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-info" disabled title="Completed semesters are locked">
-                            <i class="bi bi-lock-fill me-1"></i> Bulk Fees
+                        <button type="button" class="btn btn-sm btn-secondary" disabled title="Completed semesters are locked">
+                            <i class="bi bi-lock-fill me-1"></i>Locked
                         </button>
                     </td>
                 </tr>

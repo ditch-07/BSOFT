@@ -6,28 +6,28 @@ import os
 class SchoolConfig(AppConfig):
     name = 'school'
 
-    # def ready(self):
-    #     # Skip scheduler during PyInstaller analysis or when explicitly disabled
-    #     if getattr(sys, 'frozen', False) or os.environ.get('NRZ_DISABLE_SCHEDULER') == '1':
-    #         return
+    def ready(self):
+        # Skip scheduler during PyInstaller analysis or when explicitly disabled
+        if getattr(sys, 'frozen', False) or os.environ.get('NRZ_DISABLE_SCHEDULER') == '1':
+            return
 
-    #     # Auto-seed academic years on startup
-    #     # Only run in main process (not during migrations, tests, etc.)
-    #     if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_AUTORELOAD'):
-    #         try:
-    #             self._seed_academic_years()
-    #         except Exception as e:
-    #             import logging
-    #             logging.getLogger(__name__).error(f"Failed to seed academic years: {e}")
+        # Auto-seed academic years on startup
+        # Only run in main process (not during migrations, tests, etc.)
+        if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_AUTORELOAD'):
+            try:
+                self._seed_academic_years()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to seed academic years: {e}")
 
-    #     # Start the automatic progression scheduler
-    #     if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_AUTORELOAD'):
-    #         try:
-    #             from .scheduler import start_scheduler
-    #             start_scheduler()
-    #         except Exception as e:
-    #             import logging
-    #             logging.getLogger(__name__).error(f"Failed to start scheduler: {e}")
+        # Start the automatic progression scheduler
+        if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_AUTORELOAD'):
+            try:
+                from .scheduler import start_scheduler
+                start_scheduler()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to start scheduler: {e}")
 
     def _seed_academic_years(self):
         """Ensure current academic year exists on startup."""

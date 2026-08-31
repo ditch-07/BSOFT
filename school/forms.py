@@ -123,15 +123,55 @@ class FeeStructureItemForm(forms.ModelForm):
                 attrs={"class": "form-control", "step": "0.01"}
             ),
         }
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get('name')
+        fee_structure = self.instance.fee_structure
+        
+        # Check for duplicate fee names within the same fee structure
+        if name and fee_structure:
+            existing = FeeStructureItem.objects.filter(
+                fee_structure=fee_structure,
+                name=name
+            ).exclude(pk=self.instance.pk)  # Exclude current instance when editing
+            
+            if existing.exists():
+                self.add_error('name', f"A fee item named '{name}' already exists in this fee structure.")
+        
+        return cleaned_data
+
+
+class FeeStructureItemBaseFormSet(forms.BaseInlineFormSet):
+    """Custom formset to validate for duplicate fee names within a fee structure."""
+    
+    def clean(self):
+        super().clean()
+        
+        seen_names = {}
+        for i, form in enumerate(self.forms):
+            if form.cleaned_data and not form.cleaned_data.get('DELETE'):
+                name = form.cleaned_data.get('name')
+                if name:
+                    if name in seen_names:
+                        form.add_error('name', 
+                            f"Duplicate fee item name '{name}'. Already exists in row {seen_names[name] + 1}.")
+                        self.non_form_errors().append(
+                            f"Fee item '{name}' is duplicated in rows {seen_names[name] + 1} and {i + 1}."
+                        )
+                    else:
+                        seen_names[name] = i
 
 
 FeeStructureItemFormSet = inlineformset_factory(
     FeeStructure,
     FeeStructureItem,
     form=FeeStructureItemForm,
+    formset=FeeStructureItemBaseFormSet,
     extra=1,
     can_delete=True,
 )
+
 # Explicit prefix so the JS in fee_structure_form.html (which targets
 # #id_items-TOTAL_FORMS) matches regardless of Django's default naming.
 FeeStructureItemFormSet.get_default_prefix = classmethod(lambda cls: "items")

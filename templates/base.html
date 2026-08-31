@@ -171,6 +171,16 @@
             font-size: 0.6rem;
             margin-left: auto;
         }
+        
+        /* Blinking badge animation */
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0.3; }
+        }
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
         hr {
             margin: 0.3rem 0;
             opacity: 0.4;
@@ -200,6 +210,10 @@
     <div class="nav flex-column gap-1">
         <a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
             <i class="bi bi-grid-1x2"></i> Dashboard
+        </a>
+        <a href="{% url 'reminders' %}" class="sidebar-link {% if request.resolver_match.url_name == 'reminders' %}active{% endif %} d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-exclamation-circle"></i> Reminders</span>
+            {% if reminders_count %}<span class="badge bg-danger rounded-pill blink">{{ reminders_count }}</span>{% endif %}
         </a>
         <a href="{% url 'student_list' %}" class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
             <i class="bi bi-people"></i> Students
@@ -362,6 +376,12 @@
                 altFormat: "d/m/Y",
                 dateFormat: "Y-m-d",
                 allowInput: true,
+                disableMobile: false,
+                mode: "single",
+                minDate: "1900-01-01",
+                maxDate: new Date().fp_incr(365 * 10), // 10 years in future
+                monthSelectorType: "dropdown",
+                yearSelectorType: "dropdown",
             });
             console.log('Flatpickr initialized on', document.querySelectorAll('.datepicker').length, 'elements');
         } else {

@@ -62,6 +62,7 @@
                     <thead>
                         <tr>
                             <th>Semester</th>
+                            <th class="text-end">Students Charged</th>
                             <th class="text-end">Charged</th>
                             <th class="text-end">Paid</th>
                             <th class="text-end">Outstanding</th>
@@ -72,6 +73,7 @@
                         {% for s in group.semesters %}
                         <tr>
                             <td>{{ s.semester }}</td>
+                            <td class="text-end fw-bold">{{ s.students_charged }}</td>
                             <td class="text-end fw-bold">${{ s.total_charged|floatformat:2 }}</td>
                             <td class="text-end text-success fw-bold">${{ s.total_paid|floatformat:2 }}</td>
                             <td class="text-end {% if s.outstanding > 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
@@ -83,6 +85,7 @@
                         <!-- Year total row -->
                         <tr class="table-secondary fw-bold">
                             <td>{{ group.year.name }} TOTAL</td>
+                            <td class="text-end">{{ group.totals.students_charged }}</td>
                             <td class="text-end">${{ group.totals.charged|floatformat:2 }}</td>
                             <td class="text-end text-success">${{ group.totals.paid|floatformat:2 }}</td>
                             <td class="text-end text-danger">${{ group.totals.outstanding|floatformat:2 }}</td>

@@ -11,6 +11,9 @@ urlpatterns = [
 
     # Dashboard
     path("", views.dashboard, name="dashboard"),
+    
+    # Reminders
+    path("reminders/", views.reminders, name="reminders"),
 
     # Reports
     path("reports/", views.reports_index, name="reports_index"),

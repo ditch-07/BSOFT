@@ -5,9 +5,12 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-xl-10">
-        <div class="mb-4">
-            <h2 class="fw-bold mb-1">{{ title }}</h2>
-            <p class="text-muted">Choose the program and year level, then list the fee items.</p>
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">{{ title }}</h2>
+                <p class="text-muted">Choose the program and year level, then list the fee items.</p>
+            </div>
+            <a href="{% url back_url_name back_semester_id %}{% if filter_program or filter_year_level %}?program={{ filter_program }}&year_level={{ filter_year_level }}{% endif %}" class="btn btn-secondary">← Back</a>
         </div>
 
         <form method="post" id="feeStructureForm">
@@ -125,6 +128,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const amountInput = row.querySelector('input[name$="-amount"]');
             
             if (nameInput && !nameInput.placeholder) nameInput.placeholder = 'e.g. Tuition';
+            // Autofill name with "Tuition" if empty
+            if (nameInput && !nameInput.value) nameInput.value = 'Tuition';
             if (descInput && !descInput.placeholder) descInput.placeholder = 'Description';
             if (amountInput && !amountInput.placeholder) amountInput.placeholder = '0.00';
         });
@@ -146,7 +151,14 @@ document.addEventListener('DOMContentLoaded', function () {
             el.name = el.name.replace(/-\d+-/, `-${index}-`);
             el.id = el.id.replace(/-\d+-/, `-${index}-`);
             if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
-                if (el.type !== 'checkbox') el.value = '';
+                if (el.type !== 'checkbox') {
+                    // Autofill name field with "Tuition"
+                    if (el.name.endsWith('-name')) {
+                        el.value = 'Tuition';
+                    } else {
+                        el.value = '';
+                    }
+                }
             }
         });
 

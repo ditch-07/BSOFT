@@ -811,14 +811,44 @@ def program_revenue(semester):
     # Sort by charged descending
     result.sort(key=lambda x: x['charged'], reverse=True)
     return result
-def daily_collections(date=None):
-    """Return payments for a specific date (default today)."""
+def students_with_missing_details():
+    """
+    Returns active students with incomplete contact or address information.
+    Missing details include: no guardian name, no student phone, no address, or no guardian phone.
+    """
+    from django.db.models import Q
+    
+    return Student.objects.filter(
+        status=Student.ACTIVE
+    ).filter(
+        Q(guardian_name='') | 
+        Q(student_phone='') | 
+        Q(address='') | 
+        Q(guardian_phone='')
+    ).select_related('program').order_by('-created_at')
+
+
+def daily_collections(date=None, start_date=None, end_date=None):
+    """
+    Return payments for a specific date or date range.
+    If start_date and end_date are provided, they take precedence.
+    Otherwise, return payments for a specific date (default today).
+    """
     from school.utils.time_utils import get_current_date
-    if date is None:
-        date = get_current_date()
-    return Payment.objects.filter(payment_date=date).select_related(
-        "student", "semester", "semester__academic_year"
-    )
+    
+    if start_date and end_date:
+        # Date range filter
+        return Payment.objects.filter(
+            payment_date__gte=start_date,
+            payment_date__lte=end_date
+        ).select_related("student", "semester", "semester__academic_year")
+    else:
+        # Single date filter
+        if date is None:
+            date = get_current_date()
+        return Payment.objects.filter(payment_date=date).select_related(
+            "student", "semester", "semester__academic_year"
+        )
 
 
 def enrollment_summary(program=None, intake_year=None, status=None):

@@ -48,6 +48,7 @@ from .models import (
     daily_collections,
     enrollment_summary,
     student_status_history,
+    students_with_missing_details,
     BackupConfig,
 )
 
@@ -265,6 +266,20 @@ def dashboard(request):
     return render(request, "school/dashboard.html", context)
 
 
+@login_required
+def reminders(request):
+    """Display reminders about students with missing details."""
+    students = students_with_missing_details()
+    paginator = Paginator(students, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    
+    context = {
+        "page_obj": page_obj,
+        "total_reminders": students.count(),
+    }
+    return render(request, "school/reminders.html", context)
+
+
 # ============================================================
 # FINANCIAL RECORDS
 # ============================================================
@@ -305,6 +320,11 @@ def financial_records(request):
 
         outstanding = total_charged - total_paid
         collection_rate = (total_paid / total_charged * 100) if total_charged > 0 else 0
+        
+        # Count distinct students charged in this semester
+        students_charged = StudentCharge.objects.filter(
+            fee_item__fee_structure__semester=sem
+        ).values('student').distinct().count()
 
         semester_data.append({
             "semester": sem,
@@ -313,6 +333,7 @@ def financial_records(request):
             "total_paid": total_paid,
             "outstanding": outstanding,
             "collection_rate": collection_rate,
+            "students_charged": students_charged,
         })
 
     # Group by academic year and compute totals per year
@@ -321,6 +342,7 @@ def financial_records(request):
         semesters = list(semesters_iter)
         charged = sum(s["total_charged"] for s in semesters)
         paid = sum(s["total_paid"] for s in semesters)
+        students_charged = sum(s["students_charged"] for s in semesters)
         year_groups.append({
             "year": year,
             "semesters": semesters,
@@ -329,6 +351,7 @@ def financial_records(request):
                 "paid": paid,
                 "outstanding": sum(s["outstanding"] for s in semesters),
                 "collection_rate": (paid / charged * 100) if charged > 0 else 0,
+                "students_charged": students_charged,
             }
         })
 
@@ -780,21 +803,42 @@ def program_revenue_report(request):
 @permission_required("school.can_view_financial_reports", raise_exception=True)
 def daily_collections_report(request):
     """Daily collections / cashbook report."""
+    from datetime import datetime
+    
     today = get_current_date()
     date_filter = request.GET.get("date")
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
     
-    if date_filter:
+    filter_date = today
+    start_date = None
+    end_date = None
+    
+    # Handle date range if provided
+    if date_from and date_to:
         try:
-            from datetime import datetime
+            start_date = datetime.strptime(date_from, "%Y-%m-%d").date()
+            end_date = datetime.strptime(date_to, "%Y-%m-%d").date()
+        except ValueError:
+            start_date = None
+            end_date = None
+    # Fall back to single date if provided
+    elif date_filter:
+        try:
             filter_date = datetime.strptime(date_filter, "%Y-%m-%d").date()
         except ValueError:
             filter_date = today
-    else:
-        filter_date = today
     
     export_format = request.GET.get("format")
     
-    payments = daily_collections(filter_date)
+    # Get payments based on date range or single date
+    if start_date and end_date:
+        payments = daily_collections(start_date=start_date, end_date=end_date)
+        display_date = f"{start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}"
+    else:
+        payments = daily_collections(filter_date)
+        display_date = filter_date.strftime("%b %d, %Y")
+    
     total = payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
     avg_transaction = (total / payments.count()) if payments.count() > 0 else Decimal("0")
     
@@ -815,13 +859,19 @@ def daily_collections_report(request):
             for p in payments
         ]
         rows.append(["", "", "", "", "TOTAL", f"{total:.2f}", "", ""])
-        return _export_csv_response(
-            f"daily_collections_{filter_date.isoformat()}.csv",
-            headers, rows
-        )
+        
+        if start_date and end_date:
+            filename = f"daily_collections_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"
+        else:
+            filename = f"daily_collections_{filter_date.isoformat()}.csv"
+        
+        return _export_csv_response(filename, headers, rows)
     
     context = {
         "filter_date": filter_date,
+        "date_from": date_from,
+        "date_to": date_to,
+        "display_date": display_date,
         "payments": payments,
         "total": total,
         "avg_transaction": avg_transaction,
@@ -1359,7 +1409,7 @@ def bulk_fee_configuration(request, semester_id):
 
             return redirect("fee_structure_list", semester_id=semester.pk)
     else:
-        form = BulkFeeForm()
+        form = BulkFeeForm(initial={"fee_name": "Tuition"})
 
     return render(
         request,
@@ -2397,9 +2447,11 @@ def user_list(request):
     from django.contrib.auth.models import User, Group
     
     users = User.objects.all().prefetch_related('groups').order_by('-is_superuser', 'username')
+    paginator = Paginator(users, 20)
+    page_obj = paginator.get_page(request.GET.get("page"))
     
     context = {
-        "users": users,
+        "page_obj": page_obj,
     }
     return render(request, "school/user_list.html", context)
 

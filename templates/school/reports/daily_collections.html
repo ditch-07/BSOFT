@@ -8,14 +8,23 @@
 <form method="get" class="card border-0 shadow-sm mb-4 filter-form print-hidden">
     <div class="card-body">
         <div class="row g-3 align-items-end flex-wrap">
-            <div class="col-12 col-md-4">
-                <label class="form-label fw-semibold small">Date</label>
-                <input type="date" name="date" class="form-control" value="{{ filter_date|date:'Y-m-d' }}" onchange="this.form.submit()">
+            <div class="col-12 col-md-3">
+                <label class="form-label fw-semibold small">From Date</label>
+                <input type="date" name="date_from" class="form-control datepicker" value="{{ date_from|default:'' }}" placeholder="yyyy-mm-dd" onchange="this.form.submit()">
             </div>
             <div class="col-12 col-md-3">
-                <div class="d-flex gap-2">
-                    <a href="?format=csv{% if filter_date %}&date={{ filter_date|date:'Y-m-d' }}{% endif %}" 
-                       class="btn btn-outline-success w-100">
+                <label class="form-label fw-semibold small">To Date</label>
+                <input type="date" name="date_to" class="form-control datepicker" value="{{ date_to|default:'' }}" placeholder="yyyy-mm-dd" onchange="this.form.submit()">
+            </div>
+            <div class="col-12 col-md-2">
+                {% if date_from or date_to %}
+                <a href="{% url 'daily_collections_report' %}" class="btn btn-sm btn-outline-secondary w-100">Clear</a>
+                {% endif %}
+            </div>
+            <div class="col-12 col-md-4 text-md-end">
+                <div class="d-flex gap-2 justify-content-center justify-content-md-end">
+                    <a href="?format=csv{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}" 
+                       class="btn btn-outline-success">
                         📥 CSV
                     </a>
                 </div>
@@ -28,8 +37,8 @@
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm text-center p-3">
-            <div class="text-muted small">Date</div>
-            <div class="fw-bold">{{ filter_date|date:"F d, Y" }}</div>
+            <div class="text-muted small">Period</div>
+            <div class="fw-bold">{{ display_date }}</div>
         </div>
     </div>
     <div class="col-6 col-md-3">

@@ -6,6 +6,11 @@
 <div class="row justify-content-center">
     <div class="col-xl-10">
         <div class="mb-4">
+            <div class="mb-3">
+                <a href="{% url back_url_name back_semester_id %}" class="text-decoration-none text-muted fw-500">
+                    <i class="bi bi-chevron-left"></i> Back to Fees
+                </a>
+            </div>
             <h2 class="fw-bold mb-1">{{ title }}</h2>
             <p class="text-muted">Configure a single fee item across multiple programs and year levels at once. Existing fee items with the same name will be updated; new ones will be created. Year levels exceeding a program's duration will be skipped.</p>
         </div>
