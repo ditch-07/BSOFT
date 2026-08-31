@@ -1,18 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import sys
+
 block_cipher = None
+
+project_dir = os.getcwd()
 
 a = Analysis(
     ['launcher.py'],
-    pathex=[],
+    pathex=[project_dir],
     binaries=[],
     datas=[
-        ('config', 'config'),
-        ('school', 'school'),
-        ('templates', 'templates'),
-        ('static', 'static'),
-        ('static/vendor/bootstrap', 'static/vendor/bootstrap'),
-        ('static/vendor/flatpickr', 'static/vendor/flatpickr'),
+        (os.path.join(project_dir, 'config'), 'config'),
+        (os.path.join(project_dir, 'school'), 'school'),
+        (os.path.join(project_dir, 'templates'), 'templates'),
+        (os.path.join(project_dir, 'static'), 'static'),
     ],
     hiddenimports=[
         'django',
@@ -37,6 +40,7 @@ a = Analysis(
         'school.management.commands.progress_students_by_date',
         'school.management.commands.backup_auto',
         'school.management.commands.generate_semesters',
+		'school.management.commands.seed_academic_years',
         'config.settings',
         'config.paths',
         'config.urls',
