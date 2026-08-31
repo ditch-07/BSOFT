@@ -338,7 +338,7 @@ class Student(models.Model):
     )
 
     first_name = models.CharField(
-        max_length=100,
+        max_length=100, 
     )
 
     national_id = models.CharField(

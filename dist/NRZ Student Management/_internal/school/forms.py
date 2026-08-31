@@ -228,6 +228,7 @@ class StudentForm(BootstrapFormMixin, forms.ModelForm):
             "gender",
             "guardian_name",
             "guardian_phone",
+            'student_phone',
             "address",
             "program",
             "intake_year",

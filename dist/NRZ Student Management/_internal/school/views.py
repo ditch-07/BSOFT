@@ -57,6 +57,41 @@ import os
 import shutil
 from datetime import datetime
 
+def create_charges_for_fee_structure(fee_structure):
+    """
+    Create missing StudentCharge records for all students who are
+    enrolled in the fee structure's program/year-level/semester.
+
+    Safe to run multiple times because get_or_create() prevents
+    duplicate charges.
+    """
+    enrollments = (
+        Enrollment.objects.filter(
+            program=fee_structure.program,
+            year_level=fee_structure.year_level,
+            semester=fee_structure.semester,
+            student__status=Student.ACTIVE,
+        )
+        .select_related("student")
+    )
+
+    charges_created = 0
+
+    for enrollment in enrollments:
+        for item in fee_structure.items.all():
+            _, created = StudentCharge.objects.get_or_create(
+                student=enrollment.student,
+                enrollment=enrollment,
+                fee_item=item,
+                defaults={
+                    "amount": item.amount,
+                },
+            )
+
+            if created:
+                charges_created += 1
+
+    return charges_created
 
 def create_academic_year_enrollments(student, start_semester, start_year_level, program=None):
     """
@@ -1141,16 +1176,14 @@ def fee_structure_create(request, semester_id):
                 fee_structure.save()
                 formset.instance = fee_structure
                 formset.save()
-                messages.success(request, "Fee structure saved successfully.")
-                redirect_url = reverse("fee_structure_list", args=[semester.pk])
-                params = []
-                if filter_program:
-                    params.append(f"program={filter_program}")
-                if filter_year_level:
-                    params.append(f"year_level={filter_year_level}")
-                if params:
-                    redirect_url += "?" + "&".join(params)
-                return redirect(redirect_url)
+
+                # Create actual student charges for students who were already
+                 # enrolled before this fee structure was configured.
+                charges_created = create_charges_for_fee_structure(fee_structure)
+                messages.success(request,
+f"Fee structure saved successfully. "
+        f"{charges_created} student charge(s) created."
+    )
     else:
         initial = {}
         if request.GET.get("program"):
@@ -1230,6 +1263,8 @@ def fee_structure_edit(request, pk):
 
 @transaction.atomic
 @permission_required("school.add_feestructure", raise_exception=True)
+@transaction.atomic
+@permission_required("school.add_feestructure", raise_exception=True)
 def bulk_fee_configuration(request, semester_id):
     """
     Bulk configure fee structures for multiple programs and year levels simultaneously.
@@ -1246,9 +1281,10 @@ def bulk_fee_configuration(request, semester_id):
             amount = form.cleaned_data["amount"]
             description = form.cleaned_data["description"]
 
-            created_count = 0
-            updated_count = 0
-            skipped_count = 0
+            created_count = 0          # FeeStructureItem created
+            updated_count = 0          # FeeStructureItem updated
+            skipped_count = 0          # Year level > program duration
+            charges_created = 0        # StudentCharge created
 
             for program in programs:
                 for year_level in year_levels:
@@ -1283,14 +1319,38 @@ def bulk_fee_configuration(request, semester_id):
                         fee_item.save(update_fields=["amount", "description"])
                         updated_count += 1
 
+                    # --- NEW: Create missing student charges for this fee item ---
+                    matching_enrollments = Enrollment.objects.filter(
+                        program=program,
+                        year_level=year_level,
+                        semester=semester,
+                        student__status=Student.ACTIVE,
+                    )
+
+                    for enrollment in matching_enrollments:
+                        _, charge_created = StudentCharge.objects.get_or_create(
+                            student=enrollment.student,
+                            enrollment=enrollment,
+                            fee_item=fee_item,
+                            defaults={
+                                "amount": fee_item.amount,
+                            },
+                        )
+                        if charge_created:
+                            charges_created += 1
+
             # Build success message
             message_parts = []
             if created_count:
                 message_parts.append(f"{created_count} fee item(s) created")
             if updated_count:
                 message_parts.append(f"{updated_count} fee item(s) updated")
+            if charges_created:
+                message_parts.append(f"{charges_created} student charge(s) created")
             if skipped_count:
-                message_parts.append(f"{skipped_count} combination(s) skipped (year level exceeds program duration)")
+                message_parts.append(
+                    f"{skipped_count} combination(s) skipped (year level exceeds program duration)"
+                )
 
             if message_parts:
                 messages.success(request, "Bulk fee configuration completed: " + "; ".join(message_parts) + ".")
@@ -1312,7 +1372,6 @@ def bulk_fee_configuration(request, semester_id):
             "back_semester_id": semester.pk,
         },
     )
-
 
 # ============================================================
 # STUDENTS
@@ -1538,98 +1597,161 @@ def student_create(request):
 def student_detail(request, pk):
     student = get_object_or_404(Student, pk=pk)
     today = get_current_date()
-    
-    # Current enrollment and year level
-    current_enrollment = student.get_current_enrollment(today)
-    current_year_level = current_enrollment.year_level if current_enrollment else None
 
-    semesters = Semester.objects.select_related("academic_year")
+    # ---------------------------------------------------------
+    # Current enrollment and year level
+    # ---------------------------------------------------------
+
+    current_enrollment = student.get_current_enrollment(today)
+    current_year_level = (
+        current_enrollment.year_level
+        if current_enrollment
+        else None
+    )
+
+    # ---------------------------------------------------------
+    # All historical semester balances
+    # ---------------------------------------------------------
+
+    semesters = (
+        Semester.objects
+        .select_related("academic_year")
+        .order_by(
+            "-academic_year__name",
+            "-number",
+        )
+    )
 
     balances = []
+
     for semester in semesters:
+
         charged = (
-            StudentCharge.objects.filter(
+            StudentCharge.objects
+            .filter(
                 student=student,
                 fee_item__fee_structure__semester=semester,
-            ).aggregate(total=Sum("amount"))["total"]
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or Decimal("0")
         )
+
         paid = (
-            Payment.objects.filter(
+            Payment.objects
+            .filter(
                 student=student,
                 semester=semester,
-            ).aggregate(total=Sum("amount"))["total"]
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or Decimal("0")
         )
 
+        # Don't show completely unrelated semesters.
         if charged == 0 and paid == 0:
-            continue  # skip semesters this student has no relationship to
+            continue
 
-        balances.append(
-            {
-                "semester": semester,
-                "charged": charged,
-                "paid": paid,
-                "balance": charged - paid,
-            }
+        balances.append({
+            "semester": semester,
+            "charged": charged,
+            "paid": paid,
+            "balance": charged - paid,
+        })
+
+    # ---------------------------------------------------------
+    # Payment history
+    # ---------------------------------------------------------
+
+    payments = (
+        student.payments
+        .select_related("semester")
+        .order_by("-payment_date", "-id")
+    )
+
+    # ---------------------------------------------------------
+    # Current academic year
+    # ---------------------------------------------------------
+
+    current_year = (
+        AcademicYear.objects
+        .filter(
+            start_date__lte=today,
+            end_date__gte=today,
         )
+        .first()
+    )
 
-    payments = student.payments.select_related("semester")
-
-    # Current academic year semester balances (with projection for unconfigured semesters)
-    today = get_current_date()
-    current_year = AcademicYear.objects.filter(
-        start_date__lte=today,
-        end_date__gte=today
-    ).first()
     semester_balances = []
     total_year_balance = Decimal("0")
-    
+
     if current_year:
-        enrollments = student.enrollments.filter(
-            semester__academic_year=current_year, 
-            status__in=[Enrollment.ACTIVE, Enrollment.COMPLETED]
-        ).select_related("semester", "program").order_by("semester__number")
-        
+
+        enrollments = (
+            student.enrollments
+            .filter(
+                semester__academic_year=current_year,
+                status__in=[
+                    Enrollment.ACTIVE,
+                    Enrollment.COMPLETED,
+                ],
+            )
+            .select_related(
+                "semester",
+                "program",
+            )
+            .order_by("semester__number")
+        )
+
         for enrollment in enrollments:
+
             semester = enrollment.semester
-            
-            # Actual charges (from StudentCharge)
-            charged = student.charges.filter(
-                enrollment__semester=semester
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-            
-            paid = student.payments.filter(semester=semester).aggregate(
-                total=Sum("amount")
-            )["total"] or Decimal("0")
-            
-            # Projected charges (from FeeStructure) if no charges exist
-            projected_charged = Decimal("0")
-            if charged == 0:
-                fee_structure = FeeStructure.objects.filter(
-                    program=enrollment.program,
-                    year_level=enrollment.year_level,
-                    semester=semester
-                ).prefetch_related("items").first()
-                if fee_structure:
-                    projected_charged = sum(
-                        (item.amount for item in fee_structure.items.all()), 
-                        Decimal("0")
-                    )
-            
-            # Use projected if no actual charges
-            effective_charged = charged if charged > 0 else projected_charged
-            effective_balance = effective_charged - paid
-            
+
+            # -------------------------------------------------
+            # Actual student charges
+            # -------------------------------------------------
+
+            charged = (
+                StudentCharge.objects
+                .filter(
+                    student=student,
+                    enrollment=enrollment,
+                )
+                .aggregate(total=Sum("amount"))["total"]
+                or Decimal("0")
+            )
+
+            # -------------------------------------------------
+            # Actual payments
+            # -------------------------------------------------
+
+            paid = (
+                Payment.objects
+                .filter(
+                    student=student,
+                    semester=semester,
+                )
+                .aggregate(total=Sum("amount"))["total"]
+                or Decimal("0")
+            )
+
+            # -------------------------------------------------
+            # Actual balance
+            # -------------------------------------------------
+
+            balance = charged - paid
+
             semester_balances.append({
                 "semester": semester,
+                "year_level": enrollment.year_level,
                 "charged": charged,
-                "projected_charged": projected_charged,
                 "paid": paid,
-                "balance": effective_balance,
-                "is_projected": charged == 0 and projected_charged > 0,
+                "balance": balance,
             })
-            total_year_balance += effective_balance
+
+            total_year_balance += balance
+
+    # ---------------------------------------------------------
+    # Render
+    # ---------------------------------------------------------
 
     return render(
         request,
@@ -1645,6 +1767,8 @@ def student_detail(request, pk):
             "current_year_level": current_year_level,
         },
     )
+
+
 
 
 def cancel_unpaid_future_charges(student, user=None, today=None):
@@ -1891,7 +2015,10 @@ def archive_detail(request, pk):
 @permission_required("school.can_record_payments", raise_exception=True)
 def payment_create(request):
     student_id = request.GET.get("student") or request.POST.get("student_id")
-    selected_semester_id = request.GET.get("semester") or request.POST.get("semester")
+    selected_semester_id = (
+        request.GET.get("semester")
+        or request.POST.get("semester")
+    )
 
     student = None
     enrollments = []
@@ -1899,124 +2026,221 @@ def payment_create(request):
     today = get_current_date()
 
     if student_id:
-        student = get_object_or_404(Student, pk=student_id, status=Student.ACTIVE)
+        student = get_object_or_404(
+            Student,
+            pk=student_id,
+            status=Student.ACTIVE,
+        )
 
-        # Get all enrollments with financial data (charges, payments, or fee structure)
-        enrollments_qs = student.enrollments.select_related(
-            "program", "semester", "semester__academic_year"
-        ).order_by("-semester__academic_year__name", "-semester__number")
+        enrollments_qs = (
+            student.enrollments
+            .select_related(
+                "program",
+                "semester",
+                "semester__academic_year",
+            )
+            .order_by(
+                "-semester__academic_year__name",
+                "-semester__number",
+            )
+        )
 
-        # Filter to enrollments that have charges, payments, OR a fee structure configured
-        for e in enrollments_qs:
-            has_charges = StudentCharge.objects.filter(enrollment=e).exists()
-            has_payments = Payment.objects.filter(student=student, semester=e.semester).exists()
-            has_fee_structure = FeeStructure.objects.filter(
-                program=e.program,
-                year_level=e.year_level,
-                semester=e.semester
+        for enrollment in enrollments_qs:
+
+            has_charges = StudentCharge.objects.filter(
+                enrollment=enrollment
             ).exists()
-            if has_charges or has_payments or has_fee_structure:
-                enrollments.append(e)
 
-        # Determine default semester using the new get_current_enrollment method
+            has_payments = Payment.objects.filter(
+                student=student,
+                semester=enrollment.semester,
+            ).exists()
+
+            has_fee_structure = FeeStructure.objects.filter(
+                program=enrollment.program,
+                year_level=enrollment.year_level,
+                semester=enrollment.semester,
+            ).exists()
+
+            if has_charges or has_payments or has_fee_structure:
+                enrollments.append(enrollment)
+
+        # Default enrollment
         default_enrollment = student.get_current_enrollment(today)
-        
-        # Ensure the default enrollment is in our filtered list (has financial data)
-        if default_enrollment and default_enrollment not in enrollments:
+
+        if default_enrollment not in enrollments:
             default_enrollment = None
-        
-        # Fallback: first enrollment from filtered list
+
         if not default_enrollment and enrollments:
             default_enrollment = enrollments[0]
 
-        # Use selected semester if provided, otherwise default
+        # Explicitly selected semester
         if selected_semester_id:
-            try:
-                selected_enrollment = next(
-                    e for e in enrollments if str(e.semester.pk) == selected_semester_id
-                )
-            except StopIteration:
-                selected_enrollment = default_enrollment
-        else:
-            selected_enrollment = default_enrollment
-
-    form = PaymentForm(
-        request.POST or None,
-        semester_queryset=Semester.objects.filter(
-            pk__in=[e.semester.pk for e in enrollments]
-        ) if enrollments else Semester.objects.none(),
-    )
-
-    if request.method == "POST":
-        if not student:
-            messages.error(request, "Please select a student first.")
-        elif not selected_enrollment:
-            messages.error(request, "Please select a semester to record payment for.")
-        elif form.is_valid():
-            payment = form.save(commit=False)
-            payment.student = student
-            payment.semester = form.cleaned_data["semester"]
-            payment.save()
-
-            # Audit log
-            from school.utils.audit import log_action
-            log_action(
-                user=request.user,
-                action='PAYMENT',
-                student=student,
-                summary=f"Payment of {payment.amount} recorded for {payment.semester}",
-                details={
-                    'receipt': payment.receipt_number,
-                    'amount': str(payment.amount),
-                    'semester': str(payment.semester),
-                    'method': payment.get_method_display(),
-                    'reference': payment.reference,
-                },
-                category='FINANCIAL'
+            selected_enrollment = next(
+                (
+                    e for e in enrollments
+                    if str(e.semester.pk) == str(selected_semester_id)
+                ),
+                None,
             )
 
-            messages.success(request, "Payment recorded successfully.")
-            return redirect("student_detail", pk=student.pk)
+        # Fall back to default
+        if not selected_enrollment:
+            selected_enrollment = default_enrollment
 
-    charged = paid = balance = 0
+    semester_queryset = (
+        Semester.objects.filter(
+            pk__in=[e.semester.pk for e in enrollments]
+        )
+        if enrollments
+        else Semester.objects.none()
+    )
+
+    # ---------------------------------------------------------
+    # PAYMENT FORM
+    # ---------------------------------------------------------
+
+    if request.method == "POST":
+        form = PaymentForm(
+            request.POST,
+            semester_queryset=semester_queryset,
+        )
+    else:
+        form = PaymentForm(
+            semester_queryset=semester_queryset,
+        )
+
+        if selected_enrollment:
+            form.fields["semester"].initial = selected_enrollment.semester.pk
+
+    # ---------------------------------------------------------
+    # PROCESS PAYMENT
+    # ---------------------------------------------------------
+
+    if request.method == "POST":
+
+        if not student:
+            messages.error(
+                request,
+                "Please select a student first.",
+            )
+
+        elif not selected_enrollment:
+            messages.error(
+                request,
+                "Please select a semester to record payment for.",
+            )
+
+        elif form.is_valid():
+
+            payment = form.save(commit=False)
+
+            payment.student = student
+            payment.semester = form.cleaned_data["semester"]
+
+            payment.save()
+
+            from school.utils.audit import log_action
+
+            log_action(
+                user=request.user,
+                action="PAYMENT",
+                student=student,
+                summary=(
+                    f"Payment of {payment.amount} "
+                    f"recorded for {payment.semester}"
+                ),
+                details={
+                    "receipt": payment.receipt_number,
+                    "amount": str(payment.amount),
+                    "semester": str(payment.semester),
+                    "method": payment.get_method_display(),
+                    "reference": payment.reference,
+                },
+                category="FINANCIAL",
+            )
+
+            messages.success(
+                request,
+                "Payment recorded successfully.",
+            )
+
+            return redirect(
+                "student_detail",
+                pk=student.pk,
+            )
+
+    # ---------------------------------------------------------
+    # FINANCIAL SUMMARY
+    # ---------------------------------------------------------
+
+    charged = 0
+    paid = 0
+    balance = 0
+
     if selected_enrollment:
+
         charged = (
-            student.charges.filter(
-                fee_item__fee_structure__semester=selected_enrollment.semester
-            ).aggregate(total=Sum("amount"))["total"]
+            student.charges
+            .filter(
+                fee_item__fee_structure__semester=
+                    selected_enrollment.semester
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or 0
         )
+
         paid = (
-            student.payments.filter(semester=selected_enrollment.semester).aggregate(
-                total=Sum("amount")
-            )["total"]
+            student.payments
+            .filter(
+                semester=selected_enrollment.semester
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or 0
         )
+
         balance = charged - paid
 
-    # Build enrollment data for template
+    # ---------------------------------------------------------
+    # ENROLLMENT DATA
+    # ---------------------------------------------------------
+
     enrollment_data = []
-    for e in enrollments:
+
+    for enrollment in enrollments:
+
         e_charged = (
-            student.charges.filter(
-                fee_item__fee_structure__semester=e.semester
-            ).aggregate(total=Sum("amount"))["total"]
+            student.charges
+            .filter(
+                fee_item__fee_structure__semester=enrollment.semester
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or 0
         )
+
         e_paid = (
-            student.payments.filter(semester=e.semester).aggregate(
-                total=Sum("amount")
-            )["total"]
+            student.payments
+            .filter(
+                semester=enrollment.semester
+            )
+            .aggregate(total=Sum("amount"))["total"]
             or 0
         )
-        e_balance = e_charged - e_paid
+
         enrollment_data.append({
-            "enrollment": e,
+            "enrollment": enrollment,
             "charged": e_charged,
             "paid": e_paid,
-            "balance": e_balance,
-            "is_selected": selected_enrollment and e.semester.pk == selected_enrollment.semester.pk,
-            "is_current": e.status == Enrollment.ACTIVE and e.semester.end_date >= today,
+            "balance": e_charged - e_paid,
+            "is_selected": (
+                selected_enrollment
+                and enrollment.semester.pk
+                == selected_enrollment.semester.pk
+            ),
+            "is_current": (
+                enrollment.status == Enrollment.ACTIVE
+                and enrollment.semester.end_date >= today
+            ),
         })
 
     return render(
@@ -2032,7 +2256,6 @@ def payment_create(request):
             "balance": balance,
         },
     )
-
 @transaction.atomic
 @require_POST
 def bulk_progress_students(request, semester_id):

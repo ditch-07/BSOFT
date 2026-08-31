@@ -20,7 +20,7 @@ BACKUP_DIR = APP_DATA_DIR / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 SECRET_KEY = "nrz-local-development-key"
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     "127.0.0.1",

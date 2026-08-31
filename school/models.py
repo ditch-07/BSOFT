@@ -726,31 +726,41 @@ def unconfigured_fee_structures(semester):
 
 def outstanding_students(semester, limit=None):
     """Return queryset of students with outstanding balances for a semester."""
-    from django.db.models import F, Q
+    from django.db.models import Q, Subquery, OuterRef, Sum, F, Value
     from django.db.models.functions import Coalesce
+    
+    # Subquery for charges
+    charges_subquery = StudentCharge.objects.filter(
+        student=OuterRef('pk'),
+        enrollment__semester=semester,
+    ).values('student_id').annotate(
+        total=Coalesce(Sum('amount'), Value(Decimal('0')))
+    ).values('total')
+    
+    # Subquery for payments
+    payments_subquery = Payment.objects.filter(
+        student=OuterRef('pk'),
+        semester=semester,
+    ).values('student_id').annotate(
+        total=Coalesce(Sum('amount'), Value(Decimal('0')))
+    ).values('total')
     
     students = Student.objects.filter(
         enrollments__semester=semester,
         enrollments__status=Enrollment.ACTIVE,
     ).annotate(
-        charged=Coalesce(Sum(
-            "charges__amount",
-            filter=Q(charges__fee_item__fee_structure__semester=semester),
-        ), Decimal("0")),
-        paid=Coalesce(Sum(
-            "payments__amount",
-            filter=Q(payments__semester=semester),
-        ), Decimal("0")),
+        charged=Coalesce(Subquery(charges_subquery), Value(Decimal('0'))),
+        paid=Coalesce(Subquery(payments_subquery), Value(Decimal('0'))),
     ).annotate(
-        balance=F("charged") - F("paid")
+        balance=F('charged') - F('paid')
     ).filter(
-        charged__gt=F("paid")
-    ).order_by("-balance")
+        balance__gt=Decimal('0')
+    ).order_by('-balance')
     
     if limit:
         students = students[:limit]
+    
     return students
-
 
 def payment_methods_breakdown(semester):
     """Return payment totals grouped by method for a semester."""
@@ -762,21 +772,45 @@ def payment_methods_breakdown(semester):
 
 def program_revenue(semester):
     """Return revenue grouped by program for a semester."""
-    return StudentCharge.objects.filter(
-        fee_item__fee_structure__semester=semester
-    ).values(
-        "fee_item__fee_structure__program__id",
-        "fee_item__fee_structure__program__name",
-        "fee_item__fee_structure__program__code"
-    ).annotate(
-        charged=Sum("amount"),
-        paid=Sum(
-            "student__payments__amount",
-            filter=Q(student__payments__semester=semester)
-        )
-    ).order_by("-charged")
-
-
+    from django.db.models import Subquery, OuterRef, Sum, Value, Q
+    from django.db.models.functions import Coalesce
+    
+    # Subquery for payments by program (aggregated at program level)
+    # We need to aggregate payments per program separately
+    # Since we can't easily do this with a single subquery per program,
+    # we'll use a different approach
+    
+    # Get all programs with charges for this semester
+    programs = Program.objects.filter(
+        fee_structures__semester=semester,
+        fee_structures__items__isnull=False
+    ).distinct()
+    
+    result = []
+    for program in programs:
+        # Calculate charges for this program
+        charged = StudentCharge.objects.filter(
+            fee_item__fee_structure__program=program,
+            fee_item__fee_structure__semester=semester
+        ).aggregate(total=Coalesce(Sum('amount'), Value(Decimal('0'))))['total']
+        
+        # Calculate payments for this program
+        paid = Payment.objects.filter(
+            semester=semester,
+            student__program=program
+        ).aggregate(total=Coalesce(Sum('amount'), Value(Decimal('0'))))['total']
+        
+        result.append({
+            "fee_item__fee_structure__program__id": program.id,
+            "fee_item__fee_structure__program__name": program.name,
+            "fee_item__fee_structure__program__code": program.code,
+            "charged": charged,
+            "paid": paid,
+        })
+    
+    # Sort by charged descending
+    result.sort(key=lambda x: x['charged'], reverse=True)
+    return result
 def daily_collections(date=None):
     """Return payments for a specific date (default today)."""
     from school.utils.time_utils import get_current_date
