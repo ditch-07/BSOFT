@@ -41,6 +41,7 @@ a = Analysis(
         'school.management.commands.backup_auto',
         'school.management.commands.generate_semesters',
 		'school.management.commands.seed_academic_years',
+		'school.management.commands.setup_roles',
         'config.settings',
         'config.paths',
         'config.urls',
