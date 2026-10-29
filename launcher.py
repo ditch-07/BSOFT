@@ -218,7 +218,7 @@ def main():
     #
     # Example:
     #
-    # NRZ Student Management.exe createsuperuser
+    # BSOFT Student Management.exe createsuperuser
     #
     # sys.argv[1:] == ["createsuperuser"]
 

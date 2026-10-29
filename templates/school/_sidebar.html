@@ -1,0 +1,45 @@
+{% if sidebar_dashboard %}
+{% include "school/_icons.html" %}
+<aside class="ui sidebar-fixed offcanvas offcanvas-start" id="main-sidebar" tabindex="-1" aria-labelledby="sidebar-title" data-sidebar-storage-key="{{ sidebar_storage_key }}">
+    <div class="offcanvas-header sidebar-header">
+        <h2 id="sidebar-title">Main navigation</h2>
+        <button class="sidebar-close" type="button" data-bs-dismiss="offcanvas" aria-label="Close main navigation">
+            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-close"></use></svg>
+        </button>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav" aria-label="Main">
+        <a class="sidebar-link{% if sidebar_dashboard.active %} active{% endif %}" href="{{ sidebar_dashboard.url }}" data-sidebar-link="{{ sidebar_dashboard.id }}" data-route="{{ sidebar_dashboard.route }}" aria-label="{{ sidebar_dashboard.label }}" title="{{ sidebar_dashboard.label }}"{% if sidebar_dashboard.active %} aria-current="page"{% endif %}>
+            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ sidebar_dashboard.icon }}"></use></svg>
+            <span class="sidebar-label">{{ sidebar_dashboard.label }}</span>
+        </a>
+        {% for group in sidebar_groups %}
+        <details class="sidebar-group" data-sidebar-group="{{ group.id }}" data-active="{{ group.active|yesno:'true,false' }}"{% if group.open %} open{% endif %}>
+            <summary class="sidebar-heading" aria-controls="sidebar-group-{{ group.id }}">
+                <span>{{ group.label }}</span>
+                <svg class="sidebar-icon sidebar-chevron" aria-hidden="true" focusable="false"><use href="#side-icon-chevron"></use></svg>
+            </summary>
+            <div class="sidebar-items" id="sidebar-group-{{ group.id }}">
+                {% for item in group.items %}
+                <a class="sidebar-link{% if item.active %} active{% endif %}" href="{{ item.url }}" data-sidebar-link="{{ item.id }}" data-route="{{ item.route }}" aria-label="{{ item.label }}" title="{{ item.label }}"{% if item.active %} aria-current="page"{% endif %}>
+                    <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ item.icon }}"></use></svg>
+                    <span class="sidebar-label">{{ item.label }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </details>
+        {% endfor %}
+        <div class="sidebar-reports">
+            <a class="sidebar-link{% if sidebar_reports.active %} active{% endif %}" href="{{ sidebar_reports.url }}" data-sidebar-link="{{ sidebar_reports.id }}" data-route="{{ sidebar_reports.route }}" aria-label="{{ sidebar_reports.label }}" title="{{ sidebar_reports.label }}"{% if sidebar_reports.active %} aria-current="page"{% endif %}>
+                <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ sidebar_reports.icon }}"></use></svg>
+                <span class="sidebar-label">{{ sidebar_reports.label }}</span>
+            </a>
+        </div>
+    </nav>
+    <div class="sidebar-footer">
+        <button class="sidebar-rail-toggle" type="button" aria-controls="sidebar-nav" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation">
+            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-collapse"></use></svg>
+            <span class="sidebar-label">Collapse navigation</span>
+        </button>
+    </div>
+</aside>
+{% endif %}

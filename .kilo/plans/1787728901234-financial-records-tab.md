@@ -137,7 +137,7 @@ Add new "Reports" section in sidebar (after "Academic Setup"):
 
 <!-- Report header -->
 <div class="print-only mb-4">
-    <h2 class="fw-bold">NRZ Student Management</h2>
+    <h2 class="fw-bold">BSOFT Student Management</h2>
     <h3>Financial Records Report</h3>
     <p class="text-muted">Generated: {{ today|date:"F d, Y" }}</p>
 </div>

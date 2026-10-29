@@ -41,9 +41,16 @@
 }
 
 /* Alert dismiss button */
+.alert-dismissible {
+    padding-right: 3.25rem;
+}
+
 .alert-dismissible .btn-close {
+    top: 50%;
+    right: 0.875rem;
     padding: 0.5rem;
-    margin: -0.5rem -0.5rem -0.5rem auto;
+    margin: 0;
+    transform: translateY(-50%);
 }
 
 /* =========================================

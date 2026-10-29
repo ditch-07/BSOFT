@@ -2,7 +2,7 @@ from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 
 
-EXEMPT_PATHS = ("/login/", "/logout/", "/static/", "/admin/")
+EXEMPT_PATHS = ("/login/", "/logout/", "/static/", "/admin/", "/api/auth/check/", "/api/auth/login/", "/api/auth/logout/")
 
 
 class LoginRequiredMiddleware:

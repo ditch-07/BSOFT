@@ -192,7 +192,7 @@ class Program(models.Model):
     category = models.CharField(
         max_length=10,
         choices=CATEGORY_CHOICES,
-        default="OTHER",
+        default="NC",
     )
 
     active = models.BooleanField(
@@ -260,12 +260,12 @@ class FeeStructure(models.Model):
     def clean(self):
         super().clean()
 
-        if self.year_level < 1:
+        if self.year_level is not None and self.year_level < 1:
             raise ValidationError(
                 "Year level must be at least 1."
             )
 
-        if self.program_id:
+        if self.program_id and self.year_level is not None:
             if self.year_level > self.program.duration_years:
                 raise ValidationError(
                     "Year level cannot exceed the program duration."
@@ -343,6 +343,8 @@ class Student(models.Model):
 
     national_id = models.CharField(
         max_length=100,
+        blank=True,
+        default="",
     )
 
     last_name = models.CharField(
@@ -360,8 +362,6 @@ class Student(models.Model):
         choices=[
             ('MALE', 'Male'),
             ('FEMALE', 'Female'),
-            ('OTHER', 'Other'),
-            ('NOT_SPECIFIED', 'Prefer not to say'),
         ],
     )
 
@@ -710,11 +710,18 @@ def semester_financials(semester):
 
 
 def unconfigured_fee_structures(semester):
-    """Return list of (program, year_level) pairs missing fee structure for semester."""
+    """Return (program, year_level) pairs without a set-up fee structure.
+
+    A structure only counts as set up once it has at least one fee item;
+    an empty structure is treated the same as a missing one everywhere.
+    """
     configured_pairs = set(
-        FeeStructure.objects.filter(semester=semester).values_list(
+        FeeStructure.objects.filter(
+            semester=semester,
+            items__isnull=False,
+        ).values_list(
             "program_id", "year_level"
-        )
+        ).distinct()
     )
     missing = []
     for program in Program.objects.filter(active=True):
@@ -747,7 +754,6 @@ def outstanding_students(semester, limit=None):
     
     students = Student.objects.filter(
         enrollments__semester=semester,
-        enrollments__status=Enrollment.ACTIVE,
     ).annotate(
         charged=Coalesce(Subquery(charges_subquery), Value(Decimal('0'))),
         paid=Coalesce(Subquery(payments_subquery), Value(Decimal('0'))),

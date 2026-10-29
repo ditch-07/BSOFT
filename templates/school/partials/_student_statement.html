@@ -1,0 +1,140 @@
+{% if selected_year %}
+<div class="sd-statement-body">
+    <div class="sd-section-head">
+        <h2 class="sd-h2">{{ selected_year.name }} statement</h2>
+        <p class="sd-section-note">Open a semester to see its fees and receipts.</p>
+    </div>
+
+    {% if statement_rows %}
+    <div class="sd-ledger">
+        <div class="sd-ledger-cols" aria-hidden="true">
+            <span>Semester</span>
+            <span class="sd-num">Charged</span>
+            <span class="sd-num">Paid</span>
+            <span class="sd-num">Balance</span>
+        </div>
+
+        {% for row in statement_rows %}
+        <details class="sd-row sd-row--{{ row.state }}"{% if row.open %} open{% endif %}>
+            <summary class="sd-row-sum">
+                <span class="sd-row-title">
+                    <span class="sd-lamp sd-lamp--{{ row.state }}" aria-hidden="true"></span>
+                    <span>
+                        <span class="sd-row-name">
+                            Semester {{ row.semester.number }}
+                            {% if row.year_level %}<span class="sd-row-level">Course year {{ row.year_level }}</span>{% endif %}
+                            {% if row.marker %}<span class="sd-chip sd-chip--now">{{ row.marker }}</span>{% endif %}
+                        </span>
+                        <span class="sd-row-meta">
+                            {{ row.semester.start_date|date:"j M" }} to {{ row.semester.end_date|date:"j M Y" }}
+                        </span>
+                    </span>
+                </span>
+                <span class="sd-num sd-fig" data-label="Charged">${{ row.charged|floatformat:2 }}</span>
+                <span class="sd-num sd-fig" data-label="Paid">${{ row.paid|floatformat:2 }}</span>
+                <span class="sd-num sd-row-bal" data-label="Balance">
+                    <span class="sd-fig sd-fig--strong">${{ row.balance|floatformat:2 }}</span>
+                    <span class="sd-state">
+                        {% if row.state == "owing" %}Owes
+                        {% elif row.state == "credit" %}In credit
+                        {% elif row.state == "paid" %}Paid
+                        {% elif row.state == "unset" %}Fees not set
+                        {% elif row.state == "nocharge" %}No charges
+                        {% else %}Not enrolled{% endif %}
+                    </span>
+                </span>
+                <svg class="sd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+
+            <div class="sd-row-body">
+                {% if row.state == "unset" %}
+                <div class="sd-callout sd-callout--unset">
+                    <p>
+                        No fees are set for {{ row.program.name }} &middot; Course year {{ row.year_level }} in this semester,
+                        so nothing has been charged. The balance will stay at $0.00 until fees are added.
+                    </p>
+                    {% if perms.school.add_feestructure %}
+                        <a class="sd-btn sd-btn--quiet"
+                           href="{% url 'fee_structure_list' row.semester.pk %}?program={{ row.program.pk }}&year={{ row.year_level }}#fee-cell-{{ row.program.pk }}-{{ row.year_level }}">Set up fees</a>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="sd-split">
+                    <div>
+                        <h3 class="sd-h3">Fees charged</h3>
+                        {% if row.charges %}
+                        <ul class="sd-items">
+                            {% for charge in row.charges %}
+                            <li>
+                                <span>{{ charge.fee_item.name }}</span>
+                                <span class="sd-fig">${{ charge.amount|floatformat:2 }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% elif not row.enrollment %}
+                        <p class="sd-quiet">Not enrolled this semester.</p>
+                        {% else %}
+                        <p class="sd-quiet">Nothing charged.</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <h3 class="sd-h3">Payments received</h3>
+                        {% if row.payments %}
+                        <ul class="sd-items">
+                            {% for payment in row.payments %}
+                            <li>
+                                <span>
+                                    <span class="sd-receipt">{{ payment.receipt_number }}</span>
+                                    <span class="sd-row-meta">
+                                        {{ payment.payment_date|date:"j M Y" }}, {{ payment.get_method_display }}{% if payment.reference %}, ref {{ payment.reference }}{% endif %}
+                                    </span>
+                                </span>
+                                <span class="sd-fig sd-fig--paid">${{ payment.amount|floatformat:2 }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="sd-quiet">No payments yet.</p>
+                        {% endif %}
+
+                        {% if row.state == "owing" and perms.school.can_record_payments %}
+                            <a class="sd-btn sd-btn--quiet" href="{% url 'payment_create' %}?student={{ student.pk }}&semester={{ row.semester.pk }}">Record payment for this semester</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </details>
+        {% endfor %}
+
+        <div class="sd-ledger-total">
+            <span class="sd-total-label">{{ selected_year.name }} balance</span>
+            <span class="sd-num sd-fig" data-label="Charged">${{ year_charged|floatformat:2 }}</span>
+            <span class="sd-num sd-fig" data-label="Paid">${{ year_paid|floatformat:2 }}</span>
+            <span class="sd-num sd-total-bal{% if year_balance > 0 %} is-owing{% elif year_balance < 0 %} is-credit{% endif %}" data-label="Balance">
+                ${{ year_balance|floatformat:2 }}
+            </span>
+            <span></span>
+        </div>
+
+        {% if year_has_unset %}
+        <p class="sd-incomplete">
+            This total is incomplete because fees are not set for every semester above.
+        </p>
+        {% endif %}
+    </div>
+
+    {% elif selected_semester_count %}
+    <div class="sd-empty">
+        <p>{{ student.first_name }} is not enrolled in any {{ selected_year.name }} semester and has no charges or payments for it.</p>
+        <p class="sd-quiet">Pick another year on the course line to see their statement.</p>
+    </div>
+    {% else %}
+    <div class="sd-empty">
+        <p>No semesters are scheduled for {{ selected_year.name }} yet.</p>
+        <a class="sd-btn sd-btn--quiet" href="{% url 'semester_list' %}">Add semesters</a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

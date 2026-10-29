@@ -1,3 +1,4 @@
+from collections import defaultdict
 from decimal import Decimal
 
 from django.contrib import messages
@@ -5,7 +6,8 @@ from django.contrib.auth.decorators import login_required, permission_required, 
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F, Q, Sum, Count, Max
+from django.db.models import F, Q, Sum, Count, Max, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -26,6 +28,7 @@ from .forms import (
     EnrollmentForm,
     PaymentForm,
     BulkFeeForm,
+    StudentImportForm,
 )
 
 from .models import (
@@ -94,6 +97,262 @@ def create_charges_for_fee_structure(fee_structure):
 
     return charges_created
 
+
+# ============================================================
+# FEE SET-UP HELPERS
+# ============================================================
+
+def _active_programs():
+    return list(Program.objects.filter(active=True).order_by("name"))
+
+
+def enrolled_counts(semester):
+    """Active students per (trade, course year) in a semester, batched."""
+    rows = (
+        Enrollment.objects.filter(
+            semester=semester,
+            student__status=Student.ACTIVE,
+        )
+        .values("program_id", "year_level")
+        .annotate(count=Count("student_id", distinct=True))
+    )
+    return {(row["program_id"], row["year_level"]): row["count"] for row in rows}
+
+
+def fee_progress(semester):
+    """Return the trade x course-year grid plus set-up counts.
+
+    A cell counts as set up only when its structure has at least one fee
+    item. Queries stay constant regardless of how many trades exist.
+    """
+    programs = _active_programs()
+    max_year = max((program.duration_years for program in programs), default=0)
+
+    structures = (
+        FeeStructure.objects.filter(semester=semester)
+        .annotate(
+            item_count=Count("items", distinct=True),
+            total=Coalesce(Sum("items__amount"), Value(Decimal("0"))),
+        )
+    )
+    structure_map = {
+        (structure.program_id, structure.year_level): structure
+        for structure in structures
+    }
+    counts = enrolled_counts(semester)
+
+    cells = []
+    rows = []
+    for program in programs:
+        row_cells = []
+        for year_level in range(1, max_year + 1):
+            if year_level > program.duration_years:
+                row_cells.append({"year_level": year_level, "applicable": False})
+                continue
+
+            structure = structure_map.get((program.id, year_level))
+            set_up = bool(structure and structure.item_count)
+            cell = {
+                "program": program,
+                "year_level": year_level,
+                "applicable": True,
+                "fee_structure": structure,
+                "set_up": set_up,
+                "fee_count": structure.item_count if structure else 0,
+                "total": structure.total if structure else Decimal("0"),
+                "students": counts.get((program.id, year_level), 0),
+            }
+            row_cells.append(cell)
+            cells.append(cell)
+        rows.append({
+            "program": program,
+            "cells": row_cells,
+            "has_needs": any(
+                not cell["set_up"] for cell in row_cells if cell["applicable"]
+            ),
+            "has_set_up": any(
+                cell["set_up"] for cell in row_cells if cell["applicable"]
+            ),
+        })
+
+    set_up_count = sum(1 for cell in cells if cell["set_up"])
+    waiting = sum(
+        cell["students"] for cell in cells
+        if not cell["set_up"] and cell["students"]
+    )
+    return {
+        "programs": programs,
+        "max_year": max_year,
+        "rows": rows,
+        "cells": cells,
+        "set_up": set_up_count,
+        "total": len(cells),
+        "needs": len(cells) - set_up_count,
+        "waiting": waiting,
+    }
+
+
+def next_fee_cell(semester, exclude_structure_pk=None):
+    """First cell that still needs fees, optionally ignoring one structure."""
+    for cell in fee_progress(semester)["cells"]:
+        if cell["set_up"]:
+            continue
+        structure = cell["fee_structure"]
+        if (
+            exclude_structure_pk
+            and structure
+            and structure.pk == exclude_structure_pk
+        ):
+            continue
+        return cell
+    return None
+
+
+def fee_progress_for_semesters(semesters):
+    """Batched (set_up, total) progress for the semester list."""
+    semesters = list(semesters)
+    total = sum(program.duration_years for program in _active_programs())
+    set_up = {semester.pk: 0 for semester in semesters}
+
+    if semesters:
+        rows = (
+            FeeStructure.objects.filter(
+                semester__in=semesters,
+                program__active=True,
+                items__isnull=False,
+            )
+            .values("semester_id")
+            .annotate(count=Count("id", distinct=True))
+        )
+        for row in rows:
+            set_up[row["semester_id"]] = min(row["count"], total)
+
+    return {
+        semester.pk: {
+            "set_up": set_up[semester.pk],
+            "total": total,
+            "complete": total > 0 and set_up[semester.pk] >= total,
+        }
+        for semester in semesters
+    }
+
+
+@transaction.atomic
+def copy_fee_structures(source, target):
+    """Copy set-up fee structures into empty target cells.
+
+    Never overwrites an existing set-up cell, skips inactive trades and
+    years beyond a trade's duration, and charges already-enrolled students.
+    """
+    programs = {program.pk: program for program in _active_programs()}
+    source_structures = (
+        FeeStructure.objects.filter(semester=source, items__isnull=False)
+        .select_related("program")
+        .prefetch_related("items")
+    )
+    target_set_up = set(
+        FeeStructure.objects.filter(semester=target, items__isnull=False)
+        .values_list("program_id", "year_level")
+    )
+
+    copied = 0
+    skipped = 0
+    charges_created = 0
+
+    for structure in source_structures:
+        program = programs.get(structure.program_id)
+        if not program or structure.year_level > program.duration_years:
+            skipped += 1
+            continue
+
+        key = (structure.program_id, structure.year_level)
+        if key in target_set_up:
+            skipped += 1
+            continue
+
+        new_structure, _ = FeeStructure.objects.get_or_create(
+            program_id=structure.program_id,
+            year_level=structure.year_level,
+            semester=target,
+        )
+        for item in structure.items.all():
+            FeeStructureItem.objects.get_or_create(
+                fee_structure=new_structure,
+                name=item.name,
+                defaults={
+                    "amount": item.amount,
+                    "description": item.description,
+                },
+            )
+
+        charges_created += create_charges_for_fee_structure(new_structure)
+        copied += 1
+
+    return {
+        "copied": copied,
+        "skipped": skipped,
+        "charges": charges_created,
+    }
+
+
+def _copy_sources(exclude_semester=None):
+    """Semesters that already have at least one set-up fee structure."""
+    queryset = (
+        Semester.objects.filter(fee_structures__items__isnull=False)
+        .select_related("academic_year")
+        .distinct()
+    )
+    if exclude_semester:
+        queryset = queryset.exclude(pk=exclude_semester.pk)
+    return list(queryset.order_by("-start_date", "-number"))
+
+
+def _grid_url(semester, program_id=None, year_level=None):
+    url = reverse("fee_structure_list", args=[semester.pk])
+    params = []
+    if program_id:
+        params.append(f"program={program_id}")
+    if year_level:
+        params.append(f"year={year_level}")
+    if params:
+        url += "?" + "&".join(params)
+    if program_id and year_level:
+        url += f"#fee-cell-{program_id}-{year_level}"
+    return url
+
+
+def _fee_locked(semester):
+    return semester.status == "COMPLETED"
+
+
+def _semester_label(semester):
+    return f"{semester.academic_year.name} · Semester {semester.number}"
+
+
+def _copy_message(source, result):
+    copied = result["copied"]
+    parts = [
+        f"Copied {copied} set{'s' if copied != 1 else ''} of fees "
+        f"from {_semester_label(source)}."
+    ]
+    if result["charges"]:
+        charges = result["charges"]
+        parts.append(f"{charges} student{'s' if charges != 1 else ''} charged.")
+    if result["skipped"]:
+        skipped = result["skipped"]
+        parts.append(
+            f"{skipped} already set up or not offered "
+            f"{'were' if skipped != 1 else 'was'} left alone."
+        )
+    return " ".join(parts)
+
+
+def _fee_item_queryset(fee_structure):
+    return fee_structure.items.annotate(
+        charged_count=Count("student_charges")
+    )
+
+
 def create_academic_year_enrollments(student, start_semester, start_year_level, program=None):
     """
     Create enrollments and charges for all semesters in the academic year
@@ -154,115 +413,209 @@ def create_academic_year_enrollments(student, start_semester, start_year_level, 
 
 @login_required
 def dashboard(request):
-    today = get_current_date()
+    from bisect import bisect_right
+    from datetime import timedelta
 
-    # --- Current academic period ---
+    from django.db.models import OuterRef, Subquery
+
+    from .utils.time_utils import get_working_semester
+
+    today = get_current_date()
     current_year = AcademicYear.objects.filter(
         start_date__lte=today,
-        end_date__gte=today
-    ).first()
-    current_semester = Semester.objects.filter(
-        start_date__lte=today,
         end_date__gte=today,
-    ).select_related("academic_year").first()
-
-    # --- Student count ---
-    total_students = Student.objects.filter(status=Student.ACTIVE).count()
-
-    # --- Financials for current semester ---
-    if current_semester:
-        # Use shared helper for semester financials
-        fin = semester_financials(current_semester)
-        total_charged = fin["charged"]
-        total_paid = fin["paid"]
-        outstanding = fin["outstanding"]
-        collection_rate = fin["collection_rate"]
-
-        # Students with balance & top outstanding
-        outstanding_qs = outstanding_students(current_semester)
-        students_with_balance = outstanding_qs.count()
-        top_outstanding = outstanding_qs[:5]
-    else:
-        total_charged = total_paid = outstanding = Decimal("0")
-        collection_rate = 0
-        students_with_balance = 0
-        top_outstanding = []
-
-    # --- Expected revenue for the whole current academic year ---
-    # (sum of everything billable to ACTIVE students across both semesters
-    # of the current academic year, regardless of collection so far)
-    expected_revenue_year = Decimal("0")
-    if current_year:
-        expected_revenue_year = StudentCharge.objects.filter(
-            enrollment__semester__academic_year=current_year,
-            enrollment__status=Enrollment.ACTIVE,
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
-
-    recent_payments = Payment.objects.select_related(
-        "student", "semester"
-    ).order_by("-payment_date", "-id")[:10]
-
-    today_payments = Payment.objects.filter(payment_date=today).select_related(
-        "student", "semester"
+    ).first()
+    financial_semester = get_working_semester(today)
+    financial_semester_is_upcoming = bool(
+        financial_semester and financial_semester.start_date > today
     )
-    today_total = today_payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
-
-    upcoming_semester = (
-        Semester.objects.filter(start_date__gt=today)
-        .order_by("start_date")
-        .first()
+    financial_year = (
+        financial_semester.academic_year if financial_semester else current_year
     )
-
-    # Nudge the admin if the upcoming/current semester has programs with
-    # no fee structure configured yet — charges can't be raised without one.
-    unconfigured_fee_count = 0
-    fee_setup_semester = current_semester or upcoming_semester
-    if fee_setup_semester:
-        unconfigured_fee_count = len(unconfigured_fee_structures(fee_setup_semester))
-
-    # --- Auto-progression status ---
-    # Find semesters that have ended but may have students not yet progressed
-    ended_semesters = Semester.objects.filter(end_date__lt=today).order_by('-end_date')
-    auto_progress_eligible = 0
-    auto_progress_details = []
-    for sem in ended_semesters:
-        # Count active students in this ended semester
-        active_count = Enrollment.objects.filter(
-            semester=sem,
-            status=Enrollment.ACTIVE,
-            student__status=Student.ACTIVE,
-        ).count()
-        if active_count > 0:
-            auto_progress_eligible += active_count
-            # Check next semester
-            next_sem = Semester.objects.filter(start_date__gt=sem.start_date).order_by('start_date').first()
-            auto_progress_details.append({
-                'semester': sem,
-                'next_semester': next_sem,
-                'active_students': active_count,
-            })
+    show_financials = (
+        request.user.has_perm("school.can_view_financial_reports")
+        or request.user.has_perm("school.can_record_payments")
+    )
+    show_outstanding = request.user.has_perm("school.can_view_outstanding_reports")
+    can_progress = request.user.has_perm("school.change_student")
+    can_add_semester = request.user.has_perm("school.add_semester")
+    can_add_fees = request.user.has_perm("school.add_feestructure")
 
     context = {
-        "total_students": total_students,
-        "current_year": current_year,
-        "current_semester": current_semester,
-        "total_charged": total_charged,
-        "total_paid": total_paid,
-        "outstanding": outstanding,
-        "collection_rate": collection_rate,
-        "students_with_balance": students_with_balance,
-        "top_outstanding": top_outstanding,
-        "expected_revenue_year": expected_revenue_year,
-        "recent_payments": recent_payments,
-        "today_payments": today_payments,
-        "today_total": today_total,
-        "upcoming_semester": upcoming_semester,
-        "fee_setup_semester": fee_setup_semester,
-        "unconfigured_fee_count": unconfigured_fee_count,
         "today": today,
-        "auto_progress_eligible": auto_progress_eligible,
-        "auto_progress_details": auto_progress_details,
+        "yesterday": today - timedelta(days=1),
+        "current_year": current_year,
+        "financial_semester": financial_semester,
+        "financial_semester_is_upcoming": financial_semester_is_upcoming,
+        "financial_year": financial_year,
+        "total_students": Student.objects.filter(status=Student.ACTIVE).count(),
+        "show_financials": show_financials,
+        "show_outstanding": show_outstanding,
+        "semester_days_until": 0,
+        "semester_week": 0,
+        "semester_weeks": 0,
+        "semester_percent": 0,
     }
+    if financial_semester:
+        duration = (financial_semester.end_date - financial_semester.start_date).days
+        weeks = (duration + 7) // 7
+        elapsed = (today - financial_semester.start_date).days
+        context.update({
+            "semester_days_until": max(0, -elapsed),
+            "semester_week": min(weeks, elapsed // 7 + 1) if elapsed >= 0 else 0,
+            "semester_weeks": weeks,
+            "semester_percent": max(0, min(100, elapsed * 100 / max(1, duration))),
+        })
+
+    if show_financials:
+        total_charged = total_paid = expected_revenue_year = Decimal("0")
+        collection_rate = 0
+        if financial_semester:
+            fin = semester_financials(financial_semester)
+            total_charged = fin["charged"]
+            total_paid = fin["paid"]
+            collection_rate = fin["collection_rate"]
+            expected_revenue_year = StudentCharge.objects.filter(
+                enrollment__semester__academic_year=financial_year,
+                enrollment__status=Enrollment.ACTIVE,
+            ).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+
+        # Daily activity includes receipts for past semesters as well.
+        today_payments = Payment.objects.filter(payment_date=today).aggregate(
+            total=Sum("amount"), count=Count("pk")
+        )
+        context.update({
+            "total_charged": total_charged,
+            "total_paid": total_paid,
+            "collection_rate": collection_rate,
+            "collection_bar": max(0, min(100, collection_rate)),
+            "expected_revenue_year": expected_revenue_year,
+            "today_total": today_payments["total"] or Decimal("0"),
+            "today_count": today_payments["count"],
+            "recent_payments": Payment.objects.select_related(
+                "student__program", "semester"
+            ).order_by("-payment_date", "-id")[:8],
+        })
+
+    if show_outstanding:
+        balances = []
+        has_semester_charges = False
+        if financial_semester:
+            course_year = Enrollment.objects.filter(
+                student_id=OuterRef("pk"),
+                semester=financial_semester,
+            ).order_by("pk").values("year_level")[:1]
+            balances = list(
+                outstanding_students(financial_semester)
+                .select_related("program")
+                .annotate(course_year=Subquery(course_year))
+                .order_by("-balance", "pk")
+            )
+            # A positive balance already proves that charges exist.
+            has_semester_charges = bool(balances) or StudentCharge.objects.filter(
+                enrollment__semester=financial_semester,
+            ).exists()
+        top_outstanding = balances[:5]
+        for student in top_outstanding:
+            student.balance_percent = student.balance * 100 / balances[0].balance
+        context.update({
+            "outstanding": sum((student.balance for student in balances), Decimal("0")),
+            "students_with_balance": len(balances),
+            "top_outstanding": top_outstanding,
+            "more_outstanding": max(0, len(balances) - len(top_outstanding)),
+            "has_semester_charges": has_semester_charges,
+        })
+
+    next_steps = []
+    semesters = None
+    if can_progress or can_add_semester:
+        active_counts = {
+            row["semester_id"]: row["active_students"]
+            for row in Enrollment.objects.filter(
+                semester__end_date__lt=today,
+                status=Enrollment.ACTIVE,
+                student__status=Student.ACTIVE,
+            ).order_by().values("semester_id").annotate(active_students=Count("pk"))
+        }
+        if active_counts:
+            semesters = list(
+                Semester.objects.select_related("academic_year").order_by("start_date", "pk")
+            )
+            start_dates = [semester.start_date for semester in semesters]
+            # Equal start dates are not progression targets.
+            for semester in sorted(semesters, key=lambda sem: (sem.end_date, sem.pk), reverse=True):
+                active_students = active_counts.get(semester.pk)
+                if not active_students:
+                    continue
+                next_index = bisect_right(start_dates, semester.start_date)
+                next_semester = semesters[next_index] if next_index < len(semesters) else None
+                if next_semester and can_progress:
+                    next_steps.append({
+                        "kind": "progress",
+                        "semester": semester,
+                        "next_semester": next_semester,
+                        "active_students": active_students,
+                    })
+                elif next_semester is None and can_add_semester:
+                    next_steps.append({
+                        "kind": "missing_semester",
+                        "semester": semester,
+                        "active_students": active_students,
+                    })
+
+    if (
+        current_year
+        and (can_add_semester or can_add_fees)
+        and 0 <= (current_year.end_date - today).days <= 30
+    ):
+        next_year = AcademicYear.objects.filter(
+            start_date__gt=current_year.end_date,
+        ).order_by("start_date", "pk").first()
+        if next_year:
+            next_semesters = (
+                [semester for semester in semesters if semester.academic_year_id == next_year.pk]
+                if semesters is not None
+                else list(Semester.objects.filter(academic_year=next_year)
+                          .select_related("academic_year").order_by("start_date", "pk"))
+            )
+            if can_add_semester and len({semester.number for semester in next_semesters}) < 2:
+                next_steps.append({"kind": "year_semesters", "next_year": next_year})
+
+            fee_semesters = [
+                semester for semester in next_semesters
+                if semester != financial_semester
+            ]
+            if can_add_fees and fee_semesters:
+                applicable_pairs = {
+                    (program_id, year_level)
+                    for program_id, duration in Program.objects.filter(active=True)
+                    .values_list("pk", "duration_years")
+                    for year_level in range(1, duration + 1)
+                }
+                if applicable_pairs:
+                    configured = defaultdict(set)
+                    for semester_id, program_id, year_level in (
+                        FeeStructure.objects.filter(
+                            semester__in=fee_semesters,
+                            items__isnull=False,
+                        ).order_by().values_list("semester_id", "program_id", "year_level").distinct()
+                    ):
+                        configured[semester_id].add((program_id, year_level))
+                    fee_view = (
+                        "fee_structure_list"
+                        if request.user.has_perm("school.view_feestructure")
+                        else "fee_structure_create"
+                    )
+                    for semester in fee_semesters:
+                        if applicable_pairs - configured[semester.pk]:
+                            next_steps.append({
+                                "kind": "year_fees",
+                                "next_year": next_year,
+                                "semester": semester,
+                                "url": reverse(fee_view, kwargs={"semester_id": semester.pk}),
+                            })
+
+    context["next_steps"] = next_steps
     return render(request, "school/dashboard.html", context)
 
 
@@ -270,7 +623,7 @@ def dashboard(request):
 def reminders(request):
     """Display reminders about students with missing details."""
     students = students_with_missing_details()
-    paginator = Paginator(students, 20)
+    paginator = Paginator(students, 10)
     page_obj = paginator.get_page(request.GET.get("page"))
     
     context = {
@@ -390,18 +743,24 @@ def student_search(request):
     if len(query) < 2:
         return JsonResponse({"students": []})
 
+    statuses = [Student.ACTIVE]
+    if request.GET.get("include_deferred") == "1":
+        statuses.append(Student.DEFERRED)
+
     students = (
-        Student.objects.filter(status=Student.ACTIVE)
+        Student.objects.filter(status__in=statuses)
+        .select_related("program")
         .filter(
             Q(student_number__icontains=query)
             | Q(first_name__icontains=query)
             | Q(last_name__icontains=query)
         )
-        .order_by("last_name", "first_name")[:10]
+        .order_by("last_name", "first_name")[:8]
     )
 
     data = []
     today = get_current_date()
+    can_record_payments = request.user.has_perm("school.can_record_payments")
 
     for student in students:
         # Changed from start_date__lte to end_date__gte to include upcoming semesters
@@ -414,13 +773,24 @@ def student_search(request):
             .order_by("semester__start_date")
             .first()
         )
+        payment_url = None
+        if can_record_payments and student.status == Student.ACTIVE:
+            payment_url = f"{reverse('payment_create')}?student={student.pk}"
         data.append(
             {
                 "id": student.id,
                 "student_number": student.student_number,
                 "name": f"{student.first_name} {student.last_name}",
-                "program": enrollment.program.name if enrollment else "Not enrolled",
+                "program": (
+                    enrollment.program.name
+                    if enrollment
+                    else student.program.name
+                ),
                 "semester": str(enrollment.semester) if enrollment else "No active semester",
+                "course_year": enrollment.year_level if enrollment else None,
+                "status": student.get_status_display(),
+                "detail_url": reverse("student_detail", args=[student.pk]),
+                "payment_url": payment_url,
             }
         )
 
@@ -1003,31 +1373,35 @@ def academic_year_list(request):
 @permission_required("school.view_semester", raise_exception=True)
 def semester_list(request):
     from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-    from .utils.time_utils import get_current_date
 
     today = get_current_date()
-    all_semesters = Semester.objects.select_related('academic_year').order_by('-academic_year__name', 'number')
+    all_semesters = list(
+        Semester.objects.select_related('academic_year').order_by(
+            '-academic_year__name', 'number'
+        )
+    )
 
-    # Partition by status
+    progress = fee_progress_for_semesters(all_semesters)
+    for semester in all_semesters:
+        semester.fee_progress = progress[semester.pk]
+
     active_sems = []
     upcoming_sems = []
     completed_sems = []
 
-    for sem in all_semesters:
-        status = sem.status  # uses frozen date via property
+    for semester in all_semesters:
+        status = semester.status  # uses frozen date via property
         if status == 'ACTIVE':
-            active_sems.append(sem)
+            active_sems.append(semester)
         elif status == 'UPCOMING':
-            upcoming_sems.append(sem)
+            upcoming_sems.append(semester)
         else:
-            completed_sems.append(sem)
+            completed_sems.append(semester)
 
-    # Sort each group by start_date
     active_sems.sort(key=lambda s: s.start_date)
     upcoming_sems.sort(key=lambda s: s.start_date)
-    completed_sems.sort(key=lambda s: s.start_date, reverse=True)  # most recent first
+    completed_sems.sort(key=lambda s: s.start_date, reverse=True)
 
-    # Paginate completed (3 per page)
     paginator = Paginator(completed_sems, 3)
     page = request.GET.get('completed_page', 1)
     try:
@@ -1049,22 +1423,62 @@ def semester_list(request):
 @permission_required("school.add_semester", raise_exception=True)
 def semester_create(request):
     form = SemesterForm(request.POST or None)
+    can_copy = request.user.has_perm("school.add_feestructure")
+    copy_sources = _copy_sources() if can_copy else []
 
     if form.is_valid():
         semester = form.save()
+        fees_mode = request.POST.get("fees_mode", "empty")
+        source = next(
+            (item for item in copy_sources
+             if str(item.pk) == request.POST.get("copy_source")),
+            None,
+        )
+
+        if fees_mode == "copy" and source and can_copy:
+            result = copy_fee_structures(source, semester)
+            if result["copied"]:
+                messages.success(
+                    request,
+                    _copy_message(source, result) + " Check the amounts below.",
+                )
+            else:
+                messages.warning(
+                    request,
+                    f"{_semester_label(source)} had no fees to copy. "
+                    "Set them up below.",
+                )
+            return redirect(_grid_url(semester))
+
         messages.success(
             request,
-            "Semester created. Now configure fee structures for it.",
+            "Semester created. Set up fees for each trade and course year.",
         )
-        return redirect("fee_structure_list", semester_id=semester.pk)
+        return redirect(_grid_url(semester))
+
+    default_copy_source = copy_sources[0] if copy_sources else None
+    fees_mode_value = (
+        request.POST.get("fees_mode")
+        if request.method == "POST"
+        else ("copy" if can_copy and copy_sources else "empty")
+    )
+    copy_source_value = (
+        request.POST.get("copy_source")
+        or (default_copy_source.pk if default_copy_source else "")
+    )
 
     return render(
         request,
         "school/semester_form.html",
         {
             "form": form,
-            "title": "Create Semester",
+            "title": "New semester",
             "back_url": "semester_list",
+            "can_copy": can_copy,
+            "copy_sources": copy_sources,
+            "default_copy_source": default_copy_source,
+            "fees_mode_value": fees_mode_value,
+            "copy_source_value": copy_source_value,
         },
     )
 
@@ -1072,17 +1486,17 @@ def semester_create(request):
 @permission_required("school.change_semester", raise_exception=True)
 def semester_edit(request, pk):
     semester = get_object_or_404(Semester, pk=pk)
-    
+
     # Prevent editing completed semesters
     if semester.status == 'COMPLETED':
         messages.error(request, "Completed semesters cannot be edited.")
         return redirect('semester_list')
-    
+
     form = SemesterForm(request.POST or None, instance=semester)
 
     if form.is_valid():
         form.save()
-        messages.success(request, "Semester updated successfully.")
+        messages.success(request, "Semester updated.")
         return redirect("semester_list")
 
     return render(
@@ -1090,8 +1504,9 @@ def semester_edit(request, pk):
         "school/semester_form.html",
         {
             "form": form,
+            "semester": semester,
             "title": f"Edit {semester}",
-            "submit_label": "Update Semester",
+            "submit_label": "Save dates",
             "back_url": "semester_list",
         },
     )
@@ -1137,112 +1552,204 @@ def program_create(request):
 @permission_required("school.view_feestructure", raise_exception=True)
 def fee_structure_list(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
+    progress = fee_progress(semester)
 
-    program_filter = request.GET.get("program", "")
-    year_level_filter = request.GET.get("year_level", "")
+    try:
+        highlight_program = int(request.GET.get("program", ""))
+    except (TypeError, ValueError):
+        highlight_program = None
+    try:
+        highlight_year = int(request.GET.get("year", ""))
+    except (TypeError, ValueError):
+        highlight_year = None
 
-    programs = Program.objects.filter(active=True)
+    filter_value = request.GET.get("filter", "all")
+    if filter_value not in ("all", "needs", "set-up"):
+        filter_value = "all"
 
-    if program_filter:
-        programs = programs.filter(pk=program_filter)
-
-    existing = {
-        (fs.program_id, fs.year_level): fs
-        for fs in FeeStructure.objects.filter(semester=semester).prefetch_related("items")
-    }
-
-    max_year_level = 6
-    if programs.exists():
-        max_year_level = max(p.duration_years for p in programs)
-
-    # Build year_level_choices for template (1 to max_year_level)
-    year_level_choices = range(1, max_year_level + 1)
-
-    rows = []
-    for program in programs:
-        year_levels = range(1, program.duration_years + 1)
-        if year_level_filter and year_level_filter.isdigit():
-            year_levels = [int(year_level_filter)]
-        for year_level in year_levels:
-            fs = existing.get((program.id, year_level))
-            rows.append(
-                {
-                    "program": program,
-                    "year_level": year_level,
-                    "fee_structure": fs,
-                    "total": (
-                        sum((item.amount for item in fs.items.all()), Decimal("0"))
-                        if fs
-                        else None
-                    ),
-                }
-            )
-
-    # Paginate rows
-    paginator = Paginator(rows, 20)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
-    all_programs = Program.objects.filter(active=True)
-
-    selected_program = None
-    if program_filter:
-        selected_program = all_programs.filter(pk=program_filter).first()
+    next_cell = None
+    if progress["needs"]:
+        next_cell = next(
+            (cell for cell in progress["cells"] if not cell["set_up"]),
+            None,
+        )
 
     return render(
         request,
         "school/fee_structure_list.html",
         {
             "semester": semester,
-            "page_obj": page_obj,
-            "program_filter": program_filter,
-            "year_level_filter": year_level_filter,
-            "all_programs": all_programs,
-            "max_year_level": max_year_level,
-            "year_level_choices": year_level_choices,
-            "selected_program": selected_program,
+            "progress": progress,
+            "rows": progress["rows"],
+            "max_year": progress["max_year"],
+            "year_range": range(1, progress["max_year"] + 1),
+            "set_up_count": progress["set_up"],
+            "total_cells": progress["total"],
+            "needs_count": progress["needs"],
+            "waiting_count": progress["waiting"],
+            "set_up_pct": round(
+                progress["set_up"] / progress["total"] * 100
+            ) if progress["total"] else 0,
+            "filter_value": filter_value,
+            "highlight_program": highlight_program,
+            "highlight_year": highlight_year,
+            "next_cell": next_cell,
+            "is_locked": _fee_locked(semester),
         },
     )
+
+
+def _fee_names(semester):
+    existing = set(
+        FeeStructureItem.objects.filter(fee_structure__semester=semester)
+        .values_list("name", flat=True)
+    )
+    return sorted(existing | {"Tuition", "Levy", "Accommodation"})
+
+
+def _start_options(semester, exclude_pk=None):
+    queryset = (
+        FeeStructure.objects.filter(semester=semester, items__isnull=False)
+        .select_related("program")
+        .prefetch_related("items")
+        .order_by("program__name", "year_level")
+    )
+    if exclude_pk:
+        queryset = queryset.exclude(pk=exclude_pk)
+
+    options = []
+    for structure in queryset:
+        items = list(structure.items.all())
+        total = sum((item.amount for item in items), Decimal("0"))
+        options.append({
+            "label": (
+                f"{structure.program.name} · Course year "
+                f"{structure.year_level} · ${total:,.2f}"
+            ),
+            "items": [
+                {"name": item.name, "amount": str(item.amount)}
+                for item in items
+            ],
+        })
+    return options
 
 
 @transaction.atomic
 @permission_required("school.add_feestructure", raise_exception=True)
 def fee_structure_create(request, semester_id):
     semester = get_object_or_404(Semester, pk=semester_id)
-    fee_structure = FeeStructure(semester=semester)
 
-    filter_program = request.GET.get("filter_program", request.GET.get("program", ""))
-    filter_year_level = request.GET.get("filter_year_level", request.GET.get("year_level", ""))
+    if _fee_locked(semester):
+        messages.error(request, "This semester is completed. Fees are locked.")
+        return redirect("fee_structure_list", semester_id=semester.pk)
+
+    if request.method == "POST":
+        context_locked = request.POST.get("context_locked") == "1"
+    else:
+        context_locked = bool(
+            request.GET.get("program") and request.GET.get("year_level")
+        )
+
+    locked_program = None
+    locked_year = None
+    if context_locked:
+        program_id = request.POST.get("program") or request.GET.get("program")
+        year_value = request.POST.get("year_level") or request.GET.get("year_level")
+        locked_program = (
+            Program.objects.filter(pk=program_id).first() if program_id else None
+        )
+        try:
+            locked_year = int(year_value)
+        except (TypeError, ValueError):
+            locked_year = None
+
+        if not locked_program or not locked_year:
+            messages.error(request, "Choose a trade and course year first.")
+            return redirect("fee_structure_list", semester_id=semester.pk)
+
+        existing = FeeStructure.objects.filter(
+            semester=semester,
+            program=locked_program,
+            year_level=locked_year,
+        ).first()
+        if existing and request.method == "GET":
+            messages.info(request, "Those fees are already set up. Change them below.")
+            return redirect("fee_structure_edit", pk=existing.pk)
+
+    fee_structure = FeeStructure(semester=semester)
+    if locked_program:
+        fee_structure.program = locked_program
+        fee_structure.year_level = locked_year
 
     if request.method == "POST":
         form = FeeStructureForm(request.POST, instance=fee_structure)
         formset = FeeStructureItemFormSet(request.POST, instance=fee_structure)
 
-        if form.is_valid():
+        form_valid = form.is_valid()
+        formset_valid = formset.is_valid()
+
+        if form_valid:
+            selected_program = form.cleaned_data["program"]
+            selected_year = form.cleaned_data["year_level"]
+            duplicate = FeeStructure.objects.filter(
+                semester=semester,
+                program=selected_program,
+                year_level=selected_year,
+            ).first()
+
+            if duplicate:
+                messages.info(
+                    request,
+                    "Those fees are already set up. Change them below.",
+                )
+                return redirect("fee_structure_edit", pk=duplicate.pk)
+
+        if form_valid and formset_valid:
             fee_structure = form.save(commit=False)
             fee_structure.semester = semester
-            formset = FeeStructureItemFormSet(request.POST, instance=fee_structure)
+            fee_structure.save()
+            formset.instance = fee_structure
+            formset.save()
 
-            if formset.is_valid():
-                fee_structure.save()
-                formset.instance = fee_structure
-                formset.save()
-
-                # Create actual student charges for students who were already
-                 # enrolled before this fee structure was configured.
-                charges_created = create_charges_for_fee_structure(fee_structure)
-                messages.success(request,
-f"Fee structure saved successfully. "
-        f"{charges_created} student charge(s) created."
-    )
+            charges_created = create_charges_for_fee_structure(fee_structure)
+            saved_message = (
+                "Fees saved for "
+                f"{fee_structure.program.name} Course year "
+                f"{fee_structure.year_level}."
+            )
+            if charges_created:
+                saved_message += (
+                    f" {charges_created} student "
+                    f"charge{'s' if charges_created != 1 else ''} created."
+                )
+            messages.success(request, saved_message)
+            if request.POST.get("save_and_next"):
+                next_cell = next_fee_cell(semester)
+                if next_cell:
+                    return redirect(
+                        reverse(
+                            "fee_structure_create",
+                            args=[semester.pk],
+                        )
+                        + f"?program={next_cell['program'].pk}"
+                        f"&year_level={next_cell['year_level']}"
+                    )
+            return redirect(_grid_url(
+                semester,
+                fee_structure.program_id,
+                fee_structure.year_level,
+            ))
     else:
-        initial = {}
-        if request.GET.get("program"):
-            initial["program"] = request.GET.get("program")
-        if request.GET.get("year_level"):
-            initial["year_level"] = request.GET.get("year_level")
+        form = FeeStructureForm(instance=fee_structure)
+        formset = FeeStructureItemFormSet(
+            instance=fee_structure,
+            initial=[{"name": "Tuition"}],
+        )
 
-        form = FeeStructureForm(instance=fee_structure, initial=initial)
-        formset = FeeStructureItemFormSet(instance=fee_structure)
+    counts = enrolled_counts(semester)
+    impact = None
+    if locked_program and locked_year:
+        impact = counts.get((locked_program.pk, locked_year), 0)
 
     return render(
         request,
@@ -1251,11 +1758,28 @@ f"Fee structure saved successfully. "
             "form": form,
             "formset": formset,
             "semester": semester,
-            "title": f"Configure Fees — {semester}",
-            "back_url_name": "fee_structure_list",
-            "back_semester_id": semester.pk,
-            "filter_program": filter_program,
-            "filter_year_level": filter_year_level,
+            "title": "Set up fees",
+            "context_locked": context_locked,
+            "locked_program": locked_program,
+            "locked_year": locked_year,
+            "impact": impact,
+            "is_locked": False,
+            "fee_names": _fee_names(semester),
+            "start_options": _start_options(semester),
+            "enrollment_counts": {
+                f"{program_id}-{year_level}": count
+                for (program_id, year_level), count in counts.items()
+            },
+            "program_years": {
+                str(program.pk): program.duration_years
+                for program in _active_programs()
+            },
+            "next_needs_cell": next_fee_cell(semester),
+            "back_url": _grid_url(
+                semester,
+                locked_program.pk if locked_program else None,
+                locked_year if locked_program else None,
+            ),
         },
     )
 
@@ -1263,32 +1787,133 @@ f"Fee structure saved successfully. "
 @transaction.atomic
 @permission_required("school.change_feestructure", raise_exception=True)
 def fee_structure_edit(request, pk):
-    fee_structure = get_object_or_404(FeeStructure, pk=pk)
+    fee_structure = get_object_or_404(
+        FeeStructure.objects.select_related("semester", "program"),
+        pk=pk,
+    )
     semester = fee_structure.semester
 
-    filter_program = request.GET.get("program", "")
-    filter_year_level = request.GET.get("year_level", "")
+    if _fee_locked(semester):
+        if request.method == "POST":
+            messages.error(request, "This semester is completed. Fees are locked.")
+            return redirect("fee_structure_list", semester_id=semester.pk)
+
+        locked_items = list(
+            _fee_item_queryset(fee_structure).order_by("name")
+        )
+        return render(
+            request,
+            "school/fee_structure_form.html",
+            {
+                "form": None,
+                "formset": None,
+                "semester": semester,
+                "fee_structure": fee_structure,
+                "title": "Fees",
+                "context_locked": True,
+                "locked_program": fee_structure.program,
+                "locked_year": fee_structure.year_level,
+                "impact": enrolled_counts(semester).get(
+                    (fee_structure.program_id, fee_structure.year_level), 0
+                ),
+                "is_locked": True,
+                "items": locked_items,
+                "locked_total": sum(
+                    (item.amount for item in locked_items), Decimal("0")
+                ),
+                "back_url": _grid_url(
+                    semester,
+                    fee_structure.program_id,
+                    fee_structure.year_level,
+                ),
+            },
+        )
 
     if request.method == "POST":
         form = FeeStructureForm(request.POST, instance=fee_structure)
-        formset = FeeStructureItemFormSet(request.POST, instance=fee_structure)
+        formset = FeeStructureItemFormSet(
+            request.POST,
+            instance=fee_structure,
+            queryset=_fee_item_queryset(fee_structure),
+        )
 
-        if form.is_valid() and formset.is_valid():
-            form.save()
-            formset.save()
-            messages.success(request, "Fee structure updated successfully.")
-            redirect_url = reverse("fee_structure_list", args=[semester.pk])
-            params = []
-            if filter_program:
-                params.append(f"program={filter_program}")
-            if filter_year_level:
-                params.append(f"year_level={filter_year_level}")
-            if params:
-                redirect_url += "?" + "&".join(params)
-            return redirect(redirect_url)
+        form_valid = form.is_valid()
+        formset_valid = formset.is_valid()
+
+        if form_valid and formset_valid:
+            new_program = form.cleaned_data["program"]
+            new_year = form.cleaned_data["year_level"]
+            duplicate = (
+                FeeStructure.objects.filter(
+                    semester=semester,
+                    program=new_program,
+                    year_level=new_year,
+                )
+                .exclude(pk=fee_structure.pk)
+                .first()
+            )
+
+            if duplicate:
+                form.add_error(
+                    None,
+                    "Fees already exist for that trade and course year.",
+                )
+            else:
+                changed_charged = 0
+                for item_form in formset.forms:
+                    data = getattr(item_form, "cleaned_data", None)
+                    if not data or data.get("DELETE") or not item_form.instance.pk:
+                        continue
+                    amount = data.get("amount")
+                    if (
+                        amount is not None
+                        and amount != item_form.instance.amount
+                        and item_form.instance.student_charges.exists()
+                    ):
+                        changed_charged += 1
+
+                form.save()
+                formset.save()
+                charges_created = create_charges_for_fee_structure(fee_structure)
+
+                message = (
+                    f"Fees updated for {new_program.name} Course year {new_year}."
+                )
+                if charges_created:
+                    message += (
+                        f" {charges_created} new student "
+                        f"charge{'s' if charges_created != 1 else ''} created."
+                    )
+                if changed_charged:
+                    message += (
+                        f" {changed_charged} fee line"
+                        f"{'s' if changed_charged != 1 else ''} already charged "
+                        "keep their earlier amounts."
+                    )
+
+                messages.success(request, message)
+                if request.POST.get("save_and_next"):
+                    next_cell = next_fee_cell(semester)
+                    if next_cell:
+                        return redirect(
+                            reverse(
+                                "fee_structure_create",
+                                args=[semester.pk],
+                            )
+                            + f"?program={next_cell['program'].pk}"
+                            f"&year_level={next_cell['year_level']}"
+                        )
+                return redirect(_grid_url(
+                    semester,
+                    fee_structure.program_id,
+                    fee_structure.year_level,
+                ))
     else:
         form = FeeStructureForm(instance=fee_structure)
-        formset = FeeStructureItemFormSet(instance=fee_structure)
+        formset = FeeStructureItemFormSet(
+            instance=fee_structure,
+            queryset=_fee_item_queryset(fee_structure),
+        )
 
     return render(
         request,
@@ -1297,12 +1922,123 @@ def fee_structure_edit(request, pk):
             "form": form,
             "formset": formset,
             "semester": semester,
-            "title": f"Edit Fees — {fee_structure.program} Year {fee_structure.year_level}",
-            "submit_label": "Update Fees",
-            "back_url_name": "fee_structure_list",
-            "back_semester_id": semester.pk,
-            "filter_program": filter_program,
-            "filter_year_level": filter_year_level,
+            "fee_structure": fee_structure,
+            "title": "Fees",
+            "context_locked": True,
+            "locked_program": fee_structure.program,
+            "locked_year": fee_structure.year_level,
+            "impact": enrolled_counts(semester).get(
+                (fee_structure.program_id, fee_structure.year_level), 0
+            ),
+            "is_locked": False,
+            "fee_names": _fee_names(semester),
+            "start_options": _start_options(semester, exclude_pk=fee_structure.pk),
+            "enrollment_counts": {
+                f"{program_id}-{year_level}": count
+                for (program_id, year_level), count in enrolled_counts(semester).items()
+            },
+            "next_needs_cell": next_fee_cell(
+                semester, exclude_structure_pk=fee_structure.pk
+            ),
+            "back_url": _grid_url(
+                semester,
+                fee_structure.program_id,
+                fee_structure.year_level,
+            ),
+        },
+    )
+
+
+# ============================================================
+# COPY FEES FROM ANOTHER SEMESTER
+# ============================================================
+
+@permission_required("school.add_feestructure", raise_exception=True)
+def fee_structure_copy(request, semester_id):
+    """Preview and copy set-up fees from another semester into empty cells."""
+    semester = get_object_or_404(
+        Semester.objects.select_related("academic_year"),
+        pk=semester_id,
+    )
+
+    if _fee_locked(semester):
+        messages.error(request, "This semester is completed. Fees are locked.")
+        return redirect("fee_structure_list", semester_id=semester.pk)
+
+    sources = _copy_sources(exclude_semester=semester)
+    if not sources:
+        messages.warning(
+            request,
+            "No other semester has fees set up yet. Set up fees for one trade "
+            "and course year first, then copy them here.",
+        )
+        return redirect("fee_structure_list", semester_id=semester.pk)
+
+    earlier = [s for s in sources if s.start_date < semester.start_date]
+    default_source = earlier[0] if earlier else sources[0]
+    requested = request.POST.get("source") or request.GET.get("source")
+    source = next(
+        (s for s in sources if str(s.pk) == str(requested)),
+        default_source,
+    )
+
+    if request.method == "POST":
+        result = copy_fee_structures(source, semester)
+        messages.success(request, _copy_message(source, result))
+        return redirect(_grid_url(semester))
+
+    progress = fee_progress(semester)
+    target_cells = {
+        (cell["program"].pk, cell["year_level"]): cell
+        for cell in progress["cells"]
+    }
+    source_structures = (
+        FeeStructure.objects.filter(semester=source, items__isnull=False)
+        .annotate(
+            item_count=Count("items", distinct=True),
+            total=Coalesce(Sum("items__amount"), Value(Decimal("0"))),
+        )
+        .select_related("program")
+        .order_by("program__name", "year_level")
+    )
+
+    preview = []
+    will_copy = already = unavailable = 0
+    for structure in source_structures:
+        target_cell = target_cells.get(
+            (structure.program_id, structure.year_level)
+        )
+        if target_cell is None or not target_cell["applicable"]:
+            state = "skip"
+            unavailable += 1
+        elif target_cell["set_up"]:
+            state = "exists"
+            already += 1
+        else:
+            state = "copy"
+            will_copy += 1
+
+        preview.append({
+            "program_name": structure.program.name,
+            "year_level": structure.year_level,
+            "fee_count": structure.item_count,
+            "total": structure.total,
+            "state": state,
+        })
+
+    return render(
+        request,
+        "school/fee_structure_copy.html",
+        {
+            "semester": semester,
+            "source": source,
+            "sources": sources,
+            "preview": preview,
+            "will_copy": will_copy,
+            "already": already,
+            "unavailable": unavailable,
+            "title": f"Copy fees into {semester}",
+            "back_url": _grid_url(semester),
         },
     )
 
@@ -1311,105 +2047,137 @@ def fee_structure_edit(request, pk):
 # BULK FEE CONFIGURATION
 # ============================================================
 
-@transaction.atomic
 @permission_required("school.add_feestructure", raise_exception=True)
 @transaction.atomic
-@permission_required("school.add_feestructure", raise_exception=True)
 def bulk_fee_configuration(request, semester_id):
-    """
-    Bulk configure fee structures for multiple programs and year levels simultaneously.
-    Creates or updates FeeStructure and FeeStructureItem entries.
-    """
-    semester = get_object_or_404(Semester, pk=semester_id)
+    """Add or update one fee line across many trades and course years."""
+    semester = get_object_or_404(
+        Semester.objects.select_related("academic_year"),
+        pk=semester_id,
+    )
+
+    if _fee_locked(semester):
+        messages.error(request, "This semester is completed. Fees are locked.")
+        return redirect("fee_structure_list", semester_id=semester.pk)
 
     if request.method == "POST":
         form = BulkFeeForm(request.POST)
         if form.is_valid():
             programs = form.cleaned_data["programs"]
             year_levels = [int(yl) for yl in form.cleaned_data["year_levels"]]
-            fee_name = form.cleaned_data["fee_name"]
+            fee_name = form.cleaned_data["fee_name"].strip()
             amount = form.cleaned_data["amount"]
-            description = form.cleaned_data["description"]
+            description = (form.cleaned_data["description"] or "").strip()
 
-            created_count = 0          # FeeStructureItem created
-            updated_count = 0          # FeeStructureItem updated
-            skipped_count = 0          # Year level > program duration
-            charges_created = 0        # StudentCharge created
+            added = changed = unchanged = 0
+            skipped = 0
+            changes_charged = 0
+            charges_created = 0
+            trade_years = 0
 
             for program in programs:
                 for year_level in year_levels:
-                    # Skip year levels that exceed program duration
                     if year_level > program.duration_years:
-                        skipped_count += 1
+                        skipped += 1
                         continue
 
-                    # Get or create FeeStructure
-                    fee_structure, fs_created = FeeStructure.objects.get_or_create(
+                    trade_years += 1
+                    fee_structure, _ = FeeStructure.objects.get_or_create(
                         program=program,
                         year_level=year_level,
                         semester=semester,
                     )
 
-                    # Get or create FeeStructureItem
-                    fee_item, item_created = FeeStructureItem.objects.get_or_create(
-                        fee_structure=fee_structure,
-                        name=fee_name,
-                        defaults={
-                            "amount": amount,
-                            "description": description,
-                        },
+                    fee_item = (
+                        fee_structure.items
+                        .filter(name__iexact=fee_name)
+                        .first()
                     )
-
-                    if item_created:
-                        created_count += 1
-                    else:
-                        # Update existing item's amount and description
+                    if fee_item is None:
+                        FeeStructureItem.objects.create(
+                            fee_structure=fee_structure,
+                            name=fee_name,
+                            amount=amount,
+                            description=description,
+                        )
+                        added += 1
+                    elif (
+                        fee_item.amount != amount
+                        or (fee_item.description or "") != description
+                    ):
+                        if (
+                            fee_item.amount != amount
+                            and fee_item.student_charges.exists()
+                        ):
+                            changes_charged += 1
                         fee_item.amount = amount
                         fee_item.description = description
                         fee_item.save(update_fields=["amount", "description"])
-                        updated_count += 1
+                        changed += 1
+                    else:
+                        unchanged += 1
 
-                    # --- NEW: Create missing student charges for this fee item ---
-                    matching_enrollments = Enrollment.objects.filter(
-                        program=program,
-                        year_level=year_level,
-                        semester=semester,
-                        student__status=Student.ACTIVE,
+                    charges_created += create_charges_for_fee_structure(
+                        fee_structure
                     )
 
-                    for enrollment in matching_enrollments:
-                        _, charge_created = StudentCharge.objects.get_or_create(
-                            student=enrollment.student,
-                            enrollment=enrollment,
-                            fee_item=fee_item,
-                            defaults={
-                                "amount": fee_item.amount,
-                            },
-                        )
-                        if charge_created:
-                            charges_created += 1
-
-            # Build success message
-            message_parts = []
-            if created_count:
-                message_parts.append(f"{created_count} fee item(s) created")
-            if updated_count:
-                message_parts.append(f"{updated_count} fee item(s) updated")
+            message = (
+                f"{fee_name} applied to {trade_years} trade-year"
+                f"{'s' if trade_years != 1 else ''}."
+            )
+            parts = []
+            if added:
+                parts.append(f"{added} new")
+            if changed:
+                parts.append(f"{changed} changed")
+            if unchanged:
+                parts.append(f"{unchanged} already had it")
+            if parts:
+                message += " " + ", ".join(parts) + "."
             if charges_created:
-                message_parts.append(f"{charges_created} student charge(s) created")
-            if skipped_count:
-                message_parts.append(
-                    f"{skipped_count} combination(s) skipped (year level exceeds program duration)"
+                message += (
+                    f" {charges_created} student charge"
+                    f"{'s' if charges_created != 1 else ''} created."
+                )
+            if changes_charged:
+                message += (
+                    f" {changes_charged} changed fee line"
+                    f"{'s' if changes_charged != 1 else ''} were already "
+                    "charged; those students keep their earlier amounts."
+                )
+            if skipped:
+                message += (
+                    f" {skipped} selected course year"
+                    f"{'s' if skipped != 1 else ''} do not exist for the "
+                    "chosen trades and were skipped."
                 )
 
-            if message_parts:
-                messages.success(request, "Bulk fee configuration completed: " + "; ".join(message_parts) + ".")
-            else:
-                messages.warning(request, "No fee items were configured. Please check your selections.")
-
-            return redirect("fee_structure_list", semester_id=semester.pk)
+            messages.success(request, message)
+            return redirect(_grid_url(semester))
     else:
-        form = BulkFeeForm(initial={"fee_name": "Tuition"})
+        form = BulkFeeForm()
+
+    programs_data = [
+        {
+            "id": program.pk,
+            "name": program.name,
+            "duration": program.duration_years,
+        }
+        for program in _active_programs()
+    ]
+    existing_items = defaultdict(dict)
+    for item in (
+        FeeStructureItem.objects
+        .filter(fee_structure__semester=semester)
+        .select_related("fee_structure")
+    ):
+        key = f"{item.fee_structure.program_id}-{item.fee_structure.year_level}"
+        existing_items[key][item.name] = str(item.amount)
+
+    max_year = max(
+        (program["duration"] for program in programs_data),
+        default=0,
+    )
 
     return render(
         request,
@@ -1417,9 +2185,29 @@ def bulk_fee_configuration(request, semester_id):
         {
             "form": form,
             "semester": semester,
-            "title": f"Bulk Fee Configuration — {semester}",
-            "back_url_name": "fee_structure_list",
-            "back_semester_id": semester.pk,
+            "title": "Set one fee for many",
+            "is_locked": False,
+            "programs_data": programs_data,
+            "max_year": max_year,
+            "year_level_options": range(1, max_year + 1),
+            "selected_programs": (
+                form.data.getlist("programs") if form.is_bound else []
+            ),
+            "selected_years": (
+                form.data.getlist("year_levels") if form.is_bound else []
+            ),
+            "fee_names": _fee_names(semester),
+            "preview_json": {
+                "programs": programs_data,
+                "items": dict(existing_items),
+                "students": {
+                    f"{program_id}-{year_level}": count
+                    for (program_id, year_level), count in enrolled_counts(
+                        semester
+                    ).items()
+                },
+            },
+            "back_url": _grid_url(semester),
         },
     )
 
@@ -1643,6 +2431,148 @@ def student_create(request):
     )
 
 
+@permission_required("school.add_student", raise_exception=True)
+def student_import(request):
+    """
+    Bulk-import students from an uploaded .xlsx/.csv spreadsheet.
+
+    Two phases, both POSTs to this same view:
+      1. Upload + choose intake year/semester/year level/status -> parse the
+         file, validate every row, and show a preview (nothing is saved yet).
+      2. "Confirm import" -> re-create the already-validated rows (passed
+         back as a hidden JSON field) as real Student + Enrollment records.
+    """
+    import json
+    from school.utils.student_import import parse_student_spreadsheet, validate_rows
+
+    if request.method == "POST" and request.POST.get("confirm") == "1":
+        try:
+            rows = json.loads(request.POST.get("rows_json", "[]"))
+        except (ValueError, TypeError):
+            rows = []
+
+        try:
+            intake_year = AcademicYear.objects.get(pk=request.POST.get("intake_year"))
+            semester = Semester.objects.get(pk=request.POST.get("semester"))
+            year_level = int(request.POST.get("year_level"))
+        except (AcademicYear.DoesNotExist, Semester.DoesNotExist, TypeError, ValueError):
+            messages.error(request, "Your import session expired or was invalid. Please upload the file again.")
+            return redirect("student_import")
+
+        status = request.POST.get("default_status") or Student.ACTIVE
+        if status not in dict(Student.STATUS_CHOICES):
+            status = Student.ACTIVE
+
+        created_count = 0
+        skipped = []
+        with transaction.atomic():
+            for row in rows:
+                program = Program.objects.filter(pk=row.get("program_id")).first()
+                if not program or not row.get("student_number"):
+                    skipped.append(row.get("student_number", "?"))
+                    continue
+                if Student.objects.filter(student_number=row["student_number"]).exists():
+                    skipped.append(row["student_number"])
+                    continue
+
+                student = Student.objects.create(
+                    student_number=row["student_number"],
+                    first_name=row["first_name"],
+                    last_name=row["last_name"],
+                    national_id="",
+                    program=program,
+                    intake_year=intake_year,
+                    status=status,
+                )
+                create_academic_year_enrollments(
+                    student=student,
+                    start_semester=semester,
+                    start_year_level=year_level,
+                    program=program,
+                )
+                StudentStatusLog.objects.create(
+                    student=student,
+                    status=status,
+                    note="Imported from spreadsheet.",
+                )
+                created_count += 1
+
+        from school.utils.audit import log_action
+        log_action(
+            user=request.user,
+            action='OTHER',
+            summary=f"Bulk-imported {created_count} student(s) from spreadsheet",
+            details={
+                "count": created_count,
+                "intake_year": intake_year.name,
+                "semester": str(semester),
+                "skipped": skipped,
+            },
+            category='STUDENT',
+        )
+
+        if skipped:
+            messages.warning(
+                request,
+                f"Imported {created_count} student(s). Skipped {len(skipped)} row(s) "
+                f"that were no longer valid (e.g. duplicate student number): "
+                f"{', '.join(skipped)}.",
+            )
+        else:
+            messages.success(request, f"Imported {created_count} student(s) successfully.")
+        return redirect("student_list")
+
+    form = StudentImportForm(request.POST or None, request.FILES or None)
+    preview = None
+
+    if request.method == "POST":
+        if form.is_valid():
+            try:
+                parsed = parse_student_spreadsheet(form.cleaned_data["file"])
+            except ValueError as e:
+                messages.error(request, str(e))
+                return render(request, "school/student_import.html", {"form": form})
+
+            if not parsed:
+                messages.error(request, "No student rows were found in that file.")
+                return render(request, "school/student_import.html", {"form": form})
+
+            validated = validate_rows(parsed)
+            valid_rows = [r for r in validated if not r["errors"]]
+            invalid_rows = [r for r in validated if r["errors"]]
+
+            rows_json = json.dumps([
+                {
+                    "student_number": r["student_number"],
+                    "first_name": r["first_name"],
+                    "last_name": r["last_name"],
+                    "program_id": r["program"].id,
+                    "program_code": r["program_code"],
+                }
+                for r in valid_rows
+            ])
+
+            preview = {
+                "valid_rows": valid_rows,
+                "invalid_rows": invalid_rows,
+                "rows_json": rows_json,
+                "intake_year": form.cleaned_data["intake_year"],
+                "semester": form.cleaned_data["semester"],
+                "year_level": form.cleaned_data["year_level"],
+                "default_status": form.cleaned_data["default_status"],
+                "valid_count": len(valid_rows),
+                "invalid_count": len(invalid_rows),
+            }
+        else:
+            messages.error(request, "Please correct the errors below.")
+
+    return render(
+        request,
+        "school/student_import.html",
+        {"form": form, "preview": preview},
+    )
+
+
 @permission_required("school.view_student", raise_exception=True)
 def student_detail(request, pk):
     student = get_object_or_404(Student, pk=pk)
@@ -1660,65 +2590,7 @@ def student_detail(request, pk):
     )
 
     # ---------------------------------------------------------
-    # All historical semester balances
-    # ---------------------------------------------------------
-
-    semesters = (
-        Semester.objects
-        .select_related("academic_year")
-        .order_by(
-            "-academic_year__name",
-            "-number",
-        )
-    )
-
-    balances = []
-
-    for semester in semesters:
-
-        charged = (
-            StudentCharge.objects
-            .filter(
-                student=student,
-                fee_item__fee_structure__semester=semester,
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or Decimal("0")
-        )
-
-        paid = (
-            Payment.objects
-            .filter(
-                student=student,
-                semester=semester,
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or Decimal("0")
-        )
-
-        # Don't show completely unrelated semesters.
-        if charged == 0 and paid == 0:
-            continue
-
-        balances.append({
-            "semester": semester,
-            "charged": charged,
-            "paid": paid,
-            "balance": charged - paid,
-        })
-
-    # ---------------------------------------------------------
-    # Payment history
-    # ---------------------------------------------------------
-
-    payments = (
-        student.payments
-        .select_related("semester")
-        .order_by("-payment_date", "-id")
-    )
-
-    # ---------------------------------------------------------
-    # Current academic year
+    # Current academic year (date-based, falling back to flag)
     # ---------------------------------------------------------
 
     current_year = (
@@ -1728,91 +2600,374 @@ def student_detail(request, pk):
             end_date__gte=today,
         )
         .first()
+        or AcademicYear.objects.filter(is_current=True).first()
     )
 
-    semester_balances = []
-    total_year_balance = Decimal("0")
+    # ---------------------------------------------------------
+    # Years available to this student: past, present, upcoming
+    # ---------------------------------------------------------
+
+    # Years the student actually belongs to (intake or any activity). These
+    # define how far back the selector should go.
+    student_year_ids = (
+        set(student.enrollments.values_list(
+            "semester__academic_year_id", flat=True
+        ))
+        | set(student.charges.values_list(
+            "enrollment__semester__academic_year_id", flat=True
+        ))
+        | set(student.payments.values_list(
+            "semester__academic_year_id", flat=True
+        ))
+    )
+
+    if student.intake_year_id:
+        student_year_ids.add(student.intake_year_id)
+
+    year_ids = set(student_year_ids)
 
     if current_year:
+        year_ids.add(current_year.pk)
 
-        enrollments = (
-            student.enrollments
-            .filter(
-                semester__academic_year=current_year,
-                status__in=[
-                    Enrollment.ACTIVE,
-                    Enrollment.COMPLETED,
-                ],
-            )
-            .select_related(
-                "semester",
-                "program",
-            )
-            .order_by("semester__number")
+    # The single upcoming academic year is only relevant to active students.
+    upcoming_year = None
+    if current_year and student.status == Student.ACTIVE:
+        upcoming_year = (
+            AcademicYear.objects
+            .filter(start_date__gt=current_year.end_date)
+            .order_by("start_date")
+            .first()
+        )
+        if upcoming_year:
+            year_ids.add(upcoming_year.pk)
+
+    years = list(
+        AcademicYear.objects
+        .filter(pk__in=year_ids)
+        .order_by("start_date")
+    )
+
+    # Don't offer years from before the student joined (e.g. a 2027 intake
+    # shouldn't see the current 2026 pill).
+    if student_year_ids:
+        first_start = min(
+            y.start_date for y in years if y.pk in student_year_ids
+        )
+        years = [y for y in years if y.end_date >= first_start]
+
+    # ---------------------------------------------------------
+    # Selected year: request parameter, else current year
+    # ---------------------------------------------------------
+
+    selected_year = None
+    requested_year = request.GET.get("year")
+    if requested_year:
+        selected_year = next(
+            (y for y in years if str(y.pk) == requested_year),
+            None,
         )
 
-        for enrollment in enrollments:
+    if selected_year is None and years:
+        past_years = [y for y in years if y.end_date < today]
+        future_years = [y for y in years if y.start_date > today]
 
-            semester = enrollment.semester
-
-            # -------------------------------------------------
-            # Actual student charges
-            # -------------------------------------------------
-
-            charged = (
-                StudentCharge.objects
-                .filter(
-                    student=student,
-                    enrollment=enrollment,
-                )
-                .aggregate(total=Sum("amount"))["total"]
-                or Decimal("0")
+        # Between semesters the calendar year may hold nothing for a student who
+        # is already enrolled in (and paying for) the next academic year, so
+        # open that year instead of a blank current year.
+        enrollment_year = (
+            current_enrollment.semester.academic_year
+            if current_enrollment else None
+        )
+        current_year_has_activity = False
+        if current_year in years:
+            current_year_has_activity = (
+                student.enrollments.filter(
+                    semester__academic_year=current_year
+                ).exists()
+                or student.charges.filter(
+                    enrollment__semester__academic_year=current_year
+                ).exists()
+                or student.payments.filter(
+                    semester__academic_year=current_year
+                ).exists()
             )
 
-            # -------------------------------------------------
-            # Actual payments
-            # -------------------------------------------------
+        if current_year_has_activity:
+            selected_year = current_year
+        elif enrollment_year in years:
+            selected_year = enrollment_year
+        elif current_year in years:
+            selected_year = current_year
+        elif past_years:
+            selected_year = past_years[-1]
+        elif future_years:
+            selected_year = future_years[0]
+        else:
+            selected_year = years[0]
 
-            paid = (
-                Payment.objects
-                .filter(
-                    student=student,
-                    semester=semester,
-                )
-                .aggregate(total=Sum("amount"))["total"]
-                or Decimal("0")
+    selected_index = (
+        years.index(selected_year) if selected_year in years else -1
+    )
+    previous_year = (
+        years[selected_index - 1] if selected_index > 0 else None
+    )
+    next_year = (
+        years[selected_index + 1]
+        if 0 <= selected_index < len(years) - 1
+        else None
+    )
+
+    # ---------------------------------------------------------
+    # Every semester on the student's line, with its money
+    # ---------------------------------------------------------
+
+    semesters = list(
+        Semester.objects
+        .filter(academic_year__in=years)
+        .select_related("academic_year")
+        .order_by("start_date")
+    )
+
+    enrollments_by_semester = {
+        e.semester_id: e
+        for e in student.enrollments.select_related("program")
+    }
+
+    charges_by_semester = defaultdict(list)
+    for charge in (
+        student.charges
+        .select_related("fee_item", "enrollment")
+        .order_by("fee_item__name", "pk")
+    ):
+        charges_by_semester[charge.enrollment.semester_id].append(charge)
+
+    payments_by_semester = defaultdict(list)
+    for payment in student.payments.order_by("-payment_date", "-pk"):
+        payments_by_semester[payment.semester_id].append(payment)
+
+    fee_structures = {
+        (fs.program_id, fs.year_level, fs.semester_id): fs
+        for fs in (
+            FeeStructure.objects
+            .filter(semester__in=semesters)
+            .annotate(item_count=Count("items"))
+        )
+    }
+
+    rows_by_year = defaultdict(list)
+    all_rows = []
+
+    for semester in semesters:
+        enrollment = enrollments_by_semester.get(semester.pk)
+        charges = charges_by_semester.get(semester.pk, [])
+        payments = payments_by_semester.get(semester.pk, [])
+
+        charged = sum((c.amount for c in charges), Decimal("0"))
+        paid = sum((p.amount for p in payments), Decimal("0"))
+        balance = charged - paid
+
+        fee_structure = None
+        if enrollment:
+            fee_structure = fee_structures.get(
+                (enrollment.program_id, enrollment.year_level, semester.pk)
             )
+        fee_configured = bool(fee_structure and fee_structure.item_count)
 
-            # -------------------------------------------------
-            # Actual balance
-            # -------------------------------------------------
+        if balance > 0:
+            state = "owing"
+        elif balance < 0:
+            state = "credit"
+        elif charged > 0:
+            state = "paid"
+        elif enrollment and not fee_configured:
+            state = "unset"
+        elif enrollment:
+            state = "nocharge"
+        else:
+            state = "off"
 
-            balance = charged - paid
+        row = {
+            "semester": semester,
+            "enrollment": enrollment,
+            "year_level": enrollment.year_level if enrollment else None,
+            "program": enrollment.program if enrollment else student.program,
+            "charges": charges,
+            "payments": payments,
+            "charged": charged,
+            "paid": paid,
+            "balance": balance,
+            "credit": -balance if balance < 0 else Decimal("0"),
+            "fee_structure": fee_structure,
+            "fee_configured": fee_configured,
+            "is_current": semester.start_date <= today <= semester.end_date,
+            "is_past": semester.end_date < today,
+            "is_future": semester.start_date > today,
+            "state": state,
+        }
+        rows_by_year[semester.academic_year_id].append(row)
+        all_rows.append(row)
 
-            semester_balances.append({
-                "semester": semester,
-                "year_level": enrollment.year_level,
-                "charged": charged,
-                "paid": paid,
-                "balance": balance,
-            })
+    marker_row = next((r for r in all_rows if r["is_current"]), None)
+    if marker_row:
+        marker_row["marker"] = "Now"
+    else:
+        marker_row = next((r for r in all_rows if r["is_future"]), None)
+        if marker_row:
+            marker_row["marker"] = "Next"
 
-            total_year_balance += balance
+    # ---------------------------------------------------------
+    # The line: one segment per year, one station per semester
+    # ---------------------------------------------------------
+
+    state_priority = ["owing", "unset", "credit", "paid", "nocharge"]
+    line = []
+    for year in years:
+        rows = rows_by_year[year.pk]
+        states = {r["state"] for r in rows}
+        line.append({
+            "year": year,
+            "rows": rows,
+            "is_selected": year == selected_year,
+            "is_current": year == current_year,
+            "is_future": year.start_date > today,
+            "owed": sum(
+                (r["balance"] for r in rows if r["balance"] > 0),
+                Decimal("0"),
+            ),
+            "state": next(
+                (s for s in state_priority if s in states), "off"
+            ),
+        })
+
+    completion_year = None
+    if student.intake_year and student.program.duration_years:
+        try:
+            completion_year = (
+                int(student.intake_year.name[:4])
+                + student.program.duration_years - 1
+            )
+        except ValueError:
+            completion_year = None
+
+    track_continues = bool(
+        completion_year
+        and years
+        and completion_year > years[-1].start_date.year
+    )
+    for segment in line:
+        segment["is_final"] = (
+            completion_year is not None
+            and segment["year"].start_date.year == completion_year
+        )
+
+    # ---------------------------------------------------------
+    # Statement for the selected year
+    # ---------------------------------------------------------
+
+    statement_rows = [
+        r for r in rows_by_year[selected_year.pk] if (
+            r["enrollment"] or r["charged"] or r["paid"] or r["is_current"]
+        )
+    ] if selected_year else []
+
+    year_charged = sum((r["charged"] for r in statement_rows), Decimal("0"))
+    year_paid = sum((r["paid"] for r in statement_rows), Decimal("0"))
+    year_balance = year_charged - year_paid
+    year_has_unset = any(r["state"] == "unset" for r in statement_rows)
+    selected_semester_count = (
+        len(rows_by_year[selected_year.pk]) if selected_year else 0
+    )
+
+    open_row = next(
+        (r for r in statement_rows if r["is_current"]),
+        None,
+    ) or next(
+        (r for r in statement_rows if r["state"] in ("owing", "unset")),
+        None,
+    )
+    if open_row:
+        open_row["open"] = True
+
+    # ---------------------------------------------------------
+    # What needs doing, most urgent first
+    # ---------------------------------------------------------
+
+    actions = []
+
+    owing_rows = [r for r in all_rows if r["state"] == "owing"]
+    owing_rows.sort(key=lambda r: (r["is_future"], r["semester"].start_date))
+    for r in owing_rows:
+        actions.append({"kind": "owing", "row": r})
+
+    for r in all_rows:
+        if r["state"] == "unset" and not r["is_past"]:
+            actions.append({"kind": "unset", "row": r})
+    for r in all_rows:
+        if r["state"] == "unset" and r["is_past"]:
+            actions.append({"kind": "unset", "row": r})
+
+    contact_fields = [
+        ("student_phone", "student phone"),
+        ("guardian_name", "guardian name"),
+        ("guardian_phone", "guardian phone"),
+        ("address", "home address"),
+    ]
+    missing_details = [
+        label for field, label in contact_fields
+        if not (getattr(student, field) or "").strip()
+    ]
+    if missing_details:
+        actions.append({"kind": "details", "missing": missing_details})
+
+    for r in all_rows:
+        if r["state"] == "credit":
+            actions.append({"kind": "credit", "row": r})
+
+    total_owed = sum(
+        (r["balance"] for r in all_rows if r["balance"] > 0), Decimal("0")
+    )
+    total_credit = sum(
+        (-r["balance"] for r in all_rows if r["balance"] < 0), Decimal("0")
+    )
+    owing_count = len(owing_rows)
+
+    status_logs = list(student.status_logs.all()[:12])
 
     # ---------------------------------------------------------
     # Render
     # ---------------------------------------------------------
 
+    template = (
+        "school/partials/_student_journey.html"
+        if request.headers.get("HX-Request") == "true"
+        else "school/student_detail.html"
+    )
+
     return render(
         request,
-        "school/student_detail.html",
+        template,
         {
             "student": student,
-            "balances": balances,
-            "payments": payments,
-            "semester_balances": semester_balances,
-            "total_year_balance": total_year_balance,
-            "current_year": current_year,
+            "today": today,
+            "years": years,
+            "selected_year": selected_year,
+            "previous_year": previous_year,
+            "next_year": next_year,
+            "line": line,
+            "completion_year": completion_year,
+            "track_continues": track_continues,
+            "statement_rows": statement_rows,
+            "year_charged": year_charged,
+            "year_paid": year_paid,
+            "year_balance": year_balance,
+            "year_has_unset": year_has_unset,
+            "selected_semester_count": selected_semester_count,
+            "actions": actions,
+            "missing_details": missing_details,
+            "total_owed": total_owed,
+            "total_credit": total_credit,
+            "owing_count": owing_count,
+            "status_logs": status_logs,
             "current_enrollment": current_enrollment,
             "current_year_level": current_year_level,
         },

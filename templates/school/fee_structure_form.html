@@ -1,202 +1,580 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ title }}{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
+{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-xl-10">
-        <div class="d-flex justify-content-between align-items-start mb-4">
-            <div>
-                <h2 class="fw-bold mb-1">{{ title }}</h2>
-                <p class="text-muted">Choose the program and year level, then list the fee items.</p>
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">
+                {% if context_locked %}
+                {% if is_locked %}Fees{% else %}{{ title }}{% endif %}:
+                {{ locked_program.name }} &middot; Course year {{ locked_year }}
+                {% else %}
+                {{ title }}: {{ semester.academic_year.name }} &middot; Semester {{ semester.number }}
+                {% endif %}
+            </h1>
+            <p class="fee-sub">
+                {% if context_locked %}
+                {{ semester.academic_year.name }} &middot; Semester {{ semester.number }}.
+                {% endif %}
+                {% if is_locked %}
+                This semester is completed, so the amounts below are read-only.
+                {% else %}
+                Each line below becomes a separate charge for every enrolled student.
+                {% endif %}
+            </p>
+        </div>
+        <div class="fee-head-actions">
+            <a class="fee-btn fee-btn--ghost" href="{{ back_url }}">&larr; Back</a>
+        </div>
+    </div>
+
+    {% if is_locked %}
+    <div class="fee-banner fee-banner--locked">
+        <div><strong>This semester is completed. Fees are locked.</strong></div>
+    </div>
+
+    <div class="fee-card">
+        <div class="fee-card-body">
+            <div class="fee-context" style="margin-bottom: 1rem;">
+                <span class="fee-context-name">{{ fee_structure.program.name }}</span>
+                <span class="fee-context-meta">Course year {{ fee_structure.year_level }}</span>
+                <span class="fee-context-meta">&middot;</span>
+                <span class="fee-context-meta">{{ semester }}</span>
             </div>
-            <a href="{% url back_url_name back_semester_id %}{% if filter_program or filter_year_level %}?program={{ filter_program }}&year_level={{ filter_year_level }}{% endif %}" class="btn btn-secondary">← Back</a>
+
+            <div class="fee-lines">
+                {% for item in items %}
+                <div class="fee-line" style="grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.6fr);">
+                    <div class="fee-line-main">
+                        <strong>{{ item.name }}</strong>
+                        {% if item.description %}<span class="fee-quiet">{{ item.description }}</span>{% endif %}
+                        {% if item.charged_count %}
+                        <span class="fee-quiet">{{ item.charged_count }} student charge{{ item.charged_count|pluralize }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="fee-num" style="text-align: right; font-weight: 750; font-size: 1.05rem;">
+                        ${{ item.amount|floatformat:2 }}
+                    </div>
+                </div>
+                {% empty %}
+                <p class="fee-quiet">No fee lines were saved for this trade and course year.</p>
+                {% endfor %}
+            </div>
+
+            <div class="fee-line-actions">
+                <span class="fee-line-total">Total per student <strong>${{ locked_total|floatformat:2 }}</strong></span>
+            </div>
+        </div>
+    </div>
+    {% else %}
+
+    <form method="post" id="fee-form" novalidate>
+        {% csrf_token %}
+        {% if context_locked %}
+        <input type="hidden" name="context_locked" value="1">
+        <input type="hidden" name="program" value="{{ locked_program.pk }}">
+        <input type="hidden" name="year_level" value="{{ locked_year }}">
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <div class="fee-banner fee-banner--warn">
+            <div>
+                {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">1</span>
+                <div>
+                    <h2 class="fee-card-title">Trade and course year</h2>
+                    <p class="fee-card-note">
+                        {% if context_locked %}
+                        This is the cell you opened. Go back to choose a different one.
+                        {% else %}
+                        Pick who these fees are for. Course years are limited to the trade's length.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="fee-card-body">
+                {% if context_locked %}
+                <div class="fee-context">
+                    <span class="fee-context-name">{{ locked_program.name }}</span>
+                    <span class="fee-context-meta">Course year {{ locked_year }}</span>
+                    <span class="fee-context-meta">&middot;</span>
+                    <span class="fee-context-meta">{{ semester }}</span>
+                </div>
+                {% else %}
+                <div class="fee-grid-fields">
+                    <label class="fee-field">
+                        <span class="fee-label">Trade <span class="req">*</span></span>
+                        {{ form.program }}
+                        {% if form.program.errors %}<div class="fee-error">{{ form.program.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">Course year <span class="req">*</span></span>
+                        {{ form.year_level }}
+                        {% if form.year_level.errors %}<div class="fee-error">{{ form.year_level.errors|striptags }}</div>{% endif %}
+                    </label>
+                </div>
+                {% endif %}
+
+                <p class="fee-impact" id="fee-impact">
+                    {% if impact %}
+                    <strong>{{ impact }}</strong> student{{ impact|pluralize }} enrolled here. Saving these fees charges each of them.
+                    {% elif context_locked %}
+                    No students are enrolled here yet. These fees will apply when students register.
+                    {% else %}
+                    Choose a trade and course year to see how many students are affected.
+                    {% endif %}
+                </p>
+            </div>
         </div>
 
-        <form method="post" id="feeStructureForm">
-            {% csrf_token %}
-
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                    {% for error in form.non_field_errors %}
-                        <div>{{ error }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-3">Program & Year Level</h5>
-                    <div class="row">
-                        {% for field in form %}
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">{{ field.label }}</label>
-                            {{ field }}
-                            {% if field.errors %}<div class="text-danger small">{{ field.errors }}</div>{% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">2</span>
+                <div>
+                    <h2 class="fee-card-title">Fee lines</h2>
+                    <p class="fee-card-note">One line per charge. Amounts are per student.</p>
                 </div>
             </div>
+            <div class="fee-card-body">
+                {% if start_options and not fee_structure.pk %}
+                <label class="fee-field" style="max-width: 420px; margin-bottom: 1rem;">
+                    <span class="fee-label">Start from a set of fees (optional)</span>
+                    <select class="fee-select" id="fee-start-from">
+                        <option value="">Choose a saved set&hellip;</option>
+                        {% for option in start_options %}
+                        <option value="{{ forloop.counter0 }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                {% endif %}
 
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Fee Items</h5>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="addFeeRow">+ Add Fee</button>
+                {{ formset.management_form }}
+
+                {% if formset.non_form_errors %}
+                <div class="fee-banner fee-banner--warn" style="margin-bottom: 0.85rem;">
+                    <div>
+                        {% for error in formset.non_form_errors %}<div>{{ error }}</div>{% endfor %}
                     </div>
-                    <p class="text-muted small">e.g. Tuition, Levy, Accommodation. Each row is a separate charge.</p>
+                </div>
+                {% endif %}
 
-                    {{ formset.management_form }}
-                    <div id="feeFormset">
-                        {% for fee_form in formset %}
-                        <div class="fee-row row g-3 mb-2">
-                            <div class="col-md-4">
-                                {{ fee_form.name.label_tag }}
-                                {{ fee_form.name }}
-                            </div>
-                            <div class="col-md-4">
-                                {{ fee_form.description.label_tag }}
+                <div class="fee-lines" id="fee-lines">
+                    {% for fee_form in formset %}
+                    {% with charged=fee_form.instance.charged_count %}
+                    <div class="fee-line{% if fee_form.errors %} is-invalid{% endif %}" data-line>
+                        {% for hidden in fee_form.hidden_fields %}{{ hidden }}{% endfor %}
+                        <div class="fee-line-main">
+                            <label class="fee-label" for="{{ fee_form.name.id_for_label }}">Fee name</label>
+                            {{ fee_form.name }}
+                            {% if fee_form.name.errors %}
+                            <div class="fee-error">{{ fee_form.name.errors|striptags }}</div>
+                            {% endif %}
+
+                            {% if fee_form.description.value or fee_form.description.errors %}
+                            <div class="fee-line-note is-open">
+                            {% else %}
+                            <div class="fee-line-note">
+                            {% endif %}
+                                <label class="fee-label" for="{{ fee_form.description.id_for_label }}">Note</label>
                                 {{ fee_form.description }}
-                            </div>
-                            <div class="col-md-3">
-                                {{ fee_form.amount.label_tag }}
-                                {{ fee_form.amount }}
-                            </div>
-                            <div class="col-md-1 d-flex align-items-end">
-                                {% if fee_form.instance.pk %}
-                                    <div class="form-check">
-                                        {{ fee_form.DELETE }}
-                                        <label class="form-check-label small">Delete</label>
-                                    </div>
-                                {% else %}
-                                    <button type="button" class="btn btn-sm btn-danger remove-fee-row">&times;</button>
+                                {% if fee_form.description.errors %}
+                                <div class="fee-error">{{ fee_form.description.errors|striptags }}</div>
                                 {% endif %}
                             </div>
-                            {% for hidden in fee_form.hidden_fields %}{{ hidden }}{% endfor %}
-                            {% if fee_form.errors %}
-                            <div class="col-12 text-danger small">{{ fee_form.errors }}</div>
+                            <button type="button" class="fee-line-note-toggle" data-note-toggle>
+                                {% if fee_form.description.value %}&minus; Hide note{% else %}+ Add note{% endif %}
+                            </button>
+                        </div>
+
+                        <div>
+                            <label class="fee-label" for="{{ fee_form.amount.id_for_label }}">Amount</label>
+                            <div class="fee-amount-wrap">
+                                <span class="fee-amount-prefix">$</span>
+                                {{ fee_form.amount }}
+                            </div>
+                            {% if fee_form.amount.errors %}
+                            <div class="fee-error">{{ fee_form.amount.errors|striptags }}</div>
+                            {% endif %}
+                            {% if charged %}
+                            <div class="fee-help">
+                                {{ charged }} student charge{{ charged|pluralize }} already recorded.
+                                This line cannot be removed, and changing the amount
+                                does not update those existing charges.
+                            </div>
                             {% endif %}
                         </div>
-                        {% endfor %}
+
+                        <div>
+                            <span style="display: none;">{{ fee_form.DELETE }}</span>
+                            {% if charged and fee_form.instance.pk %}
+                            <button type="button" class="fee-line-remove" disabled
+                                    title="{{ charged }} student charge{{ charged|pluralize }} already recorded, so this line cannot be removed."
+                                    aria-label="This fee line cannot be removed">&times;</button>
+                            {% else %}
+                            <button type="button" class="fee-line-remove" data-remove
+                                    aria-label="Remove this fee line">&times;</button>
+                            {% endif %}
+                        </div>
+
+                        {% if fee_form.non_field_errors %}
+                        <div class="fee-error" style="grid-column: 1 / -1;">{{ fee_form.non_field_errors|striptags }}</div>
+                        {% endif %}
                     </div>
+                    {% endwith %}
+                    {% endfor %}
+                </div>
+
+                <div class="fee-line-actions">
+                    <button type="button" class="fee-btn fee-btn--quiet fee-btn--sm" id="fee-add-line">
+                        + Add fee line
+                    </button>
+                    <span class="fee-line-total">
+                        Total per student <strong id="fee-running-total">$0.00</strong>
+                    </span>
                 </div>
             </div>
+        </div>
 
-            <div class="d-flex gap-2 justify-content-end">
-                <a href="{% url back_url_name back_semester_id %}{% if filter_program or filter_year_level %}?program={{ filter_program }}&year_level={{ filter_year_level }}{% endif %}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary px-4">
-                    {{ submit_label|default:"Save Fee Structure" }}
+        <div class="fee-actionbar">
+            <p class="fee-action-text" id="fee-action-text">
+                {% if impact %}
+                <strong>{{ impact }}</strong> student{{ impact|pluralize }} will be charged.
+                {% elif context_locked %}
+                No students are enrolled here yet.
+                {% else %}
+                Choose a trade and course year to see who is charged.
+                {% endif %}
+            </p>
+            <div class="fee-action-buttons">
+                <a class="fee-btn fee-btn--quiet" href="{{ back_url }}">Cancel</a>
+                <button type="submit" class="fee-btn fee-btn--solid" id="fee-save-btn">
+                    Save
                 </button>
+                {% if next_needs_cell %}
+                <button type="submit" class="fee-btn fee-btn--quiet" name="save_and_next" value="1">
+                    Save and set up next
+                </button>
+                {% endif %}
+                <span class="fee-quiet"><span class="fee-kbd">Ctrl</span> + <span class="fee-kbd">Enter</span> to save</span>
             </div>
-        </form>
-    </div>
-</div>
+        </div>
+    </form>
 
+    <datalist id="fee-name-options">
+        {% for name in fee_names %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+
+    <template id="fee-line-template">
+        <div class="fee-line" data-line>
+            {{ formset.empty_form.id }}
+            <div class="fee-line-main">
+                <label class="fee-label" for="id_items-__prefix__-name">Fee name</label>
+                {{ formset.empty_form.name }}
+                <div class="fee-line-note">
+                    <label class="fee-label" for="id_items-__prefix__-description">Note</label>
+                    {{ formset.empty_form.description }}
+                </div>
+                <button type="button" class="fee-line-note-toggle" data-note-toggle>+ Add note</button>
+            </div>
+            <div>
+                <label class="fee-label" for="id_items-__prefix__-amount">Amount</label>
+                <div class="fee-amount-wrap">
+                    <span class="fee-amount-prefix">$</span>
+                    {{ formset.empty_form.amount }}
+                </div>
+            </div>
+            <div>
+                <span style="display: none;">{{ formset.empty_form.DELETE }}</span>
+                <button type="button" class="fee-line-remove" data-remove aria-label="Remove this fee line">&times;</button>
+            </div>
+        </div>
+    </template>
+
+    {{ enrollment_counts|json_script:"fee-enrollment-counts" }}
+    {{ program_years|json_script:"fee-program-years" }}
+    {{ start_options|json_script:"fee-start-data" }}
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}
+{% if not is_locked %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Add placeholders to fee structure form fields
-    const placeholders = {
-        'id_program': 'Select program',
-        'id_year_level': 'Select year level',
-    };
-    
-    Object.entries(placeholders).forEach(([id, placeholder]) => {
-        const el = document.getElementById(id);
-        if (el && placeholder) {
-            el.placeholder = placeholder;
-        }
-    });
-    
-    // Update select empty options
-    document.querySelectorAll('select').forEach(select => {
-        const firstOption = select.querySelector('option[value=""]');
-        if (firstOption && !firstOption.disabled) {
-            firstOption.disabled = true;
-            firstOption.selected = true;
-        }
-    });
-    
-    // Add placeholders to fee formset fields
-    function addPlaceholdersToFormset() {
-        document.querySelectorAll('#feeFormset .fee-row').forEach(row => {
-            const nameInput = row.querySelector('input[name$="-name"]');
-            const descInput = row.querySelector('input[name$="-description"]');
-            const amountInput = row.querySelector('input[name$="-amount"]');
-            
-            if (nameInput && !nameInput.placeholder) nameInput.placeholder = 'e.g. Tuition';
-            // Autofill name with "Tuition" if empty
-            if (nameInput && !nameInput.value) nameInput.value = 'Tuition';
-            if (descInput && !descInput.placeholder) descInput.placeholder = 'Description';
-            if (amountInput && !amountInput.placeholder) amountInput.placeholder = '0.00';
-        });
-    }
-    
-    addPlaceholdersToFormset();
-    
-    const formset = document.getElementById('feeFormset');
+(function () {
+    const form = document.getElementById('fee-form');
+    if (!form) return;
+
+    const lines = document.getElementById('fee-lines');
     const totalForms = document.getElementById('id_items-TOTAL_FORMS');
-    const addBtn = document.getElementById('addFeeRow');
+    const totalEl = document.getElementById('fee-running-total');
+    const actionText = document.getElementById('fee-action-text');
+    const impactEl = document.getElementById('fee-impact');
+    const template = document.getElementById('fee-line-template');
+    const addButton = document.getElementById('fee-add-line');
+    const saveButton = document.getElementById('fee-save-btn');
+    const startSelect = document.getElementById('fee-start-from');
 
-    function getNewRow() {
-        const rows = formset.querySelectorAll('.fee-row');
-        const lastRow = rows[rows.length - 1];
-        const newRow = lastRow.cloneNode(true);
-        const index = parseInt(totalForms.value);
-
-        newRow.querySelectorAll('[name]').forEach(el => {
-            el.name = el.name.replace(/-\d+-/, `-${index}-`);
-            el.id = el.id.replace(/-\d+-/, `-${index}-`);
-            if (el.tagName === 'SELECT' || el.tagName === 'INPUT') {
-                if (el.type !== 'checkbox') {
-                    // Autofill name field with "Tuition"
-                    if (el.name.endsWith('-name')) {
-                        el.value = 'Tuition';
-                    } else {
-                        el.value = '';
-                    }
-                }
-            }
-        });
-
-        const deleteField = newRow.querySelector('input[name$="-DELETE"]');
-        if (deleteField) deleteField.closest('.form-check')?.remove();
-
-        const removeBtn = newRow.querySelector('.remove-fee-row');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                newRow.remove();
-            });
-        } else {
-            const cell = newRow.querySelector('.col-md-1');
-            cell.innerHTML = '<button type="button" class="btn btn-sm btn-danger remove-fee-row">&times;</button>';
-            cell.querySelector('.remove-fee-row').addEventListener('click', function (e) {
-                e.preventDefault();
-                newRow.remove();
-            });
-        }
-
-        totalForms.value = index + 1;
-        return newRow;
+    let startOptions = [];
+    try {
+        startOptions = JSON.parse(document.getElementById('fee-start-data').textContent);
+    } catch (error) {
+        startOptions = [];
     }
 
-    addBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        const newRow = getNewRow();
-        formset.appendChild(newRow);
-        addPlaceholdersToFormset();
+    let counts = {};
+    try {
+        counts = JSON.parse(document.getElementById('fee-enrollment-counts').textContent);
+    } catch (error) {
+        counts = {};
+    }
+
+    let programYears = {};
+    try {
+        programYears = JSON.parse(document.getElementById('fee-program-years').textContent);
+    } catch (error) {
+        programYears = {};
+    }
+
+    function money(value) {
+        return '$' + (Number(value) || 0).toFixed(2);
+    }
+
+    function totalAmount() {
+        let total = 0;
+        lines.querySelectorAll('[data-line]').forEach(function (row) {
+            if (row.hidden) return;
+            const remove = row.querySelector('input[name$="-DELETE"]');
+            if (remove && remove.checked && row.querySelector('input[name$="-id"]') && row.querySelector('input[name$="-id"]').value) return;
+            const amount = row.querySelector('input[name$="-amount"]');
+            total += parseFloat(amount && amount.value ? amount.value : 0) || 0;
+        });
+        return total;
+    }
+
+    function refreshTotal() {
+        totalEl.textContent = money(totalAmount());
+        refreshAction();
+    }
+
+    function selectedContext() {
+        const program = document.getElementById('id_program');
+        const year = document.getElementById('id_year_level');
+        const programInput = program || form.querySelector('input[name="program"]');
+        const yearInput = year || form.querySelector('input[name="year_level"]');
+        return {
+            programId: programInput ? programInput.value : '',
+            year: yearInput ? yearInput.value : ''
+        };
+    }
+
+    function refreshImpact() {
+        const context = selectedContext();
+        const key = context.programId + '-' + context.year;
+        const count = Number(counts[key] || 0);
+
+        if (impactEl) {
+            impactEl.textContent = '';
+            if (!context.programId || !context.year) {
+                impactEl.textContent = 'Choose a trade and course year to see how many students are affected.';
+            } else if (count) {
+                const strong = document.createElement('strong');
+                strong.textContent = String(count);
+                impactEl.appendChild(strong);
+                impactEl.appendChild(document.createTextNode(
+                    ' student' + (count === 1 ? '' : 's') +
+                    ' enrolled here. Saving these fees charges each of them.'
+                ));
+            } else {
+                impactEl.textContent = 'No students are enrolled here yet. These fees will apply when students register.';
+            }
+        }
+        refreshAction();
+    }
+
+    function refreshAction() {
+        if (!actionText) return;
+        const context = selectedContext();
+        const count = Number(counts[context.programId + '-' + context.year] || 0);
+        const total = totalAmount();
+        actionText.textContent = '';
+
+        if (!context.programId || !context.year) {
+            actionText.textContent = 'Choose a trade and course year to see who is charged.';
+            return;
+        }
+        if (!count) {
+            actionText.textContent = 'No students are enrolled here yet. ' + money(total) + ' per student will apply when they register.';
+            return;
+        }
+
+        const strong = document.createElement('strong');
+        strong.textContent = String(count);
+        actionText.appendChild(strong);
+        actionText.appendChild(document.createTextNode(
+            ' student' + (count === 1 ? '' : 's') + ' will be charged ' +
+            money(total) + ' each.'
+        ));
+    }
+
+    function wireRow(row) {
+        const name = row.querySelector('input[name$="-name"]');
+        if (name && !name.value) {
+            name.focus();
+        }
+    }
+
+    function addRow(values) {
+        const index = parseInt(totalForms.value, 10) || 0;
+        const html = template.innerHTML.replace(/__prefix__/g, String(index));
+        const holder = document.createElement('div');
+        holder.innerHTML = html.trim();
+        const row = holder.firstElementChild;
+        if (!row) return null;
+
+        if (values) {
+            const name = row.querySelector('input[name$="-name"]');
+            const amount = row.querySelector('input[name$="-amount"]');
+            const description = row.querySelector('input[name$="-description"]');
+            if (name) name.value = values.name || '';
+            if (amount) amount.value = values.amount || '';
+            if (description) description.value = values.description || '';
+        }
+
+        lines.appendChild(row);
+        totalForms.value = String(index + 1);
+        wireRow(row);
+        refreshTotal();
+        return row;
+    }
+
+    addButton.addEventListener('click', function () {
+        addRow(null);
     });
 
-    formset.querySelectorAll('.remove-fee-row').forEach(btn => {
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            this.closest('.fee-row').remove();
-        });
+    lines.addEventListener('input', function (event) {
+        if (event.target.matches('input[name$="-amount"]')) {
+            refreshTotal();
+        }
     });
-});
+
+    lines.addEventListener('click', function (event) {
+        const noteToggle = event.target.closest('[data-note-toggle]');
+        if (noteToggle) {
+            const row = noteToggle.closest('[data-line]');
+            const note = row.querySelector('.fee-line-note');
+            note.classList.toggle('is-open');
+            noteToggle.textContent = note.classList.contains('is-open')
+                ? '\u2212 Hide note'
+                : '+ Add note';
+            return;
+        }
+
+        const remove = event.target.closest('[data-remove]');
+        if (remove) {
+            const row = remove.closest('[data-line]');
+            const deleteInput = row.querySelector('input[name$="-DELETE"]');
+            const idInput = row.querySelector('input[name$="-id"]');
+            if (idInput && idInput.value) {
+                if (deleteInput) deleteInput.checked = true;
+                row.hidden = true;
+            } else {
+                row.remove();
+            }
+            refreshTotal();
+        }
+    });
+
+    if (startSelect) {
+        startSelect.addEventListener('change', function () {
+            const option = startOptions[parseInt(startSelect.value, 10)];
+            if (!option) return;
+
+            const hasRows = Array.from(lines.querySelectorAll('[data-line]')).some(function (row) {
+                const name = row.querySelector('input[name$="-name"]');
+                const amount = row.querySelector('input[name$="-amount"]');
+                return (name && name.value) || (amount && amount.value);
+            });
+
+            if (hasRows && !window.confirm('Replace the fee lines below with this set of fees?')) {
+                startSelect.value = '';
+                return;
+            }
+
+            lines.innerHTML = '';
+            totalForms.value = '0';
+            option.items.forEach(function (item) {
+                addRow(item);
+            });
+            if (!option.items.length) {
+                addRow(null);
+            }
+            startSelect.value = '';
+        });
+    }
+
+    const programSelect = document.getElementById('id_program');
+    const yearSelect = document.getElementById('id_year_level');
+    if (programSelect && yearSelect) {
+        const originalOptions = Array.from(yearSelect.options).map(function (option) {
+            return { value: option.value, label: option.textContent };
+        });
+
+        function limitYears() {
+            const duration = parseInt(programYears[programSelect.value], 10);
+            const current = yearSelect.value;
+            yearSelect.innerHTML = '';
+
+            originalOptions.forEach(function (option) {
+                if (option.value === '') {
+                    yearSelect.appendChild(new Option(option.label, option.value));
+                    return;
+                }
+                if (!duration || parseInt(option.value, 10) <= duration) {
+                    yearSelect.appendChild(new Option(option.label, option.value));
+                }
+            });
+
+            if (current && yearSelect.querySelector('option[value="' + current + '"]')) {
+                yearSelect.value = current;
+            } else {
+                yearSelect.value = '';
+            }
+            refreshImpact();
+        }
+
+        programSelect.addEventListener('change', limitYears);
+        yearSelect.addEventListener('change', refreshImpact);
+        limitYears();
+    } else {
+        refreshImpact();
+    }
+
+    form.addEventListener('keydown', function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault();
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit(saveButton);
+            } else {
+                saveButton.click();
+            }
+        }
+    });
+
+    refreshTotal();
+})();
 </script>
+{% endif %}
 {% endblock %}

@@ -1,83 +1,151 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ title }}{% endblock %}
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-xl-8">
-        <div class="mb-4">
-            <h2 class="fw-bold mb-1">{{ title }}</h2>
-            <p class="text-muted">
-                Define the academic period. You'll configure fee
-                structures for each program/year level afterwards.
-            </p>
-        </div>
-
-        <form method="post">
-            {% csrf_token %}
-
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                    {% for error in form.non_field_errors %}
-                        <div>{{ error }}</div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <div class="row">
-                        {% for field in form %}
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">
-                                {{ field.label }}
-                            </label>
-                            {{ field }}
-                            {% if field.errors %}
-                                <div class="text-danger small">{{ field.errors }}</div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="d-flex gap-2 justify-content-end">
-                <a href="{% url back_url %}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary px-4">
-                    {{ submit_label|default:"Save Semester" }}
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
 {% endblock %}
 
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const placeholders = {
-        'id_name': 'e.g. 2027',
-        'id_start_date': 'YYYY-MM-DD',
-        'id_end_date': 'YYYY-MM-DD',
-    };
-    
-    Object.entries(placeholders).forEach(([id, placeholder]) => {
-        const el = document.getElementById(id);
-        if (el && placeholder) {
-            el.placeholder = placeholder;
-        }
-    });
-    
-    // Update select empty options
-    document.querySelectorAll('select').forEach(select => {
-        const firstOption = select.querySelector('option[value=""]');
-        if (firstOption && !firstOption.disabled) {
-            firstOption.disabled = true;
-            firstOption.selected = true;
-        }
-    });
-});
-</script>
+{% block content %}
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">{{ title }}</h1>
+            <p class="fee-sub">
+                {% if semester %}
+                Change when this semester starts and ends. Fees and enrollments stay as they are.
+                {% else %}
+                A semester is the period fees and enrollments belong to. You can set up its fees next.
+                {% endif %}
+            </p>
+        </div>
+        <div class="fee-head-actions">
+            <a class="fee-btn fee-btn--ghost" href="{% url back_url %}">&larr; Back</a>
+        </div>
+    </div>
+
+    <form method="post" id="semester-form" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="fee-banner fee-banner--warn">
+            <div>
+                {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">1</span>
+                <div>
+                    <h2 class="fee-card-title">When it runs</h2>
+                    <p class="fee-card-note">Dates use day, month and year.</p>
+                </div>
+            </div>
+            <div class="fee-card-body">
+                <div class="fee-grid-fields">
+                    <label class="fee-field">
+                        <span class="fee-label">Academic year <span class="req">*</span></span>
+                        {{ form.academic_year }}
+                        {% if form.academic_year.errors %}<div class="fee-error">{{ form.academic_year.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">Semester <span class="req">*</span></span>
+                        {{ form.number }}
+                        {% if form.number.errors %}<div class="fee-error">{{ form.number.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">Start date <span class="req">*</span></span>
+                        {{ form.start_date }}
+                        {% if form.start_date.errors %}<div class="fee-error">{{ form.start_date.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">End date <span class="req">*</span></span>
+                        {{ form.end_date }}
+                        {% if form.end_date.errors %}<div class="fee-error">{{ form.end_date.errors|striptags }}</div>{% endif %}
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {% if not semester %}
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">2</span>
+                <div>
+                    <h2 class="fee-card-title">Fees</h2>
+                    <p class="fee-card-note">Start from a previous semester, or start with a blank grid.</p>
+                </div>
+            </div>
+            <div class="fee-card-body">
+                {% if not can_copy %}
+                <p class="fee-quiet">
+                    You can set up fees after saving. Ask an administrator if you need access.
+                </p>
+                <input type="hidden" name="fees_mode" value="empty">
+                {% else %}
+                <div class="fee-radio-row">
+                    <label class="fee-radio">
+                        <input type="radio" name="fees_mode" value="copy"
+                               {% if fees_mode_value == "copy" and copy_sources %}checked{% endif %}
+                               {% if not copy_sources %}disabled{% endif %}>
+                        <span>
+                            <strong>Copy fees from a previous semester</strong>
+                            <span>
+                                {% if copy_sources %}
+                                Only empty trade and course year cells are filled in.
+                                {% else %}
+                                No other semester has fees set up yet.
+                                {% endif %}
+                            </span>
+                        </span>
+                    </label>
+
+                    {% if copy_sources %}
+                    <label class="fee-field" style="margin-left: 1.75rem; max-width: 420px;">
+                        <span class="fee-label">Copy from</span>
+                        <select name="copy_source" class="fee-select">
+                            {% for source in copy_sources %}
+                            <option value="{{ source.pk }}"
+                                    {% if source.pk|stringformat:"s" == copy_source_value|stringformat:"s" %}selected{% endif %}>
+                                {{ source.academic_year.name }} &middot; Semester {{ source.number }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    {% endif %}
+
+                    <label class="fee-radio">
+                        <input type="radio" name="fees_mode" value="empty"
+                               {% if fees_mode_value != "copy" or not copy_sources %}checked{% endif %}>
+                        <span>
+                            <strong>Start empty</strong>
+                            <span>Set up each trade and course year by hand on the next screen.</span>
+                        </span>
+                    </label>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="fee-actionbar">
+            <p class="fee-action-text">
+                {% if semester %}
+                Changes apply immediately. Fees and enrolled students are not affected.
+                {% else %}
+                The semester is created first; fees come next.
+                {% endif %}
+            </p>
+            <div class="fee-action-buttons">
+                <a class="fee-btn fee-btn--quiet" href="{% url back_url %}">Cancel</a>
+                <button type="submit" class="fee-btn fee-btn--solid">
+                    {{ submit_label|default:"Create semester" }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
 {% endblock %}

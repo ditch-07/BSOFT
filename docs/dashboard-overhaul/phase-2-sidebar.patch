@@ -1,0 +1,1005 @@
+--- a/templates/base.html
++++ b/templates/base.html
+@@ -1,4 +1,4 @@
+-{% load static %}
++{% load static school_tags %}
+ 
+ <!DOCTYPE html>
+ <html lang="en">
+@@ -15,171 +15,25 @@
+     <link rel="stylesheet" href="{% static 'css/bootstrap-icons-offline.css' %}">
+     <!-- Your custom app styles -->
+     <link rel="stylesheet" href="{% static 'css/app.css' %}">
++    <link rel="stylesheet" href="{% static 'css/ui.css' %}">
+     <link rel="stylesheet" href="{% static 'css/navbar.css' %}">
++    <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
+     {% block extra_head %}{% endblock %}
+ 
+     <style>
+-        :root { --nav-h: 60px; }
+-
+-        /* --- RESET & LAYOUT --- */
+-        body {
+-            margin: 0;
+-            padding: 0;
+-            background-color: #f8f9fa;
+-        }
+-
+-        /* Slim navbar */
+-        .navbar.fixed-top {
+-            z-index: 1030;
+-            height: var(--nav-h);
+-            min-height: var(--nav-h);
+-            padding-top: 0.2rem;
+-            padding-bottom: 0.2rem;
+-        }
+-        .navbar .navbar-brand {
+-            font-size: 1.0rem;
+-            padding: 0;
+-        }
+-        .navbar .btn {
+-            font-size: 0.8rem;
+-            padding: 0.25rem 0.6rem;
+-        }
+-
+-        /* --- SIDEBAR --- */
+-        .sidebar-fixed {
+-            position: fixed;
+-            top: var(--nav-h);
+-            left: 0;
+-            bottom: 0;
+-            width: 16.6667%;
+-            overflow-y: auto;
+-            z-index: 1020;
+-            background-color: #fff;
+-            border-right: 1px solid #dee2e6;
+-            padding: 0.5rem 0.4rem;
+-        }
+-
+-        /* Thin scrollbar for sidebar */
+-        .sidebar-fixed::-webkit-scrollbar {
+-            width: 4px;
+-        }
+-        .sidebar-fixed::-webkit-scrollbar-track {
+-            background: #f1f1f1;
+-        }
+-        .sidebar-fixed::-webkit-scrollbar-thumb {
+-            background: #ccc;
+-            border-radius: 10px;
+-        }
+-        .sidebar-fixed::-webkit-scrollbar-thumb:hover {
+-            background: #aaa;
+-        }
+-
+-        /* Sidebar links – tighter spacing */
+-        .sidebar-link {
+-            display: flex;
+-            align-items: center;
+-            gap: 0.5rem;
+-            color: #495057;
+-            border-radius: 6px;
+-            padding: 0.35rem 0.6rem;
+-            font-size: 0.85rem;
+-            font-weight: 500;
+-            transition: all 0.15s ease;
+-            text-decoration: none;
+-            border-left: 3px solid transparent;
+-        }
+-        .sidebar-link i {
+-            font-size: 1.05rem;
+-            width: 1.2rem;
+-            text-align: center;
+-            flex-shrink: 0;
+-        }
+-        .sidebar-link:hover {
+-            background-color: #f1f3f5;
+-            color: #212529;
+-            border-left-color: #adb5bd;
+-        }
+-        .sidebar-link.active {
+-            background-color: #e9ecef;
+-            color: #212529;
+-            font-weight: 600;
+-            border-left-color: #0d6efd;
+-        }
+-
+-        /* Sidebar heading – smaller */
+-        .sidebar-heading {
+-            font-size: 0.6rem;
+-            letter-spacing: 0.06em;
+-            text-transform: uppercase;
+-            color: #868e96;
+-            font-weight: 700;
+-            padding: 0.3rem 0.6rem 0.1rem;
+-            margin-top: 0.2rem;
+-        }
+-
+-        /* Collapsible toggle link */
+-        .sidebar-link[data-bs-toggle="collapse"] {
+-            cursor: pointer;
+-        }
+-        .chevron-icon {
+-            font-size: 0.7rem;
+-            transition: transform 0.2s ease;
+-            margin-left: auto;
+-        }
+-        .sidebar-link[aria-expanded="true"] .chevron-icon {
+-            transform: rotate(90deg);
+-        }
+-
+-        /* Nested submenu items */
+-        .sidebar-submenu .sidebar-link {
+-            padding-left: 2rem;
+-            font-size: 0.8rem;
+-        }
+-        .sidebar-submenu .sidebar-link i {
+-            font-size: 0.85rem;
+-            width: 1.1rem;
+-        }
+-
+-        /* --- MAIN CONTENT --- */
++        :root { --nav-h: 60px; --side-w: 232px; }
++        body { margin: 0; padding: 0; background-color: #f8f9fa; }
+         .main-content {
+-            margin-left: 16.6667%;
++            margin-left: var(--side-w);
+             margin-top: var(--nav-h);
+             height: calc(100vh - var(--nav-h));
+             overflow-y: auto;
+             padding: 0.8rem 1.2rem;
+         }
+-
+-        /* Small screen override */
+         @media (max-width: 768px) {
+-            .sidebar-fixed {
+-                width: 100%;
+-                height: auto;
+-                position: relative;
+-                top: 0;
+-                border-right: none;
+-                border-bottom: 1px solid #dee2e6;
+-            }
+-            .main-content {
+-                margin-left: 0;
+-                margin-top: 0;
+-                height: auto;
+-                overflow-y: visible;
+-            }
+-            body {
+-                padding-top: var(--nav-h);
+-            }
++            .main-content { margin-left: 0; }
+         }
+-
+-        /* Misc tweaks */
+-        .sidebar-link .badge {
+-            font-size: 0.6rem;
+-            margin-left: auto;
+-        }
+-        
+-        hr {
+-            margin: 0.3rem 0;
+-            opacity: 0.4;
+-        }
++        hr { margin: 0.3rem 0; opacity: 0.4; }
+     </style>
+ </head>
+ <body>
+@@ -189,6 +43,9 @@
+ <!-- ===== NAVBAR ===== -->
+ <nav class="navbar navbar-dark fixed-top app-navbar" aria-label="Quick actions">
+     <div class="nav-shell">
++        <button class="sidebar-menu-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#main-sidebar" aria-controls="main-sidebar" aria-expanded="false" aria-label="Open main navigation" title="Open main navigation">
++            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
++        </button>
+         <a class="navbar-brand nav-brand" href="{% url 'dashboard' %}" aria-label="Bsoft Student Management dashboard">
+             <svg class="nav-brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                 <path d="M3 22C8 22 8 12 14 12C20 12 19 21 29 21" stroke="#8AD4CE" stroke-width="1.7" stroke-linecap="round"/>
+@@ -200,19 +57,19 @@
+         </a>
+         {% if nav_semester %}
+             {% if nav_testing_date %}
+-            <a class="nav-semester nav-semester--testing" href="{% url 'time_override' %}" title="Testing clock is active">
++            {% if user.is_superuser and ENABLE_TIME_OVERRIDE %}<a class="nav-semester nav-semester--testing" href="{% url 'time_override' %}" title="Testing clock is active">{% else %}<span class="nav-semester nav-semester--testing" title="Testing clock is active">{% endif %}
+                 <span class="nav-semester-dot" aria-hidden="true"></span>
+                 <span class="nav-semester-copy">
+                     <span>{{ nav_semester.academic_year.name }} &middot; Semester {{ nav_semester.number }}</span>
+                     <span class="nav-testing-date">Testing clock: {{ nav_testing_date|date:"j M Y" }}</span>
+                 </span>
+-            </a>
++            {% if user.is_superuser and ENABLE_TIME_OVERRIDE %}</a>{% else %}</span>{% endif %}
+             {% else %}
+-            <a class="nav-semester" href="{% url 'semester_list' %}">
++            {% if perms.school.view_semester %}<a class="nav-semester" href="{% url 'semester_list' %}">{% else %}<span class="nav-semester">{% endif %}
+                 <span class="nav-semester-dot" aria-hidden="true"></span>
+                 <span class="nav-semester-status">{% if nav_semester_is_upcoming %}Upcoming{% else %}Current{% endif %}</span>
+                 <span>{{ nav_semester.academic_year.name }} &middot; Semester {{ nav_semester.number }}</span>
+-            </a>
++            {% if perms.school.view_semester %}</a>{% else %}</span>{% endif %}
+             {% endif %}
+         {% endif %}
+ 
+@@ -269,7 +126,7 @@
+                 <div class="dropdown-menu dropdown-menu-end nav-dropdown">
+                     <div class="nav-dropdown-title">Needs attention</div>
+                     {% if perms.school.add_feestructure and nav_fee_count and nav_semester %}
+-                    <a class="dropdown-item" href="{% url 'fee_structure_list' nav_semester.pk %}?filter=needs">
++                    <a class="dropdown-item" href="{% if perms.school.view_feestructure %}{% url 'fee_structure_list' nav_semester.pk %}?filter=needs{% else %}{% url 'fee_structure_create' nav_semester.pk %}{% endif %}">
+                         <span>Fees not set up</span>
+                         <span class="nav-dropdown-count">{{ nav_fee_count }}</span>
+                     </a>
+@@ -323,146 +180,25 @@
+ </nav>
+ 
+ <!-- ===== SIDEBAR ===== -->
+-<aside class="sidebar-fixed">
+-
+-    <!-- Primary navigation -->
+-    <div class="nav flex-column gap-1">
+-        <a href="{% url 'dashboard' %}" class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+-            <i class="bi bi-grid-1x2"></i> Dashboard
+-        </a>
+-        <a href="{% url 'reminders' %}" class="sidebar-link {% if request.resolver_match.url_name == 'reminders' %}active{% endif %} d-flex justify-content-between align-items-center">
+-            <span><i class="bi bi-exclamation-circle"></i> Reminders</span>
+-            {% if reminders_count %}<span class="badge bg-danger rounded-pill">{{ reminders_count }}</span>{% endif %}
+-        </a>
+-        <a href="{% url 'student_list' %}" class="sidebar-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}">
+-            <i class="bi bi-people"></i> Students
+-        </a>
+-        <a href="{% url 'archive_list' %}" class="sidebar-link {% if 'archive' in request.resolver_match.url_name %}active{% endif %}">
+-            <i class="bi bi-archive"></i> Archive
+-        </a>
+-        <a href="{% url 'payment_create' %}" class="sidebar-link {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+-            <i class="bi bi-credit-card"></i> Payments
+-        </a>
+-    </div>
+-
+-    <hr>
+-
+-    <!-- Academic Setup -->
+-    <div class="sidebar-heading"><i class="bi bi-book me-1"></i> Academic Setup</div>
+-    <div class="nav flex-column gap-1">
+-        <a href="{% url 'academic_year_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'academic_year_list' %}active{% endif %}">
+-            <i class="bi bi-calendar-range"></i> Academic years
+-        </a>
+-        <a href="{% url 'semester_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'semester_list' or request.resolver_match.url_name == 'semester_create' or request.resolver_match.url_name == 'semester_edit' %}active{% endif %}">
+-            <i class="bi bi-calendar-event"></i> Semesters
+-        </a>
+-        <a href="{% url 'program_list' %}" class="sidebar-link {% if 'program' in request.resolver_match.url_name %}active{% endif %}">
+-            <i class="bi bi-bookmark"></i> Programs
+-        </a>
+-        {% if nav_semester and perms.school.view_feestructure %}
+-        <a href="{% url 'fee_structure_list' nav_semester.pk %}" class="sidebar-link {% if 'fee_structure' in request.resolver_match.url_name or 'bulk_fee' in request.resolver_match.url_name %}active{% endif %}">
+-            <i class="bi bi-cash-stack"></i> Fees
+-        </a>
+-        {% else %}
+-        <a href="{% url 'semester_list' %}" class="sidebar-link">
+-            <i class="bi bi-cash-stack"></i> Fees
+-        </a>
+-        {% endif %}
+-    </div>
+-
+-    <hr>
+-
+-    <!-- Reports (collapsible) -->
+-    <div class="sidebar-heading"><i class="bi bi-bar-chart"></i> Reports</div>
+-    <div class="nav flex-column gap-1">
+-        <a class="sidebar-link d-flex justify-content-between align-items-center" 
+-           data-bs-toggle="collapse" 
+-           href="#reportsSubmenu" 
+-           role="button" 
+-           aria-expanded="false" 
+-           aria-controls="reportsSubmenu">
+-            <span><i class="bi bi-files"></i> All Reports</span>
+-            <i class="bi bi-chevron-right chevron-icon"></i>
+-        </a>
+-        <div class="collapse sidebar-submenu" id="reportsSubmenu">
+-            <div class="nav flex-column gap-1">
+-                <a href="{% url 'reports_index' %}" class="sidebar-link {% if request.resolver_match.url_name == 'reports_index' %}active{% endif %}">
+-                    <i class="bi bi-house"></i> Index
+-                </a>
+-                <a href="{% url 'financial_records' %}" class="sidebar-link {% if request.resolver_match.url_name == 'financial_records' %}active{% endif %}">
+-                    <i class="bi bi-wallet2"></i> Financial Records
+-                </a>
+-                <a href="{% url 'enrollment_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'enrollment_report' %}active{% endif %}">
+-                    <i class="bi bi-person-plus"></i> Enrollment
+-                </a>
+-                <a href="{% url 'outstanding_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'outstanding_report' %}active{% endif %}">
+-                    <i class="bi bi-exclamation-triangle"></i> Outstanding
+-                </a>
+-                <a href="{% url 'fee_audit_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'fee_audit_report' %}active{% endif %}">
+-                    <i class="bi bi-search"></i> Fee Audit
+-                </a>
+-                <a href="{% url 'payment_methods_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'payment_methods_report' %}active{% endif %}">
+-                    <i class="bi bi-credit-card-2-back"></i> Methods
+-                </a>
+-                <a href="{% url 'program_revenue_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'program_revenue_report' %}active{% endif %}">
+-                    <i class="bi bi-graph-up"></i> Revenue
+-                </a>
+-                <a href="{% url 'daily_collections_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'daily_collections_report' %}active{% endif %}">
+-                    <i class="bi bi-cash"></i> Daily Collections
+-                </a>
+-                <a href="{% url 'status_history_report' %}" class="sidebar-link {% if request.resolver_match.url_name == 'status_history_report' %}active{% endif %}">
+-                    <i class="bi bi-clock-history"></i> Status History
+-                </a>
+-            </div>
+-        </div>
+-    </div>
+-
+-    <hr>
+-
+-    <!-- System -->
+-    <div class="sidebar-heading"><i class="bi bi-gear"></i> System</div>
+-    <div class="nav flex-column gap-1">
+-        <a class="sidebar-link" href="/admin/"><i class="bi bi-shield-lock"></i> Administration</a>
+-        <a href="{% url 'backup_index' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup_index' %}active{% endif %}">
+-            <i class="bi bi-hdd-stack"></i> Backup & Restore
+-        </a>
+-        <a href="{% url 'backup_settings' %}" class="sidebar-link {% if request.resolver_match.url_name == 'backup_settings' %}active{% endif %}">
+-            <i class="bi bi-gear"></i> Backup Settings
+-        </a>
+-        <a href="{% url 'audit_log_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'audit_log_list' %}active{% endif %}">
+-            <i class="bi bi-journal-text"></i> Audit Trail
+-        </a>
+-        <a href="{% url 'user_list' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_list' %}active{% endif %}">
+-            <i class="bi bi-people"></i> Users
+-        </a>
+-        <a href="{% url 'user_create' %}" class="sidebar-link {% if request.resolver_match.url_name == 'user_create' %}active{% endif %}">
+-            <i class="bi bi-person-plus"></i> Add User
+-        </a>
+-    </div>
+-
+-    <!-- Time Override (only if enabled) -->
+-    {% if ENABLE_TIME_OVERRIDE %}
+-    <hr>
+-    <div class="sidebar-heading"><i class="bi bi-clock"></i> Testing</div>
+-    <div class="nav flex-column gap-1">
+-        <a href="{% url 'time_override' %}" class="sidebar-link {% if request.resolver_match.url_name == 'time_override' %}active{% endif %}">
+-            <i class="bi bi-stopwatch"></i> Time Override
+-        </a>
+-    </div>
+-    {% endif %}
+-
+-</aside>
++{% sidebar_navigation %}
+ 
+ <!-- ===== MAIN CONTENT ===== -->
+ <main class="main-content" id="main-content" tabindex="-1">
+-    {% for message in messages %}
+-        <div class="alert alert-{% if 'error' in message.tags %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show">
+-            {{ message }}
+-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+-        </div>
+-    {% endfor %}
++    {% if request.resolver_match.url_name != 'dashboard' %}
++        {% for message in messages %}
++            <div class="alert alert-{% if 'error' in message.tags %}danger{% elif message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show">
++                {{ message }}
++                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
++            </div>
++        {% endfor %}
++    {% endif %}
+ 
+     {% block content %}{% endblock %}
++    {% if request.resolver_match.url_name == 'dashboard' and messages %}
++    <aside class="ui db-notices" role="status" aria-label="Updates">
++        {% for message in messages %}<div class="ui-card db-notice"><span>{{ message }}</span><button type="button" class="ui-btn ui-btn--ghost" data-dismiss-notice aria-label="Dismiss update">Dismiss</button></div>{% endfor %}
++    </aside>
++    {% endif %}
+ </main>
+ 
+ <!-- Bootstrap JS -->
+@@ -470,26 +206,8 @@
+ <!-- Flatpickr (local vendor) -->
+ <script src="{% static 'vendor/flatpickr/flatpickr.min.js' %}"></script>
+ 
+-<!-- Keep reports submenu state -->
+ <script>
+     document.addEventListener('DOMContentLoaded', function() {
+-        const toggle = document.querySelector('[data-bs-toggle="collapse"][href="#reportsSubmenu"]');
+-        const collapseEl = document.getElementById('reportsSubmenu');
+-
+-        if (toggle && collapseEl) {
+-            const isOpen = localStorage.getItem('reportsSubmenuOpen') === 'true';
+-            if (isOpen) {
+-                collapseEl.classList.add('show');
+-                toggle.setAttribute('aria-expanded', 'true');
+-            }
+-            collapseEl.addEventListener('shown.bs.collapse', function() {
+-                localStorage.setItem('reportsSubmenuOpen', 'true');
+-            });
+-            collapseEl.addEventListener('hidden.bs.collapse', function() {
+-                localStorage.setItem('reportsSubmenuOpen', 'false');
+-            });
+-        }
+-        
+         // Initialize flatpickr for all .datepicker inputs
+         if (typeof flatpickr !== 'undefined') {
+             console.log('Flatpickr loaded, initializing...');
+@@ -513,6 +231,7 @@
+ </script>
+ 
+ <script src="{% static 'js/navbar.js' %}"></script>
++<script src="{% static 'js/sidebar.js' %}"></script>
+ {% block extra_js %}{% endblock %}
+ 
+ </body>
+--- a/school/templatetags/school_tags.py
++++ b/school/templatetags/school_tags.py
+@@ -1,4 +1,6 @@
+ from django import template
++from django.conf import settings
++from django.urls import reverse
+ 
+ register = template.Library()
+ 
+@@ -37,4 +39,158 @@
+             return 0
+         return value / arg
+     except (ValueError, TypeError):
+-        return value
+\ No newline at end of file
++        return value
++
++
++# Access rules without an @ prefix are Django permission codenames.
++SIDEBAR_ROUTES = {
++    "dashboard": ("Dashboard", "dashboard", "dashboard", "@login", ("dashboard",)),
++    "students": (
++        "Students", "students", "student_list", "school.view_student",
++        ("student_list", "student_create", "student_import", "student_edit",
++         "student_search", "student_list_search", "student_detail", "student_status_change"),
++    ),
++    "archive": (
++        "Archive", "archive", "archive_list", "school.view_student",
++        ("archive_list", "archive_search", "archive_detail"),
++    ),
++    "enrollment": (
++        "Enrollment report", "enrollment", "enrollment_report", "school.view_student",
++        ("enrollment_report",),
++    ),
++    "status-history": (
++        "Status history", "history", "status_history_report", "school.view_studentstatuslog",
++        ("status_history_report",),
++    ),
++    "financial-records": (
++        "Financial records", "ledger", "financial_records", "school.can_view_financial_reports",
++        ("financial_records",),
++    ),
++    "outstanding": (
++        "Outstanding", "outstanding", "outstanding_report", "school.can_view_outstanding_reports",
++        ("outstanding_report",),
++    ),
++    "daily-collections": (
++        "Daily collections", "collections", "daily_collections_report", "school.can_view_financial_reports",
++        ("daily_collections_report",),
++    ),
++    "payment-methods": (
++        "Payment methods", "payment", "payment_methods_report", "school.can_view_financial_reports",
++        ("payment_methods_report",),
++    ),
++    "revenue": (
++        "Revenue", "revenue", "program_revenue_report", "school.can_view_financial_reports",
++        ("program_revenue_report",),
++    ),
++    "academic-years": (
++        "Academic years", "calendar", "academic_year_list", "school.view_academicyear",
++        ("academic_year_list",),
++    ),
++    "semesters": (
++        "Semesters", "semester", "semester_list", "school.view_semester",
++        ("semester_list", "semester_create", "semester_edit"),
++    ),
++    "fees": (
++        "Fees", "fees", "fee_structure_list", "@fees",
++        ("fee_structure_list", "fee_structure_create", "fee_structure_edit",
++         "fee_structure_copy", "bulk_fee_configuration"),
++    ),
++    "trades": (
++        "Trades", "trade", "program_list", "school.view_program",
++        ("program_list", "program_create"),
++    ),
++    "fee-audit": (
++        "Fee audit", "search", "fee_audit_report", "school.view_feestructure",
++        ("fee_audit_report",),
++    ),
++    "users": (
++        "Users", "users", "user_list", "@superuser", ("user_list", "user_create"),
++    ),
++    "audit-trail": (
++        "Audit trail", "audit", "audit_log_list", "school.view_auditlog", ("audit_log_list",),
++    ),
++    "backups": (
++        "Backups", "backup", "backup_index", "@superuser",
++        ("backup_index", "backup_settings", "backup_create", "backup_download",
++         "backup_restore", "backup_upload"),
++    ),
++    "administration": ("Administration", "shield", "admin:index", "@staff", ()),
++    "time-override": (
++        "Time override", "clock", "time_override", "@time-override", ("time_override",),
++    ),
++    "reports": ("Reports index", "reports", "reports_index", "@login", ("reports_index",)),
++}
++
++SIDEBAR_GROUPS = (
++    ("people", "People", ("students", "archive", "enrollment", "status-history")),
++    ("money", "Money", ("financial-records", "outstanding", "daily-collections", "payment-methods", "revenue")),
++    ("academics", "Academics", ("academic-years", "semesters", "fees", "trades", "fee-audit")),
++    ("system", "System", ("users", "audit-trail", "backups", "administration", "time-override")),
++)
++
++
++@register.inclusion_tag("school/_sidebar.html", takes_context=True)
++def sidebar_navigation(context):
++    """Build only permitted links; never query school data from navigation."""
++    request = context.get("request")
++    user = getattr(request, "user", None) or context.get("user")
++    if not user or not user.is_authenticated:
++        return {"sidebar_groups": [], "sidebar_dashboard": None, "sidebar_reports": None}
++
++    match = getattr(request, "resolver_match", None)
++    current_name = getattr(match, "url_name", "") or ""
++    in_admin = "admin" in (getattr(match, "namespaces", ()) or ())
++    semester = context.get("nav_semester")
++    time_enabled = context.get(
++        "ENABLE_TIME_OVERRIDE", getattr(settings, "ENABLE_TIME_OVERRIDE", False)
++    )
++    links = {}
++    for key, (label, icon, route, access, owners) in SIDEBAR_ROUTES.items():
++        args = ()
++        if access == "@fees":
++            if semester and user.has_perm("school.view_feestructure"):
++                args = (semester.pk,)
++            elif user.has_perm("school.view_semester"):
++                route = "semester_list"
++            else:
++                continue
++        elif access == "@superuser":
++            if not user.is_superuser:
++                continue
++        elif access == "@staff":
++            if not user.is_staff:
++                continue
++        elif access == "@time-override":
++            if not (user.is_superuser and time_enabled):
++                continue
++        elif access != "@login" and not user.has_perm(access):
++            continue
++        links[key] = {
++            "id": key,
++            "label": label,
++            "icon": icon,
++            "route": route,
++            "url": reverse(route, args=args),
++            "url_names": owners,
++            "active": in_admin if key == "administration" else not in_admin and current_name in owners,
++        }
++
++    groups = []
++    for key, label, item_ids in SIDEBAR_GROUPS:
++        items = [links[item_id] for item_id in item_ids if item_id in links]
++        if not items:
++            continue
++        active = any(item["active"] for item in items)
++        groups.append({
++            "id": key,
++            "label": label,
++            "items": items,
++            "active": active,
++            "open": active or key != "system",
++        })
++    return {
++        "sidebar_dashboard": links["dashboard"],
++        "sidebar_groups": groups,
++        "sidebar_reports": links["reports"],
++        "sidebar_storage_key": f"school:sidebar:v1:{user.pk}",
++    }
+--- /dev/null
++++ b/templates/school/_sidebar.html
+@@ -0,0 +1,45 @@
++{% if sidebar_dashboard %}
++{% include "school/_icons.html" %}
++<aside class="ui sidebar-fixed offcanvas offcanvas-start" id="main-sidebar" tabindex="-1" aria-labelledby="sidebar-title" data-sidebar-storage-key="{{ sidebar_storage_key }}">
++    <div class="offcanvas-header sidebar-header">
++        <h2 id="sidebar-title">Main navigation</h2>
++        <button class="sidebar-close" type="button" data-bs-dismiss="offcanvas" aria-label="Close main navigation">
++            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-close"></use></svg>
++        </button>
++    </div>
++    <nav class="sidebar-nav" id="sidebar-nav" aria-label="Main">
++        <a class="sidebar-link{% if sidebar_dashboard.active %} active{% endif %}" href="{{ sidebar_dashboard.url }}" data-sidebar-link="{{ sidebar_dashboard.id }}" data-route="{{ sidebar_dashboard.route }}" aria-label="{{ sidebar_dashboard.label }}" title="{{ sidebar_dashboard.label }}"{% if sidebar_dashboard.active %} aria-current="page"{% endif %}>
++            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ sidebar_dashboard.icon }}"></use></svg>
++            <span class="sidebar-label">{{ sidebar_dashboard.label }}</span>
++        </a>
++        {% for group in sidebar_groups %}
++        <details class="sidebar-group" data-sidebar-group="{{ group.id }}" data-active="{{ group.active|yesno:'true,false' }}"{% if group.open %} open{% endif %}>
++            <summary class="sidebar-heading" aria-controls="sidebar-group-{{ group.id }}">
++                <span>{{ group.label }}</span>
++                <svg class="sidebar-icon sidebar-chevron" aria-hidden="true" focusable="false"><use href="#side-icon-chevron"></use></svg>
++            </summary>
++            <div class="sidebar-items" id="sidebar-group-{{ group.id }}">
++                {% for item in group.items %}
++                <a class="sidebar-link{% if item.active %} active{% endif %}" href="{{ item.url }}" data-sidebar-link="{{ item.id }}" data-route="{{ item.route }}" aria-label="{{ item.label }}" title="{{ item.label }}"{% if item.active %} aria-current="page"{% endif %}>
++                    <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ item.icon }}"></use></svg>
++                    <span class="sidebar-label">{{ item.label }}</span>
++                </a>
++                {% endfor %}
++            </div>
++        </details>
++        {% endfor %}
++        <div class="sidebar-reports">
++            <a class="sidebar-link{% if sidebar_reports.active %} active{% endif %}" href="{{ sidebar_reports.url }}" data-sidebar-link="{{ sidebar_reports.id }}" data-route="{{ sidebar_reports.route }}" aria-label="{{ sidebar_reports.label }}" title="{{ sidebar_reports.label }}"{% if sidebar_reports.active %} aria-current="page"{% endif %}>
++                <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-{{ sidebar_reports.icon }}"></use></svg>
++                <span class="sidebar-label">{{ sidebar_reports.label }}</span>
++            </a>
++        </div>
++    </nav>
++    <div class="sidebar-footer">
++        <button class="sidebar-rail-toggle" type="button" aria-controls="sidebar-nav" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation">
++            <svg class="sidebar-icon" aria-hidden="true" focusable="false"><use href="#side-icon-collapse"></use></svg>
++            <span class="sidebar-label">Collapse navigation</span>
++        </button>
++    </div>
++</aside>
++{% endif %}
+--- /dev/null
++++ b/templates/school/_icons.html
+@@ -0,0 +1,28 @@
++<svg class="sidebar-sprite" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false">
++    <defs>
++        <symbol id="side-icon-dashboard" viewBox="0 0 20 20"><path d="M3 3h6v6H3zM12 3h5v4h-5zM3 12h6v5H3zM12 10h5v7h-5z"/></symbol>
++        <symbol id="side-icon-students" viewBox="0 0 20 20"><circle cx="7.5" cy="6" r="3"/><path d="M2 17v-1a5.5 5.5 0 0 1 11 0v1M13 3.5a3 3 0 0 1 0 5.5M15 11.5a4.5 4.5 0 0 1 3 4.5v1"/></symbol>
++        <symbol id="side-icon-archive" viewBox="0 0 20 20"><path d="M2.5 3h15v4h-15zM4 7v10h12V7M8 10h4"/></symbol>
++        <symbol id="side-icon-enrollment" viewBox="0 0 20 20"><path d="M5 3H3v14h14V3h-2M7 2h6v4H7zM6 10l1.5 1.5L10 9M12 10h2M6 14h8"/></symbol>
++        <symbol id="side-icon-history" viewBox="0 0 20 20"><path d="M3 8a7 7 0 1 1 1 7M3 3v5h5M10 6v4l3 2"/></symbol>
++        <symbol id="side-icon-ledger" viewBox="0 0 20 20"><path d="M4 2.5h12v15H4zM7 2.5v15M10 6h3M10 10h3M10 14h3"/></symbol>
++        <symbol id="side-icon-outstanding" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 6v5M10 14h.01"/></symbol>
++        <symbol id="side-icon-collections" viewBox="0 0 20 20"><path d="M3 10v7h14v-7M7 12l3 3 3-3M10 3v11M3 6h3M14 6h3"/></symbol>
++        <symbol id="side-icon-payment" viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2"/><path d="M3 8h14M6 12h3"/></symbol>
++        <symbol id="side-icon-revenue" viewBox="0 0 20 20"><path d="M3 3v14h14M6 12l4-4 3 2 4-6M13 4h4v4"/></symbol>
++        <symbol id="side-icon-calendar" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M6 2v4M14 2v4M3 8h14M6 11h2M12 11h2M6 14h2M12 14h2"/></symbol>
++        <symbol id="side-icon-semester" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="13" rx="2"/><path d="M6 2v4M14 2v4M3 8h14M7 12h6M10 10v4"/></symbol>
++        <symbol id="side-icon-fees" viewBox="0 0 20 20"><path d="M4 2.5h12v15l-3-1.5-3 1.5-3-1.5-3 1.5zM12 6H9a1.5 1.5 0 0 0 0 3h2a1.5 1.5 0 0 1 0 3H8M10 4.5v9"/></symbol>
++        <symbol id="side-icon-trade" viewBox="0 0 20 20"><path d="M12 3a4 4 0 0 0-5 5l-4.5 4.5a2.1 2.1 0 0 0 3 3L10 11a4 4 0 0 0 5-5l-2.5 2.5L10 6z"/></symbol>
++        <symbol id="side-icon-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></symbol>
++        <symbol id="side-icon-users" viewBox="0 0 20 20"><circle cx="10" cy="6" r="3"/><path d="M4 17v-1a6 6 0 0 1 12 0v1M2 4v4M18 4v4"/></symbol>
++        <symbol id="side-icon-audit" viewBox="0 0 20 20"><path d="M4 2.5h9l3 3V17H4zM12 3v4h4M7 10h6M7 13h6"/></symbol>
++        <symbol id="side-icon-backup" viewBox="0 0 20 20"><ellipse cx="10" cy="4.5" rx="6.5" ry="2.5"/><path d="M3.5 4.5v10c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-10M3.5 9.5C3.5 11 6.4 12 10 12s6.5-1 6.5-2.5"/></symbol>
++        <symbol id="side-icon-shield" viewBox="0 0 20 20"><path d="m10 2 7 3v5c0 3-3 6-7 8-4-2-7-5-7-8V5zM6.5 10l2.5 2.5 4.5-5"/></symbol>
++        <symbol id="side-icon-clock" viewBox="0 0 20 20"><circle cx="10" cy="11" r="6.5"/><path d="M8 2h4M10 2v2M10 7v4l2 2M15 5l1.5-1.5"/></symbol>
++        <symbol id="side-icon-reports" viewBox="0 0 20 20"><path d="M3 5h10v12H3zM7 5V2h10v12h-4M6 9h4M6 12h4"/></symbol>
++        <symbol id="side-icon-chevron" viewBox="0 0 20 20"><path d="m8 5 5 5-5 5"/></symbol>
++        <symbol id="side-icon-collapse" viewBox="0 0 20 20"><path d="M4 3v14M13 5l-5 5 5 5"/></symbol>
++        <symbol id="side-icon-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
++    </defs>
++</svg>
+--- /dev/null
++++ b/static/css/sidebar.css
+@@ -0,0 +1,185 @@
++/* Preserve the existing navbar's base sizing. */
++.navbar.fixed-top {
++    z-index: 1030;
++    height: var(--nav-h);
++    min-height: var(--nav-h);
++    padding-top: 0.2rem;
++    padding-bottom: 0.2rem;
++}
++.navbar .navbar-brand { font-size: 1rem; padding: 0; }
++.navbar .btn { font-size: 0.8rem; padding: 0.25rem 0.6rem; }
++
++.sidebar-sprite { position: absolute; overflow: hidden; pointer-events: none; }
++.ui.sidebar-fixed {
++    --bs-offcanvas-width: min(292px, calc(100vw - 40px));
++    --bs-offcanvas-bg: var(--paper);
++    --bs-offcanvas-border-color: var(--line);
++    display: flex;
++    flex-direction: column;
++    background: var(--paper);
++    border-right: 1px solid var(--line);
++}
++.sidebar-header {
++    flex: 0 0 auto;
++    min-height: var(--nav-h);
++    padding: 8px 12px 8px 16px;
++    border-bottom: 1px solid var(--line);
++}
++.sidebar-header h2 { margin: 0; color: var(--ink); font-size: 1rem; font-weight: 750; }
++.sidebar-nav {
++    flex: 1 1 auto;
++    min-height: 0;
++    overflow-x: hidden;
++    overflow-y: auto;
++    overscroll-behavior: contain;
++    scrollbar-width: thin;
++    scrollbar-color: var(--line) var(--paper);
++    padding: 10px 8px;
++}
++.sidebar-nav::-webkit-scrollbar { width: 4px; }
++.sidebar-nav::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--line); }
++.ui .sidebar-link,
++.sidebar-rail-toggle {
++    display: flex;
++    align-items: center;
++    gap: 10px;
++    width: 100%;
++    min-height: 40px;
++    padding: 8px 10px;
++    border: 0;
++    border-left: 3px solid transparent;
++    border-radius: 6px;
++    background: transparent;
++    color: var(--ink-2);
++    font: inherit;
++    font-size: 0.9rem;
++    font-weight: 550;
++    line-height: 1.35;
++    text-align: left;
++    text-decoration: none;
++    transition: background-color 120ms ease, color 120ms ease;
++}
++.ui .sidebar-link:hover,
++.sidebar-rail-toggle:hover { background: var(--wash); color: var(--ink); }
++.ui .sidebar-link.active {
++    border-left-color: var(--rail);
++    background: var(--rail-soft);
++    color: var(--rail);
++    font-weight: 700;
++}
++.sidebar-icon {
++    display: block;
++    flex: 0 0 18px;
++    width: 18px;
++    height: 18px;
++    fill: none;
++    stroke: currentColor;
++    stroke-width: 1.5;
++    stroke-linecap: round;
++    stroke-linejoin: round;
++}
++.sidebar-label { white-space: nowrap; }
++.sidebar-group { margin-top: 10px; }
++.sidebar-heading {
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    min-height: 32px;
++    padding: 6px 10px 6px 13px;
++    border-radius: 6px;
++    /* --grey is too light for small text on white; use the shared secondary ink. */
++    color: var(--ink-2);
++    font-size: 0.68rem;
++    font-weight: 700;
++    letter-spacing: 0.09em;
++    text-transform: uppercase;
++    list-style: none;
++    cursor: pointer;
++}
++.sidebar-heading::-webkit-details-marker { display: none; }
++.sidebar-heading:hover { background: var(--wash); color: var(--ink); }
++.sidebar-chevron { transition: transform 120ms ease; }
++.sidebar-group[open] > .sidebar-heading .sidebar-chevron { transform: rotate(90deg); }
++.sidebar-items { display: grid; gap: 2px; }
++.sidebar-reports { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
++.sidebar-footer {
++    flex: 0 0 auto;
++    padding: 8px;
++    border-top: 1px solid var(--line);
++    background: var(--paper);
++}
++.sidebar-rail-toggle { font-size: 0.78rem; cursor: pointer; }
++.sidebar-close,
++.sidebar-menu-toggle {
++    display: inline-flex;
++    align-items: center;
++    justify-content: center;
++    flex: 0 0 38px;
++    width: 38px;
++    height: 38px;
++    padding: 0;
++    border: 1px solid var(--line);
++    border-radius: 7px;
++    background: var(--paper);
++    color: var(--ink);
++}
++.sidebar-close:hover { background: var(--wash); }
++.sidebar-menu-toggle {
++    display: none;
++    border-color: rgba(255, 255, 255, 0.42);
++    background: rgba(5, 25, 39, 0.38);
++    color: #fff;
++}
++.sidebar-menu-toggle:hover { background: rgba(5, 25, 39, 0.66); }
++.sidebar-fixed :focus-visible { outline: 3px solid var(--rail); outline-offset: 2px; }
++.sidebar-tooltip {
++    --bs-tooltip-bg: #163B5C;
++    --bs-tooltip-color: #fff;
++    --bs-tooltip-opacity: 1;
++    font-family: "Archivo Navbar", system-ui, sans-serif;
++    font-size: 0.8rem;
++}
++
++@media (min-width: 769px) {
++    :root.sidebar-collapsed { --side-w: 64px; }
++    .ui.sidebar-fixed {
++        position: fixed;
++        inset: var(--nav-h) auto 0 0;
++        z-index: 1020;
++        width: var(--side-w);
++        height: calc(100vh - var(--nav-h));
++        visibility: visible !important;
++        transform: none !important;
++        transition: none;
++    }
++    .sidebar-header { display: none; }
++    .sidebar-collapsed .sidebar-label {
++        position: absolute;
++        width: 1px;
++        height: 1px;
++        overflow: hidden;
++        clip-path: inset(50%);
++        white-space: nowrap;
++    }
++    .sidebar-collapsed .sidebar-heading { display: none; }
++    .sidebar-collapsed .sidebar-group {
++        margin-top: 8px;
++        padding-top: 8px;
++        border-top: 1px solid var(--line);
++    }
++    .sidebar-collapsed .sidebar-link,
++    .sidebar-collapsed .sidebar-rail-toggle { justify-content: center; padding: 10px 0; gap: 0; }
++    .sidebar-collapsed .sidebar-rail-toggle .sidebar-icon { transform: rotate(180deg); }
++}
++@media (max-width: 768px) {
++    .sidebar-menu-toggle { display: inline-flex; }
++    .sidebar-footer { display: none; }
++    .ui.sidebar-fixed { height: 100vh; height: 100dvh; }
++}
++@media (prefers-reduced-motion: reduce) {
++    .sidebar-fixed, .sidebar-fixed *, .sidebar-tooltip, .offcanvas-backdrop { transition: none !important; animation: none !important; }
++}
++@media print {
++    .sidebar-fixed, .sidebar-sprite, .sidebar-menu-toggle, .sidebar-rail-toggle, .offcanvas-backdrop, .sidebar-tooltip { display: none !important; }
++    .main-content { margin: 0 !important; height: auto !important; overflow: visible !important; }
++}
+--- /dev/null
++++ b/static/js/sidebar.js
+@@ -0,0 +1,113 @@
++(() => {
++    "use strict";
++
++    const sidebar = document.getElementById("main-sidebar");
++    if (!sidebar) return;
++
++    const root = document.documentElement;
++    const mobile = window.matchMedia("(max-width: 768px)");
++    const railToggle = sidebar.querySelector(".sidebar-rail-toggle");
++    const menuToggle = document.querySelector(".sidebar-menu-toggle");
++    const nav = sidebar.querySelector(".sidebar-nav");
++    const storageKey = sidebar.dataset.sidebarStorageKey;
++    const read = (key) => {
++        try { return window.localStorage.getItem(`${storageKey}:${key}`); }
++        catch (_) { return null; }
++    };
++    const write = (key, value) => {
++        try { window.localStorage.setItem(`${storageKey}:${key}`, String(value)); }
++        catch (_) { /* Navigation still works with storage disabled. */ }
++    };
++    let collapsed = read("collapsed") === "true";
++    const inRail = () => collapsed && !mobile.matches;
++    const groups = Array.from(sidebar.querySelectorAll("[data-sidebar-group]")).map((element) => {
++        const saved = read(`group:${element.dataset.sidebarGroup}`);
++        // A current destination always wins over a previously closed section.
++        const preferred = element.dataset.active === "true" ||
++            (saved === null ? element.open : saved === "true");
++        const group = { element, preferred, renderedOpen: element.open };
++        element.addEventListener("toggle", () => {
++            // Programmatic rail/viewport changes must not overwrite preferences.
++            if (inRail() || element.open === group.renderedOpen) return;
++            group.preferred = element.open;
++            group.renderedOpen = element.open;
++            write(`group:${element.dataset.sidebarGroup}`, element.open);
++        });
++        return group;
++    });
++
++    const tooltips = [];
++    if (window.bootstrap && window.bootstrap.Tooltip) {
++        sidebar.querySelectorAll("[data-sidebar-link]").forEach((link) => {
++            const tooltip = new window.bootstrap.Tooltip(link, {
++                container: "body",
++                placement: "right",
++                trigger: "hover focus",
++                customClass: "sidebar-tooltip",
++                animation: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
++            });
++            tooltip.disable();
++            tooltips.push(tooltip);
++        });
++    }
++
++    function revealCurrent() {
++        const current = nav.querySelector('[aria-current="page"]');
++        if (!current) return;
++        const bounds = nav.getBoundingClientRect();
++        const item = current.getBoundingClientRect();
++        if (item.bottom > bounds.bottom) nav.scrollTop += item.bottom - bounds.bottom + 8;
++        else if (item.top < bounds.top) nav.scrollTop -= bounds.top - item.top + 8;
++    }
++
++    function applyLayout() {
++        root.classList.toggle("sidebar-collapsed", collapsed);
++        const rail = inRail();
++        groups.forEach((group) => {
++            group.renderedOpen = rail || group.preferred;
++            group.element.open = group.renderedOpen;
++        });
++        const label = rail ? "Expand navigation" : "Collapse navigation";
++        railToggle.setAttribute("aria-expanded", String(!rail));
++        railToggle.setAttribute("aria-label", label);
++        railToggle.setAttribute("title", label);
++        railToggle.querySelector(".sidebar-label").textContent = label;
++        tooltips.forEach((tooltip) => {
++            tooltip.hide();
++            if (rail) tooltip.enable();
++            else tooltip.disable();
++        });
++        if (!mobile.matches) revealCurrent();
++    }
++
++    railToggle.addEventListener("click", () => {
++        collapsed = !collapsed;
++        write("collapsed", collapsed);
++        applyLayout();
++    });
++
++    // Bootstrap owns the drawer's backdrop, focus trap, Escape, and return focus.
++    sidebar.addEventListener("show.bs.offcanvas", (event) => {
++        if (!mobile.matches) {
++            event.preventDefault();
++            return;
++        }
++        menuToggle.setAttribute("aria-expanded", "true");
++    });
++    sidebar.addEventListener("shown.bs.offcanvas", revealCurrent);
++    sidebar.addEventListener("hidden.bs.offcanvas", () => {
++        menuToggle.setAttribute("aria-expanded", "false");
++        if (!mobile.matches && sidebar.contains(document.activeElement)) {
++            const current = nav.querySelector('[aria-current="page"]') || nav.querySelector("a");
++            current.focus({ preventScroll: true });
++        }
++    });
++    mobile.addEventListener("change", () => {
++        if (!mobile.matches && window.bootstrap && window.bootstrap.Offcanvas) {
++            const drawer = window.bootstrap.Offcanvas.getInstance(sidebar);
++            if (drawer) drawer.hide();
++        }
++        applyLayout();
++    });
++    applyLayout();
++})();
+--- a/templates/school/backup_index.html
++++ b/templates/school/backup_index.html
+@@ -7,6 +7,7 @@
+ <div class="d-flex justify-content-between align-items-center mb-4">
+     <h2 class="fw-bold mb-0">Backup & Restore</h2>
+     <div class="d-flex gap-2">
++        {% if user.is_superuser %}<a class="btn btn-outline-secondary" href="{% url 'backup_settings' %}">Backup settings</a>{% endif %}
+         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+             <i class="bi bi-upload"></i> Upload Backup
+         </button>
+--- a/templates/school/program_list.html
++++ b/templates/school/program_list.html
+@@ -1,11 +1,11 @@
+ {% extends "base.html" %}
+ 
+-{% block title %}Programs{% endblock %}
++{% block title %}Trades{% endblock %}
+ 
+ {% block content %}
+ 
+ <div class="d-flex justify-content-between align-items-center mb-4">
+-    <h2>Programs</h2>
++    <h2>Trades</h2>
+     <a href="{% url 'program_create' %}" class="btn btn-primary">+ New Program</a>
+ </div>
+ 

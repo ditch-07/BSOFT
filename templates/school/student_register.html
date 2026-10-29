@@ -1,147 +1,1204 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}{% if is_edit %}Edit Student{% else %}Register Student{% endif %}{% endblock %}
+{% block title %}{% if is_edit %}Edit {{ student.first_name }} {{ student.last_name }}{% else %}Register Student{% endif %}{% endblock %}
 
 {% block content %}
+<style>
+    @font-face {
+        font-family: "Archivo Student Form";
+        src: url("{% static 'vendor/fonts/archivo/archivo-latin-var.woff2' %}") format("woff2");
+        font-weight: 100 900;
+        font-stretch: 62% 125%;
+        font-display: swap;
+    }
 
-<div class="row justify-content-center">
-    <div class="col-xl-9">
+    .sf {
+        --ink: #1E2B33;
+        --ink-2: #4E5C66;
+        --grey: #7D878E;
+        --line: #D6DAD5;
+        --ballast: #E4E6E2;
+        --paper: #FFFFFF;
+        --wash: #F5F6F3;
+        --rail: #1F4F7A;
+        --rail-dark: #163B5C;
+        --rail-soft: #E5EDF4;
+        --red: #B8372B;
+        --red-soft: #FBEDEB;
+        --amber: #A86E06;
+        --amber-lamp: #D99A1E;
+        --green: #2F7D4F;
+        --blue: #2C6FB0;
+        --radius: 10px;
 
-        <div class="mb-4">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="fw-bold mb-1">{% if is_edit %}Edit Student{% else %}Register Student{% endif %}</h2>
-                    {% if is_edit %}
-                        <p class="text-muted">Update student details below.</p>
-                    {% else %}
-                        <p class="text-muted">Register the student and enrol them in their starting semester.</p>
-                    {% endif %}
-                </div>
-                <a href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Back
-                </a>
-            </div>
+        max-width: 1180px;
+        padding: 0.75rem 0 2rem;
+        color: var(--ink);
+        font-family: "Archivo Student Form", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .sf :focus-visible {
+        outline: 3px solid var(--rail);
+        outline-offset: 2px;
+        border-radius: 6px;
+    }
+
+    .sf-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.25rem 2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .sf-title {
+        margin: 0;
+        font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+        font-weight: 800;
+        font-stretch: 106%;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        text-transform: uppercase;
+    }
+
+    .sf-intro {
+        max-width: 680px;
+        margin: 0.65rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.9375rem;
+    }
+
+    .sf-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 2rem;
+        margin: 0.9rem 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .sf-facts li { display: flex; flex-direction: column; }
+    .sf-fact-label { color: var(--grey); font-size: 0.75rem; }
+    .sf-fact-value { font-size: 0.9375rem; font-weight: 650; }
+
+    .sf-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .sf-lamp {
+        --lamp: var(--grey);
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--lamp);
+        box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px rgba(30, 43, 51, 0.15);
+    }
+    .sf-status--ACTIVE .sf-lamp { --lamp: var(--green); }
+    .sf-status--DEFERRED .sf-lamp { --lamp: var(--amber-lamp); }
+    .sf-status--WITHDRAWN .sf-lamp { --lamp: var(--grey); }
+    .sf-status--COMPLETED .sf-lamp { --lamp: var(--blue); }
+
+    .sf-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        min-height: 44px;
+        padding: 0.65rem 1rem;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 650;
+        line-height: 1.2;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease,
+            box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    .sf-btn:active { transform: translateY(1px) scale(0.99); }
+    .sf-btn:disabled,
+    .sf-btn[aria-disabled="true"] { cursor: wait; opacity: 0.68; }
+
+    .sf .sf-btn--solid {
+        background: var(--rail);
+        color: #fff;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 4px 12px -6px rgba(31, 79, 122, 0.7);
+    }
+    .sf .sf-btn--solid:hover { background: var(--rail-dark); color: #fff; }
+
+    .sf .sf-btn--quiet {
+        border-color: #BFCEDC;
+        background: var(--paper);
+        color: var(--rail);
+    }
+    .sf .sf-btn--quiet:hover { border-color: var(--rail); background: var(--rail-soft); }
+
+    .sf .sf-btn--ghost {
+        border-color: var(--line);
+        background: transparent;
+        color: var(--ink);
+    }
+    .sf .sf-btn--ghost:hover { border-color: var(--grey); background: var(--paper); }
+
+    .sf-errors {
+        margin-bottom: 1rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid #E6B8B2;
+        border-left: 4px solid var(--red);
+        border-radius: var(--radius);
+        background: var(--red-soft);
+        color: var(--ink);
+    }
+    .sf-errors:focus { outline: 3px solid var(--red); outline-offset: 2px; }
+    .sf-errors h2 { margin: 0 0 0.3rem; font-size: 1rem; font-weight: 750; }
+    .sf-errors ul { margin: 0; padding-left: 1.15rem; font-size: 0.875rem; }
+    .sf-errors a { color: var(--red); font-weight: 650; }
+
+    .sf-form { padding-bottom: 1rem; }
+
+    .sf-card {
+        margin-bottom: 1rem;
+        padding: 1.15rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+    }
+
+    .sf-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .sf-card-title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 750;
+        font-stretch: 106%;
+        line-height: 1.25;
+    }
+
+    .sf-card-copy {
+        max-width: 650px;
+        margin: 0.2rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+    }
+
+    .sf-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        height: 1.5rem;
+        padding: 0 0.45rem;
+        border-radius: 999px;
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .sf-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.9rem 1rem;
+    }
+
+    .sf-field { min-width: 0; }
+    .sf-field--full { grid-column: 1 / -1; }
+
+    .sf-label {
+        display: block;
+        margin-bottom: 0.3rem;
+        color: var(--ink);
+        font-size: 0.8125rem;
+        font-weight: 650;
+    }
+
+    .sf-required {
+        margin-left: 0.15rem;
+        color: var(--red);
+        font-weight: 750;
+    }
+
+    .sf .form-control,
+    .sf .form-select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #AEB7BD;
+        border-radius: 7px;
+        background-color: var(--paper);
+        color: var(--ink);
+        font: inherit;
+        font-size: 0.9375rem;
+        box-shadow: none;
+    }
+
+    .sf .form-control { padding: 0.65rem 0.8rem; }
+    .sf .form-select { padding: 0.65rem 2.2rem 0.65rem 0.8rem; }
+    .sf textarea.form-control { min-height: 88px; resize: vertical; }
+    .sf .form-control::placeholder { color: var(--grey); opacity: 1; }
+
+    .sf .form-control:focus,
+    .sf .form-select:focus {
+        border-color: var(--rail);
+        outline: 0;
+        box-shadow: 0 0 0 3px rgba(31, 79, 122, 0.14);
+    }
+
+    .sf .form-control.is-invalid,
+    .sf .form-select.is-invalid,
+    .sf [aria-invalid="true"] {
+        border-color: var(--red);
+        background-image: none;
+    }
+
+    .sf-help {
+        margin: 0.3rem 0 0;
+        color: var(--grey);
+        font-size: 0.75rem;
+    }
+
+    .sf-field-error,
+    .sf-client-error,
+    .sf-duplicate-feedback.is-error {
+        margin-top: 0.3rem;
+        color: var(--red);
+        font-size: 0.75rem;
+        font-weight: 650;
+    }
+
+    .sf-duplicate-feedback.is-clear {
+        margin-top: 0.3rem;
+        color: var(--green);
+        font-size: 0.75rem;
+        font-weight: 650;
+    }
+
+    .sf-segments {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+
+    .sf-segment,
+    .sf-segments label {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        margin: 0;
+        padding: 0.55rem 0.85rem;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--paper);
+        color: var(--ink-2);
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 650;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .sf-segment:hover,
+    .sf-segments label:hover { border-color: var(--rail); color: var(--rail); }
+    .sf-segment[aria-checked="true"] { border-color: var(--rail); background: var(--rail); color: #fff; }
+
+    .sf-segments input[type="radio"] {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .sf-segments input[type="radio"]:checked + span {
+        color: #fff;
+    }
+
+    .sf-segments label:has(input:checked) {
+        border-color: var(--rail);
+        background: var(--rail);
+        color: #fff;
+    }
+
+    .sf-segments label:has(input:focus-visible) {
+        outline: 3px solid var(--rail);
+        outline-offset: 2px;
+    }
+
+    .sf.is-enhanced .sf-segment-source { display: none; }
+
+    .sf-enrolment {
+        grid-column: 1 / -1;
+        margin-top: 0.15rem;
+        padding: 1rem;
+        border-radius: var(--radius);
+        background: var(--ballast);
+    }
+
+    .sf-enrolment-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .sf-enrolment-head .sf-lamp { --lamp: var(--rail); margin-top: 0.4rem; }
+    .sf-enrolment-title { margin: 0; font-size: 1rem; font-weight: 750; }
+    .sf-enrolment-copy { margin: 0.1rem 0 0; color: var(--ink-2); font-size: 0.75rem; }
+
+    .sf-no-semester {
+        margin-top: 0.45rem;
+        color: var(--red);
+        font-size: 0.8125rem;
+        font-weight: 650;
+    }
+    .sf-no-semester a { color: var(--red); }
+
+    .sf-actionbar {
+        position: sticky;
+        z-index: 20;
+        bottom: -1px;
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) auto;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 -8px 22px -20px rgba(30, 43, 51, 0.7);
+        backdrop-filter: blur(8px);
+    }
+
+    .sf-summary {
+        min-width: 0;
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+        line-height: 1.35;
+    }
+    .sf-summary strong { color: var(--ink); font-weight: 700; }
+    .sf-key-hint { display: block; margin-top: 0.15rem; color: var(--grey); font-size: 0.6875rem; }
+    .sf-key-hint kbd {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--wash);
+        color: var(--ink-2);
+        font: inherit;
+        padding: 0.05rem 0.3rem;
+        box-shadow: none;
+    }
+
+    .sf-actions { display: flex; align-items: center; gap: 0.45rem; }
+
+    @keyframes sf-reveal {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .sf[data-intro] .sf-head,
+    .sf[data-intro] .sf-errors,
+    .sf[data-intro] .sf-card,
+    .sf[data-intro] .sf-actionbar {
+        animation: sf-reveal 0.45s cubic-bezier(.2, .7, .2, 1) both;
+    }
+    .sf[data-intro] .sf-card:nth-of-type(1) { animation-delay: 70ms; }
+    .sf[data-intro] .sf-card:nth-of-type(2) { animation-delay: 120ms; }
+    .sf[data-intro] .sf-card:nth-of-type(3) { animation-delay: 170ms; }
+    .sf[data-intro] .sf-actionbar { animation-delay: 220ms; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .sf *, .sf *::before, .sf *::after {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
+
+    @media (min-width: 1100px) {
+        .sf-form {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+        .sf-form > .sf-card { margin-bottom: 0; }
+        .sf-form > .sf-errors,
+        .sf-form > .sf-card--trade,
+        .sf-form > .sf-card--additional,
+        .sf-form > .sf-actionbar { grid-column: 1 / -1; }
+        .sf-form > .sf-actionbar { margin-top: 0; }
+    }
+
+    @media (max-width: 760px) {
+        .sf { padding-top: 0.35rem; }
+        .sf-head { flex-direction: column; }
+        .sf-grid { grid-template-columns: minmax(0, 1fr); }
+        .sf-field--full,
+        .sf-enrolment { grid-column: auto; }
+        .sf-actionbar { grid-template-columns: minmax(0, 1fr); }
+        .sf-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sf-actions .sf-btn { width: 100%; }
+        .sf-actions .sf-btn--solid { grid-column: 1 / -1; grid-row: 1; }
+    }
+
+    @media (max-width: 460px) {
+        .sf-card { padding: 0.95rem; }
+        .sf-facts { gap: 0.5rem 1rem; }
+        .sf-segments label,
+        .sf-segment { flex: 1 1 calc(50% - 0.4rem); }
+        .sf-actions { grid-template-columns: minmax(0, 1fr); }
+        .sf-actions .sf-btn--solid { grid-column: auto; }
+    }
+</style>
+
+<div class="sf"
+     data-intro
+     data-mode="{% if is_edit %}edit{% else %}create{% endif %}"
+     data-bound="{{ form.is_bound|yesno:'true,false' }}"
+     data-student-id="{% if is_edit %}{{ student.pk }}{% endif %}"
+     data-duplicate-url="{{ duplicate_check_url|default:'' }}">
+    <header class="sf-head">
+        <div>
+            {% if is_edit %}
+                <h1 class="sf-title">{{ student.first_name }} {{ student.last_name }}</h1>
+                <ul class="sf-facts">
+                    <li>
+                        <span class="sf-fact-label">Student number</span>
+                        <span class="sf-fact-value">{{ student.student_number }}</span>
+                    </li>
+                    <li>
+                        <span class="sf-fact-label">Trade</span>
+                        <span class="sf-fact-value">{{ student.program.name }}</span>
+                    </li>
+                    <li>
+                        <span class="sf-fact-label">Status</span>
+                        <span class="sf-fact-value sf-status sf-status--{{ student.status }}"><span class="sf-lamp" aria-hidden="true"></span>{{ student.get_status_display }}</span>
+                    </li>
+                </ul>
+                <p class="sf-intro">Update the student’s record. Starting enrolment is managed separately.</p>
+            {% else %}
+                <h1 class="sf-title">Register Student</h1>
+                <p class="sf-intro">Copy the paper form from top to bottom. Required fields are marked with <span class="sf-required" aria-hidden="true">*</span>.</p>
+            {% endif %}
         </div>
+        <a class="sf-btn sf-btn--ghost"
+           href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}"
+           aria-label="{% if is_edit %}Back to student{% else %}Back to students{% endif %}">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M9.5 3.5L5 8l4.5 4.5M5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% if is_edit %}Back to student{% else %}Back{% endif %}
+        </a>
+    </header>
 
-        <form method="post">
-            {% csrf_token %}
+    <form method="post" id="student-form" class="sf-form" autocomplete="off">
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
-            {% endif %}
-
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-4">Student Information</h5>
-                    <div class="row">
-                        {% for field in form %}
-                            <div class="col-md-6 mb-3">
-                                <label for="{{ field.id_for_label }}" class="form-label fw-semibold{% if field.field.required %} required{% endif %}">
-                                    {{ field.label }}
-                                </label>
-                                {{ field }}
-                                {% for error in field.errors %}
-                                    <div class="text-danger small">{{ error }}</div>
-                                {% endfor %}
-                                {% if field.name == "program" %}
-                                    <div class="form-text">Determines available year levels and fee structure.</div>
-                                {% endif %}
-                            </div>
+        {% if form.errors %}
+            <section class="sf-errors" id="sf-error-summary" role="alert" tabindex="-1" aria-labelledby="sf-error-title">
+                <h2 id="sf-error-title">Check the highlighted details</h2>
+                <ul>
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <li><a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a></li>
                         {% endfor %}
-                    </div>
+                    {% endfor %}
+                    {% for error in form.non_field_errors %}
+                        <li><a href="#student-form">{{ error }}</a></li>
+                    {% endfor %}
+                    {% if not is_edit and not request.POST.year_level %}
+                        <li><a href="#id_year_level_1">Choose a starting year level.</a></li>
+                    {% endif %}
+                    {% if not is_edit and not request.POST.semester %}
+                        <li><a href="#id_semester">Choose a starting semester.</a></li>
+                    {% endif %}
+                </ul>
+            </section>
+        {% elif request.method == "POST" and not is_edit %}
+            <section class="sf-errors" id="sf-error-summary" role="alert" tabindex="-1" aria-labelledby="sf-error-title">
+                <h2 id="sf-error-title">Check the starting enrolment</h2>
+                <ul>
+                    {% if not request.POST.year_level %}<li><a href="#id_year_level_1">Choose a starting year level.</a></li>{% endif %}
+                    {% if not request.POST.semester %}<li><a href="#id_semester">Choose a starting semester.</a></li>{% endif %}
+                    {% if request.POST.year_level and request.POST.semester %}<li><a href="#sf-enrolment">The selected Trade, year level and semester do not form a valid enrolment.</a></li>{% endif %}
+                </ul>
+            </section>
+        {% endif %}
+
+        <section class="sf-card sf-card--personal" aria-labelledby="sf-personal-title">
+            <div class="sf-card-head">
+                <div>
+                    <h2 class="sf-card-title" id="sf-personal-title">Personal details</h2>
+                    <p class="sf-card-copy">Use the spelling shown on the student’s documents.</p>
                 </div>
+                <span class="sf-count" aria-label="Section 1">1</span>
             </div>
 
-            {% if not is_edit %}
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-1">Starting Enrollment</h5>
-                    <p class="text-muted small mb-4">
-                        The student will automatically be charged according to the fee
-                        structure configured for their program, year level, and semester.
-                    </p>
+            <div class="sf-grid">
+                {% with field=form.student_number %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Student number{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    <p class="sf-help" id="{{ field.id_for_label }}_help">Use the number printed on the student file.</p>
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">Starting Year Level</label>
-                            <select name="year_level" class="form-select" required>
-                                <option value="" selected disabled>Select year level</option>
+                {% if form.first_name %}
+                    {% with field=form.first_name %}
+                    <div class="sf-field">
+                        <label class="sf-label" for="{{ field.id_for_label }}">First names{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                    </div>
+                    {% endwith %}
+                {% else %}
+                    {% with field=form.first_names %}
+                    <div class="sf-field">
+                        <label class="sf-label" for="{{ field.id_for_label }}">First names{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                        {{ field }}
+                        {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                    </div>
+                    {% endwith %}
+                {% endif %}
+
+                {% with field=form.last_name %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Last name{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.national_id %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">National ID{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    <p class="sf-help" id="{{ field.id_for_label }}_help">Example: 63-123456 A 42</p>
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.date_of_birth %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Date of birth{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.gender %}
+                <div class="sf-field">
+                    <label class="sf-label" id="{{ field.id_for_label }}_label" for="{{ field.id_for_label }}">Gender{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    <div class="sf-segment-source">{{ field }}</div>
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+            </div>
+        </section>
+
+        <section class="sf-card sf-card--contact" aria-labelledby="sf-contact-title">
+            <div class="sf-card-head">
+                <div>
+                    <h2 class="sf-card-title" id="sf-contact-title">Contact and guardian</h2>
+                    <p class="sf-card-copy">Phone numbers are saved in the same Zimbabwe format.</p>
+                </div>
+                <span class="sf-count" aria-label="Section 2">2</span>
+            </div>
+
+            <div class="sf-grid">
+                {% with field=form.student_phone %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Student phone{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.guardian_name %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Guardian name{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.guardian_phone %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Guardian phone{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.address %}
+                <div class="sf-field sf-field--full">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Home address{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+            </div>
+        </section>
+
+        <section class="sf-card sf-card--trade" aria-labelledby="sf-trade-title">
+            <div class="sf-card-head">
+                <div>
+                    <h2 class="sf-card-title" id="sf-trade-title">{% if is_edit %}Trade{% else %}Trade and enrolment{% endif %}</h2>
+                    <p class="sf-card-copy">{% if is_edit %}Update the student’s Trade, intake and current status.{% else %}These choices determine the student’s enrolment and fees.{% endif %}</p>
+                </div>
+                <span class="sf-count" aria-label="Section 3">3</span>
+            </div>
+
+            <div class="sf-grid">
+                {% with field=form.program %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Trade{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.intake_year %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Intake year{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% with field=form.status %}
+                <div class="sf-field">
+                    <label class="sf-label" for="{{ field.id_for_label }}">Status{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                </div>
+                {% endwith %}
+
+                {% if not is_edit %}
+                <div class="sf-enrolment" id="sf-enrolment">
+                    <div class="sf-enrolment-head">
+                        <span class="sf-lamp" aria-hidden="true"></span>
+                        <div>
+                            <h3 class="sf-enrolment-title">Starting enrolment</h3>
+                            <p class="sf-enrolment-copy">Defaults suit a new intake; change them for a transfer student.</p>
+                        </div>
+                    </div>
+                    <div class="sf-grid">
+                        <fieldset class="sf-field">
+                            <legend class="sf-label">Starting year level<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span></legend>
+                            <div class="sf-segments" id="sf-year-levels">
                                 {% for level in year_level_choices %}
-                                    <option value="{{ level }}">Year {{ level }}</option>
+                                <label for="id_year_level_{{ level }}">
+                                    <input type="radio" id="id_year_level_{{ level }}" name="year_level" value="{{ level }}" required
+                                        {% if request.POST.year_level %}{% if request.POST.year_level == level|stringformat:"s" %}checked{% endif %}{% elif request.GET.year_level %}{% if request.GET.year_level == level|stringformat:"s" %}checked{% endif %}{% elif level == 1 %}checked{% endif %}>
+                                    <span>Year {{ level }}</span>
+                                </label>
                                 {% endfor %}
-                            </select>
-                            <div class="form-text">Usually Year 1, unless the student is transferring in.</div>
-                        </div>
+                            </div>
+                            <p class="sf-help" id="id_year_level_help">Change this only for a transfer student.</p>
+                            {% if request.method == "POST" and not request.POST.year_level %}<div class="sf-field-error" id="id_year_level_errors">Choose a starting year level.</div>{% endif %}
+                        </fieldset>
 
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">Starting Semester</label>
-                            <select name="semester" class="form-select" required>
-                                <option value="" selected disabled>Select semester</option>
+                        <div class="sf-field">
+                            <label class="sf-label" for="id_semester">Starting semester<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span></label>
+                            <select name="semester" id="id_semester" class="form-select" required aria-describedby="id_semester_help{% if request.method == 'POST' and not request.POST.semester %} id_semester_errors{% endif %}" {% if not semesters %}disabled{% endif %}>
+                                {% if not semesters %}<option value="">No semester available</option>{% endif %}
                                 {% for semester in semesters %}
-                                    <option value="{{ semester.pk }}">
-                                        {{ semester }}
-                                        {% if semester.status == "ACTIVE" %}(current){% elif semester.status == "UPCOMING" %}(upcoming){% endif %}
-                                    </option>
+                                <option value="{{ semester.pk }}"
+                                    {% if request.POST.semester %}{% if request.POST.semester == semester.pk|stringformat:"s" %}selected{% endif %}{% elif request.GET.semester %}{% if request.GET.semester == semester.pk|stringformat:"s" %}selected{% endif %}{% elif forloop.first %}selected{% endif %}>
+                                    {{ semester }}{% if semester.status == "ACTIVE" %} — current{% elif semester.status == "UPCOMING" %} — upcoming{% endif %}
+                                </option>
                                 {% endfor %}
                             </select>
-                            {% if not semesters %}
-                                <div class="text-danger small">
-                                    No current or upcoming semester exists — <a href="{% url 'semester_create' %}">create one first</a>.
-                                </div>
-                            {% endif %}
+                            <p class="sf-help" id="id_semester_help">The student’s first semester for enrolment and charges.</p>
+                            {% if request.method == "POST" and not request.POST.semester %}<div class="sf-field-error" id="id_semester_errors">Choose a starting semester.</div>{% endif %}
+                            {% if not semesters %}<p class="sf-no-semester">No current or upcoming semester exists. <a href="{% url 'semester_create' %}">Create one first</a>.</p>{% endif %}
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
+        </section>
+
+        {% for field in form %}
+            {% if field.name != "student_number" and field.name != "first_name" and field.name != "first_names" and field.name != "last_name" and field.name != "national_id" and field.name != "date_of_birth" and field.name != "gender" and field.name != "guardian_name" and field.name != "guardian_phone" and field.name != "student_phone" and field.name != "address" and field.name != "program" and field.name != "intake_year" and field.name != "status" %}
+                <section class="sf-card sf-card--additional" aria-labelledby="sf-additional-{{ field.name }}">
+                    <div class="sf-card-head">
+                        <div><h2 class="sf-card-title" id="sf-additional-{{ field.name }}">Additional details</h2></div>
+                    </div>
+                    <div class="sf-field">
+                        <label class="sf-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="sf-required" aria-hidden="true">*</span><span class="visually-hidden"> (required)</span>{% endif %}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="sf-help" id="{{ field.id_for_label }}_help">{{ field.help_text }}</p>{% endif %}
+                        {% if field.errors %}<div class="sf-field-error" id="{{ field.id_for_label }}_errors">{% for error in field.errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+                    </div>
+                </section>
             {% endif %}
+        {% endfor %}
 
-            <div class="d-flex justify-content-end gap-2">
-                <a href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary px-4">{% if is_edit %}Save Changes{% else %}Register Student{% endif %}</button>
+        <footer class="sf-actionbar" aria-label="Save student">
+            <p class="sf-summary" id="sf-summary" aria-live="polite">
+                {% if is_edit %}<strong>Saving changes for {{ student.first_name }} {{ student.last_name }}.</strong>{% else %}<strong>Enter the student’s name, Trade and starting enrolment.</strong>{% endif %}
+                <span class="sf-key-hint"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> saves</span>
+            </p>
+            <div class="sf-actions">
+                <a class="sf-btn sf-btn--ghost" href="{% if is_edit %}{% url 'student_detail' student.pk %}{% else %}{% url 'student_list' %}{% endif %}">Cancel</a>
+                {% if not is_edit %}
+                    <button type="submit" name="action" value="save_and_new" class="sf-btn sf-btn--quiet" {% if not semesters %}disabled{% endif %}>Register and add another</button>
+                {% endif %}
+                <button type="submit" id="sf-primary-submit" class="sf-btn sf-btn--solid" {% if not is_edit and not semesters %}disabled{% endif %}>{% if is_edit %}Save Changes{% else %}Register Student{% endif %}</button>
             </div>
-        </form>
-
-    </div>
+        </footer>
+    </form>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Add placeholders to form fields
-    const placeholders = {
-        'id_student_number': 'e.g. STU00125',
-        'id_first_names': 'Enter first names',
-        'id_last_name': 'Enter last name',
-        'id_national_id': 'National ID',
-        'id_date_of_birth': 'YYYY-MM-DD',
-        'id_gender': '',
-        'id_guardian_name': "Guardian's full name",
-        'id_guardian_phone': '+263 77 123 4567',
-        'id_student_phone': '+263 77 123 4567',
-        'id_address': 'Physical address',
+(function () {
+    "use strict";
+
+    var root = document.querySelector(".sf");
+    var form = document.getElementById("student-form");
+    if (!root || !form) return;
+
+    var isEdit = root.dataset.mode === "edit";
+    var isBound = root.dataset.bound === "true";
+    var submitting = false;
+    var dirty = false;
+    var primarySubmit = document.getElementById("sf-primary-submit");
+
+    function byId(id) {
+        return document.getElementById(id);
+    }
+
+    function setAttributes(element, attributes) {
+        if (!element) return;
+        Object.keys(attributes).forEach(function (name) {
+            var value = attributes[name];
+            if (value === null) element.removeAttribute(name);
+            else element.setAttribute(name, value);
+        });
+    }
+
+    var firstName = byId("id_first_name") || byId("id_first_names");
+    var fields = {
+        studentNumber: byId("id_student_number"),
+        firstName: firstName,
+        lastName: byId("id_last_name"),
+        nationalId: byId("id_national_id"),
+        dateOfBirth: byId("id_date_of_birth"),
+        gender: byId("id_gender"),
+        guardianName: byId("id_guardian_name"),
+        guardianPhone: byId("id_guardian_phone"),
+        studentPhone: byId("id_student_phone"),
+        address: byId("id_address"),
+        program: byId("id_program"),
+        intakeYear: byId("id_intake_year"),
+        status: byId("id_status"),
+        semester: byId("id_semester")
     };
-    
-    Object.entries(placeholders).forEach(([id, placeholder]) => {
-        const el = document.getElementById(id);
-        if (el && placeholder) {
-            el.placeholder = placeholder;
+
+    form.querySelectorAll("input, select, textarea").forEach(function (element) {
+        if (element.type === "hidden" || element.type === "radio" || element.type === "checkbox") return;
+        element.classList.add(element.tagName === "SELECT" ? "form-select" : "form-control");
+        element.dataset.entryControl = "true";
+        element.setAttribute("autocomplete", "off");
+        element.setAttribute("spellcheck", "false");
+    });
+
+    setAttributes(fields.studentNumber, {
+        "placeholder": "e.g. 002/ECS/2026",
+        "autocapitalize": "characters",
+        "inputmode": "text"
+    });
+    setAttributes(fields.firstName, {
+        "placeholder": "First and middle names",
+        "autocapitalize": "words",
+        "inputmode": "text"
+    });
+    setAttributes(fields.lastName, {
+        "placeholder": "Surname",
+        "autocapitalize": "words",
+        "inputmode": "text"
+    });
+    setAttributes(fields.nationalId, {
+        "placeholder": "63-123456 A 42",
+        "autocapitalize": "characters",
+        "inputmode": "text"
+    });
+    setAttributes(fields.guardianName, {
+        "placeholder": "Guardian’s full name",
+        "autocapitalize": "words",
+        "inputmode": "text"
+    });
+    setAttributes(fields.guardianPhone, {
+        "type": "tel",
+        "placeholder": "+263 77 123 4567",
+        "inputmode": "tel",
+        "autocapitalize": "off"
+    });
+    setAttributes(fields.studentPhone, {
+        "type": "tel",
+        "placeholder": "+263 77 123 4567",
+        "inputmode": "tel",
+        "autocapitalize": "off"
+    });
+    setAttributes(fields.address, {
+        "placeholder": "Home address",
+        "autocapitalize": "sentences"
+    });
+
+    if (fields.dateOfBirth) {
+        var today = new Date();
+        var yyyy = today.getFullYear();
+        var mm = String(today.getMonth() + 1).padStart(2, "0");
+        var dd = String(today.getDate()).padStart(2, "0");
+        fields.dateOfBirth.classList.remove("datepicker");
+        setAttributes(fields.dateOfBirth, {
+            "type": "date",
+            "min": "1900-01-01",
+            "max": yyyy + "-" + mm + "-" + dd,
+            "placeholder": null,
+            "inputmode": null
+        });
+    }
+
+    form.querySelectorAll(".sf-field").forEach(function (wrapper) {
+        var control = wrapper.querySelector("input:not([type='radio']), select, textarea");
+        if (!control) return;
+        var descriptions = [];
+        var help = wrapper.querySelector(".sf-help");
+        var error = wrapper.querySelector(".sf-field-error");
+        if (help && help.id) descriptions.push(help.id);
+        if (error && error.id) descriptions.push(error.id);
+        if (descriptions.length) control.setAttribute("aria-describedby", descriptions.join(" "));
+        if (error) control.setAttribute("aria-invalid", "true");
+    });
+
+    function titleCaseIfNeeded(value) {
+        var trimmed = value.trim().replace(/\s+/g, " ");
+        var letters = trimmed.replace(/[^A-Za-z]/g, "");
+        if (!letters || (letters !== letters.toUpperCase() && letters !== letters.toLowerCase())) return trimmed;
+        return trimmed.toLowerCase().replace(/(^|[\s'-])([a-z])/g, function (_, boundary, letter) {
+            return boundary + letter.toUpperCase();
+        });
+    }
+
+    function formatNationalId(value) {
+        var compact = value.trim().toUpperCase().replace(/[^0-9A-Z]/g, "");
+        var match = compact.match(/^(\d{2})(\d{6})([A-Z])(\d{2})$/);
+        return match ? match[1] + "-" + match[2] + " " + match[3] + " " + match[4] : value.trim().toUpperCase();
+    }
+
+    function formatPhone(value) {
+        var digits = value.replace(/\D/g, "");
+        if (digits.indexOf("263") === 0) digits = digits.slice(3);
+        else if (digits.indexOf("0") === 0) digits = digits.slice(1);
+        if (digits.length === 9) {
+            return "+263 " + digits.slice(0, 2) + " " + digits.slice(2, 5) + " " + digits.slice(5);
+        }
+        return value.trim();
+    }
+
+    function normaliseField(element) {
+        if (!element || typeof element.value !== "string") return;
+        element.value = element.value.trim();
+        if ([fields.firstName, fields.lastName, fields.guardianName].indexOf(element) !== -1) {
+            element.value = titleCaseIfNeeded(element.value);
+        } else if (element === fields.nationalId) {
+            element.value = formatNationalId(element.value);
+        } else if (element === fields.guardianPhone || element === fields.studentPhone) {
+            element.value = formatPhone(element.value);
+        } else if (element === fields.studentNumber) {
+            element.value = element.value.toUpperCase();
+        }
+    }
+
+    [fields.firstName, fields.lastName, fields.guardianName, fields.nationalId,
+        fields.guardianPhone, fields.studentPhone, fields.studentNumber].forEach(function (element) {
+        if (!element) return;
+        element.addEventListener("blur", function () {
+            normaliseField(element);
+            updateSummary();
+        });
+    });
+
+    form.querySelectorAll("input[type='text'], input[type='tel'], textarea").forEach(function (element) {
+        element.addEventListener("blur", function () {
+            element.value = element.value.trim();
+        });
+    });
+
+    function enhanceSelectAsSegments(select) {
+        if (!select) return;
+        var group = document.createElement("div");
+        group.className = "sf-segments";
+        group.setAttribute("role", "radiogroup");
+        group.setAttribute("aria-labelledby", select.id + "_label");
+
+        Array.from(select.options).forEach(function (option) {
+            if (!option.value) return;
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "sf-segment";
+            button.textContent = option.textContent.trim();
+            button.dataset.value = option.value;
+            button.setAttribute("role", "radio");
+            button.setAttribute("aria-checked", option.selected ? "true" : "false");
+            button.tabIndex = option.selected ? 0 : -1;
+            button.addEventListener("click", function () {
+                select.value = option.value;
+                select.dispatchEvent(new Event("input", { bubbles: true }));
+                select.dispatchEvent(new Event("change", { bubbles: true }));
+                sync();
+                button.focus();
+            });
+            button.addEventListener("keydown", function (event) {
+                if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].indexOf(event.key) === -1) return;
+                event.preventDefault();
+                var buttons = Array.from(group.querySelectorAll(".sf-segment"));
+                var direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+                var next = buttons[(buttons.indexOf(button) + direction + buttons.length) % buttons.length];
+                next.click();
+            });
+            group.appendChild(button);
+        });
+
+        function sync() {
+            var buttons = Array.from(group.querySelectorAll(".sf-segment"));
+            buttons.forEach(function (button, index) {
+                var checked = button.dataset.value === select.value;
+                button.setAttribute("aria-checked", checked ? "true" : "false");
+                button.tabIndex = checked || (!select.value && index === 0) ? 0 : -1;
+            });
+        }
+
+        select.closest(".sf-segment-source").insertAdjacentElement("afterend", group);
+        select.addEventListener("change", sync);
+        sync();
+    }
+
+    root.classList.add("is-enhanced");
+    enhanceSelectAsSegments(fields.gender);
+
+    if (!isEdit && !isBound && fields.intakeYear && !fields.intakeYear.value) {
+        var currentYear = String(new Date().getFullYear());
+        var currentYearOption = Array.from(fields.intakeYear.options).find(function (option) {
+            return option.textContent.trim() === currentYear || option.textContent.indexOf(currentYear) !== -1;
+        });
+        if (currentYearOption) fields.intakeYear.value = currentYearOption.value;
+    }
+
+    function selectedText(select) {
+        if (!select || !select.value || select.selectedIndex < 0) return "";
+        return select.options[select.selectedIndex].textContent.trim().replace(/\s+[—-]\s+(current|upcoming)$/i, "");
+    }
+
+    function updateSummary() {
+        var name = [fields.firstName && fields.firstName.value.trim(), fields.lastName && fields.lastName.value.trim()].filter(Boolean).join(" ");
+        var trade = selectedText(fields.program);
+        if (trade.indexOf(" - ") !== -1) trade = trade.split(" - ").pop().trim();
+        var summary = byId("sf-summary");
+        if (!summary) return;
+
+        if (isEdit) {
+            var status = selectedText(fields.status);
+            summary.firstElementChild.textContent = "Saving changes for " + (name || "this student") +
+                (trade ? " · " + trade : "") + (status ? " · " + status : "") + ".";
+            return;
+        }
+
+        var year = form.querySelector("input[name='year_level']:checked");
+        var semester = selectedText(fields.semester);
+        var parts = [];
+        if (trade) parts.push(trade);
+        if (year) parts.push("Year " + year.value);
+        if (semester) parts.push(semester);
+        summary.firstElementChild.textContent = parts.length
+            ? "Registering " + (name || "this student") + " in " + parts.join(", ") + "."
+            : "Enter the student’s name, Trade and starting enrolment.";
+    }
+
+    form.addEventListener("input", function () {
+        dirty = true;
+        updateSummary();
+    });
+    form.addEventListener("change", function () {
+        dirty = true;
+        updateSummary();
+    });
+    updateSummary();
+
+    function clearClientError(control) {
+        var wrapper = control.closest(".sf-field");
+        var message = wrapper && wrapper.querySelector(".sf-client-error");
+        if (message) message.remove();
+        if (control.validity.valid && !wrapper.querySelector(".sf-field-error")) {
+            control.classList.remove("is-invalid");
+            control.removeAttribute("aria-invalid");
+        }
+    }
+
+    function showClientError(control) {
+        var wrapper = control.closest(".sf-field");
+        if (!wrapper || control.validity.valid) {
+            clearClientError(control);
+            return;
+        }
+        control.classList.add("is-invalid");
+        control.setAttribute("aria-invalid", "true");
+        var message = wrapper.querySelector(".sf-client-error");
+        if (!message) {
+            message = document.createElement("div");
+            message.className = "sf-client-error";
+            message.setAttribute("aria-live", "polite");
+            wrapper.appendChild(message);
+        }
+        message.textContent = control.validationMessage;
+    }
+
+    form.querySelectorAll("input:not([type='hidden']):not([type='radio']), select, textarea").forEach(function (control) {
+        control.addEventListener("blur", function () { showClientError(control); });
+        control.addEventListener("input", function () { if (control.validity.valid) clearClientError(control); });
+        control.addEventListener("change", function () { if (control.validity.valid) clearClientError(control); });
+    });
+
+    form.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            if (primarySubmit && !primarySubmit.disabled) form.requestSubmit(primarySubmit);
+            return;
+        }
+        if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (event.target.tagName === "TEXTAREA" || event.target.tagName === "BUTTON") return;
+        if (!event.target.matches("input:not([type='radio']):not([type='checkbox']), select")) return;
+
+        var controls = Array.from(form.querySelectorAll("[data-entry-control='true']")).filter(function (control) {
+            return !control.disabled && control.offsetParent !== null;
+        });
+        var index = controls.indexOf(event.target);
+        if (index >= 0 && index < controls.length - 1) {
+            event.preventDefault();
+            controls[index + 1].focus();
         }
     });
-    
-    // Add form-control class to any field missing it
-    document.querySelectorAll('.form-control:not([class*="form-control"]), .form-select:not([class*="form-select"])').forEach(el => {
-        if (el.tagName === 'SELECT') {
-            el.classList.add('form-select');
-        } else if (el.tagName === 'TEXTAREA') {
-            el.classList.add('form-control');
-        } else if (el.type === 'checkbox' || el.type === 'radio') {
-            el.classList.add('form-check-input');
-        } else {
-            el.classList.add('form-control');
+
+    function duplicateFeedback(input) {
+        var wrapper = input.closest(".sf-field");
+        var feedback = wrapper.querySelector(".sf-duplicate-feedback");
+        if (!feedback) {
+            feedback = document.createElement("div");
+            feedback.className = "sf-duplicate-feedback";
+            feedback.setAttribute("aria-live", "polite");
+            wrapper.appendChild(feedback);
         }
+        return feedback;
+    }
+
+    function checkDuplicate(input, fieldName) {
+        var endpoint = root.dataset.duplicateUrl;
+        if (!endpoint || !input || !input.value.trim()) return;
+        var url = new URL(endpoint, window.location.origin);
+        url.searchParams.set("field", fieldName);
+        url.searchParams.set("value", input.value.trim());
+        if (root.dataset.studentId) url.searchParams.set("exclude", root.dataset.studentId);
+
+        fetch(url.toString(), { headers: { "Accept": "application/json" }, credentials: "same-origin" })
+            .then(function (response) { return response.ok ? response.json() : null; })
+            .then(function (data) {
+                if (!data) return;
+                var feedback = duplicateFeedback(input);
+                feedback.className = "sf-duplicate-feedback " + (data.exists ? "is-error" : "is-clear");
+                feedback.textContent = data.message || (data.exists ? "This value is already in use." : "No matching student found.");
+                input.setCustomValidity(data.exists ? feedback.textContent : "");
+                if (data.exists) input.setAttribute("aria-invalid", "true");
+            })
+            .catch(function () {});
+    }
+
+    if (root.dataset.duplicateUrl) {
+        if (fields.studentNumber) fields.studentNumber.addEventListener("blur", function () { checkDuplicate(fields.studentNumber, "student_number"); });
+        if (fields.nationalId) fields.nationalId.addEventListener("blur", function () { checkDuplicate(fields.nationalId, "national_id"); });
+    }
+
+    function focusFirstProblem() {
+        var errorSummary = byId("sf-error-summary");
+        var invalid = form.querySelector("[aria-invalid='true'], .is-invalid");
+        if (invalid && invalid.offsetParent !== null) {
+            invalid.focus();
+            return;
+        }
+        if (errorSummary) {
+            errorSummary.focus();
+            return;
+        }
+        var controls = Array.from(form.querySelectorAll("[data-entry-control='true']")).filter(function (control) {
+            return !control.disabled && control.offsetParent !== null;
+        });
+        var empty = controls.find(function (control) { return !String(control.value || "").trim(); });
+        var target = empty || controls[0];
+        if (target) target.focus();
+    }
+
+    form.addEventListener("submit", function (event) {
+        if (submitting) {
+            event.preventDefault();
+            return;
+        }
+
+        form.querySelectorAll("input[type='text'], input[type='tel'], textarea").forEach(normaliseField);
+        updateSummary();
+
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            form.querySelectorAll(":invalid").forEach(showClientError);
+            var invalid = form.querySelector(":invalid");
+            if (invalid) invalid.focus();
+            return;
+        }
+
+        submitting = true;
+        dirty = false;
+        var submitter = event.submitter;
+        if (submitter && submitter.name) {
+            var action = document.createElement("input");
+            action.type = "hidden";
+            action.name = submitter.name;
+            action.value = submitter.value;
+            form.appendChild(action);
+        }
+
+        form.querySelectorAll("button[type='submit']").forEach(function (button) {
+            button.disabled = true;
+            button.setAttribute("aria-disabled", "true");
+        });
+        if (submitter) submitter.textContent = isEdit ? "Saving…" : "Registering…";
     });
-});
+
+    window.addEventListener("beforeunload", function (event) {
+        if (!dirty || submitting) return;
+        event.preventDefault();
+        event.returnValue = "";
+    });
+
+    window.requestAnimationFrame(focusFirstProblem);
+})();
 </script>
 {% endblock %}

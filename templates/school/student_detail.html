@@ -1,519 +1,1074 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Student Profile{% endblock %}
+{% block title %}{{ student.first_name }} {{ student.last_name }}{% endblock %}
 
 {% block content %}
+<style>
+    @font-face {
+        font-family: "Archivo SD";
+        src: url("{% static 'vendor/fonts/archivo/archivo-latin-var.woff2' %}") format("woff2");
+        font-weight: 100 900;
+        font-stretch: 62% 125%;
+        font-display: swap;
+    }
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
-        <h2 class="fw-bold">
-            {{ student.first_name }}
-            {{ student.last_name }}
-        </h2>
+    .sd {
+        --ink: #1E2B33;
+        --ink-2: #4E5C66;
+        --grey: #7D878E;
+        --line: #D6DAD5;
+        --ballast: #E4E6E2;
+        --paper: #FFFFFF;
+        --wash: #F5F6F3;
+        --rail: #1F4F7A;
+        --rail-dark: #163B5C;
+        --rail-soft: #E5EDF4;
+        --red: #B8372B;
+        --red-soft: #FBEDEB;
+        --amber: #A86E06;
+        --amber-lamp: #D99A1E;
+        --amber-soft: #FBF3E2;
+        --amber-ink: #6B4A07;
+        --green: #2F7D4F;
+        --blue: #2C6FB0;
+        --radius: 10px;
 
- 
-    <div class="text-muted">
-        {{ student.student_number }} · {{ student.program.name }}
+        font-family: "Archivo SD", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+        color: var(--ink);
+        max-width: 1320px;
+        padding-bottom: 3rem;
+    }
 
-        {% if student.status == "ACTIVE" %}
-            <span class="badge text-bg-success ms-1">Active</span>
-        {% elif student.status == "DEFERRED" %}
-            <span class="badge text-bg-warning ms-1">Deferred</span>
-        {% elif student.status == "WITHDRAWN" %}
-            <span class="badge text-bg-secondary ms-1">Withdrawn</span>
-        {% elif student.status == "COMPLETED" %}
-            <span class="badge text-bg-primary ms-1">Completed</span>
-        {% endif %}
-    </div>
-</div>
+    .sd a { color: var(--rail); }
+    .sd :focus-visible {
+        outline: 3px solid var(--rail);
+        outline-offset: 2px;
+        border-radius: 6px;
+    }
 
-<div class="d-flex gap-2">
-    <a
-        href="{% url 'student_edit' student.pk %}"
-        class="btn btn-outline-primary"
-    >
-        <i class="bi bi-pencil"></i> Edit
-    </a>
+    .sd-fig {
+        font-stretch: 88%;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
 
-    <a
-        href="{% url 'student_status_change' student.pk %}"
-        class="btn btn-outline-secondary"
-    >
-        Change Status
-    </a>
+    .sd-h2 {
+        font-size: 1.3125rem;
+        font-weight: 750;
+        font-stretch: 106%;
+        letter-spacing: -0.005em;
+        line-height: 1.25;
+        margin: 0;
+    }
 
-    <a
-        href="{% url 'payment_create' %}?student={{ student.pk }}"
-        class="btn btn-success"
-    >
-        + Record Payment
-    </a>
-</div>
- 
+    .sd-h3 {
+        font-size: 0.875rem;
+        font-weight: 700;
+        margin: 0.9rem 0 0.35rem;
+    }
 
-</div>
+    .sd-quiet {
+        color: var(--ink-2);
+        font-size: 0.875rem;
+        margin: 0 0 0.75rem;
+    }
 
-<!-- =========================================================
-     ACADEMIC YEAR BALANCE SUMMARY
-     ========================================================= -->
+    /* ---------- Buttons ---------- */
 
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-light">
-        <h5 class="mb-0">
-            {% if current_year %}
-                {{ current_year.name }} — Academic Year Balance
-            {% else %}
-                Academic Year Balance
-                <span class="badge text-bg-warning ms-2">
-                    No Current Year Set
-                </span>
-            {% endif %}
-        </h5>
-    </div>
+    .sd-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 650;
+        line-height: 1.2;
+        padding: 0.6rem 1rem;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease,
+            box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    .sd-btn:active { transform: translateY(1px) scale(0.99); }
 
- 
-<div class="card-body">
+    .sd .sd-btn--solid {
+        background: var(--rail);
+        color: #fff;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 4px 12px -6px rgba(31, 79, 122, 0.7);
+    }
+    .sd .sd-btn--solid:hover { background: var(--rail-dark); color: #fff; }
 
-    {% if current_year and semester_balances %}
+    .sd .sd-btn--quiet {
+        background: var(--paper);
+        color: var(--rail);
+        border-color: #BFCEDC;
+    }
+    .sd .sd-btn--quiet:hover { background: var(--rail-soft); border-color: var(--rail); }
 
-        <div class="row g-3 mb-3">
+    .sd .sd-btn--ghost {
+        background: transparent;
+        color: var(--ink);
+        border-color: var(--line);
+    }
+    .sd .sd-btn--ghost:hover,
+    .sd .sd-btn--ghost[aria-expanded="true"] { background: var(--paper); border-color: var(--grey); }
 
-            {% for sb in semester_balances %}
+    .sd .dropdown-menu {
+        font-size: 0.9rem;
+        border-color: var(--line);
+        border-radius: var(--radius);
+        padding: 0.35rem;
+        box-shadow: 0 12px 28px -12px rgba(30, 43, 51, 0.35);
+    }
+    .sd .dropdown-item {
+        border-radius: 6px;
+        padding: 0.45rem 0.75rem;
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        color: var(--ink);
+    }
+    .sd .dropdown-item:hover { background: var(--wash); }
 
-                <div class="col-md-6">
+    /* ---------- Signal lamps ---------- */
 
-                    <div class="card border h-100">
-                        <div class="card-body">
+    .sd-lamp {
+        --c: var(--grey);
+        display: inline-block;
+        flex-shrink: 0;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--c);
+        box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px rgba(30, 43, 51, 0.16);
+    }
+    .sd-lamp--owing { --c: var(--red); }
+    .sd-lamp--unset { --c: var(--amber-lamp); }
+    .sd-lamp--paid { --c: var(--green); }
+    .sd-lamp--credit { --c: var(--blue); }
+    .sd-lamp--nocharge { --c: #A9B1B6; }
+    .sd-lamp--details { --c: var(--ink-2); }
+    .sd-lamp--off {
+        background: var(--paper);
+        box-shadow: inset 0 0 0 2px var(--grey), 0 0 0 2px var(--paper);
+    }
 
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+    /* ---------- Header ---------- */
 
-                                <h6 class="mb-0 fw-bold">
-                                    {{ sb.semester }}
-                                </h6>
+    .sd-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.25rem 2rem;
+        flex-wrap: wrap;
+        padding: 0.75rem 0 1.5rem;
+    }
 
-                                {% if sb.balance > 0 %}
-                                    <span class="badge text-bg-danger">
-                                        Outstanding
-                                    </span>
-                                {% elif sb.balance < 0 %}
-                                    <span class="badge text-bg-primary">
-                                        Credit
-                                    </span>
-                                {% else %}
-                                    <span class="badge text-bg-success">
-                                        Paid
-                                    </span>
-                                {% endif %}
+    .sd-name {
+        font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+        font-weight: 800;
+        font-stretch: 106%;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin: 0 0 0.85rem;
+    }
 
-                            </div>
+    .sd-facts {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 2rem;
+        margin: 0;
+        padding: 0;
+    }
+    .sd-facts li { display: flex; flex-direction: column; }
+    .sd-fact-label { font-size: 0.75rem; color: var(--grey); }
+    .sd-fact-value { font-size: 0.9375rem; font-weight: 650; }
 
+    .sd-status { display: inline-flex; align-items: center; gap: 0.45rem; }
+    .sd-status .sd-lamp { width: 9px; height: 9px; }
+    .sd-status--ACTIVE .sd-lamp { --c: var(--green); }
+    .sd-status--DEFERRED .sd-lamp { --c: var(--amber-lamp); }
+    .sd-status--WITHDRAWN .sd-lamp { --c: var(--grey); }
+    .sd-status--COMPLETED .sd-lamp { --c: var(--blue); }
 
-                            <div class="row text-center">
+    .sd-owed {
+        margin: 1.1rem 0 0;
+        font-size: 1.3125rem;
+        line-height: 1.35;
+    }
+    .sd-owed strong { font-weight: 800; }
+    .sd-owed .is-owing { color: var(--red); }
+    .sd-owed .is-credit { color: var(--blue); }
+    .sd-owed .is-clear { color: var(--green); }
 
-                                <div class="col-4">
-                                    <div class="small text-muted">
-                                        Charged
-                                    </div>
+    .sd-head-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .sd-head-actions .sd-btn { min-height: 44px; }
 
-                                    <div class="fw-bold">
-                                        ${{ sb.charged|floatformat:2 }}
-                                    </div>
-                                </div>
+    /* ---------- Needs doing ---------- */
 
+    .sd-todo {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
 
-                                <div class="col-4">
-                                    <div class="small text-muted">
-                                        Paid
-                                    </div>
+    .sd-todo-head {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.9rem 1.25rem 0.5rem;
+    }
 
-                                    <div class="fw-bold text-success">
-                                        ${{ sb.paid|floatformat:2 }}
-                                    </div>
-                                </div>
+    .sd-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        height: 1.5rem;
+        padding: 0 0.45rem;
+        border-radius: 999px;
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-stretch: 100%;
+    }
 
+    .sd-todo-list { list-style: none; margin: 0; padding: 0; }
 
-                                <div class="col-4">
-                                    <div class="small text-muted">
-                                        Balance
-                                    </div>
+    .sd-todo-item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.4rem 1rem;
+        padding: 0.85rem 1.25rem;
+        border-top: 1px solid var(--line);
+    }
+    .sd-todo-item:first-child { border-top: 0; }
+    .sd-todo-item > .sd-lamp { align-self: start; margin-top: 0.35rem; }
+    .sd-todo-text { display: flex; flex-direction: column; gap: 0.1rem; }
+    .sd-todo-text strong { font-weight: 700; }
+    .sd-todo-text > span { font-size: 0.875rem; color: var(--ink-2); }
+    .sd-todo--owing .sd-todo-text strong .sd-fig { color: var(--red); font-weight: 750; }
 
-                                    <div
-                                        class="fw-bold fs-5
-                                        {% if sb.balance > 0 %}
-                                            text-danger
-                                        {% elif sb.balance < 0 %}
-                                            text-primary
-                                        {% else %}
-                                            text-success
-                                        {% endif %}"
-                                    >
-                                        ${{ sb.balance|floatformat:2 }}
-                                    </div>
-                                </div>
+    .sd-more summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 0.7rem 1.25rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.875rem;
+        font-weight: 650;
+        color: var(--rail);
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .sd-more summary::-webkit-details-marker { display: none; }
+    .sd-more summary:hover { background: var(--wash); }
+    .sd-more[open] summary { display: none; }
 
-                            </div>
+    .sd-todo-done {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 1rem 1.25rem;
+    }
+    .sd-todo-done p { margin: 0; }
+    .sd-todo-done .sd-quiet { margin: 0; }
 
-                        </div>
-                    </div>
+    /* ---------- Course line ---------- */
 
-                </div>
+    .sd-band {
+        background: var(--ballast);
+        border-radius: 14px;
+        padding: 1rem 1.25rem 0.9rem;
+        margin: 1.75rem 0 2rem;
+        transition: opacity 0.15s ease;
+    }
+    .sd-band.htmx-request { opacity: 0.7; }
 
-            {% endfor %}
+    .sd-line-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+    }
 
-        </div>
+    .sd-line-nav { display: flex; gap: 0.35rem; }
 
+    .sd .sd-nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--paper);
+        color: var(--ink);
+        text-decoration: none;
+        transition: background-color 0.15s ease, transform 0.12s ease;
+    }
+    .sd .sd-nav-btn:hover { background: var(--rail); color: #fff; }
+    .sd .sd-nav-btn:active { transform: scale(0.94); }
+    .sd .sd-nav-btn.is-disabled { background: transparent; color: #AEB5B9; }
 
-        <hr class="my-3">
+    .sd-track {
+        overflow-x: auto;
+        margin: 0.4rem -0.5rem 0;
+        padding: 0.25rem 0.5rem 0.5rem;
+        scrollbar-width: thin;
+        scrollbar-color: #B9BFBB transparent;
+    }
 
+    .sd-track-list {
+        list-style: none;
+        display: flex;
+        margin: 0;
+        padding: 0;
+        min-width: min-content;
+    }
 
-        <div class="d-flex justify-content-between align-items-center">
+    .sd-seg { flex: 1 0 15rem; }
 
-            <div>
-                <span class="text-muted">
-                    Total Academic Year Balance:
-                </span>
-            </div>
+    .sd .sd-seg-link {
+        display: block;
+        height: 100%;
+        padding: 0.7rem 1rem 0.8rem;
+        border-radius: 12px;
+        color: inherit;
+        text-decoration: none;
+        transition: background-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .sd a.sd-seg-link:hover { background: rgba(255, 255, 255, 0.6); }
 
-            <div
-                class="fw-bold fs-3
-                {% if total_year_balance > 0 %}
-                    text-danger
-                {% elif total_year_balance < 0 %}
-                    text-primary
+    .sd-seg.is-selected .sd-seg-link,
+    .sd-seg.is-selected a.sd-seg-link:hover {
+        background: var(--paper);
+        box-shadow: 0 1px 0 rgba(30, 43, 51, 0.05), 0 10px 24px -14px rgba(30, 43, 51, 0.5);
+    }
+
+    .sd-seg-year {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1.3125rem;
+        font-weight: 800;
+        font-stretch: 112%;
+        line-height: 1.2;
+    }
+
+    .sd-seg-tag {
+        font-size: 0.6875rem;
+        font-weight: 650;
+        font-stretch: 100%;
+        color: var(--rail);
+        background: var(--rail-soft);
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+    }
+
+    .sd-seg-state {
+        display: block;
+        font-size: 0.8125rem;
+        color: var(--ink-2);
+        margin-top: 0.1rem;
+    }
+    .sd-seg--owing .sd-seg-state { color: var(--red); font-weight: 650; }
+    .sd-seg--unset .sd-seg-state { color: var(--amber); font-weight: 650; }
+
+    .sd-rail {
+        --rail-c: #98A1A6;
+        --sleeper-c: #BCC2BE;
+        position: relative;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        height: 30px;
+        margin: 1.35rem -1rem 0.35rem;
+    }
+    .sd-rail::before,
+    .sd-rail::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        transform-origin: left center;
+    }
+    .sd-rail::before {
+        top: 6px;
+        height: 18px;
+        background: repeating-linear-gradient(90deg, var(--sleeper-c) 0 4px, transparent 4px 13px);
+    }
+    .sd-rail::after {
+        top: 10px;
+        height: 10px;
+        border-top: 2px solid var(--rail-c);
+        border-bottom: 2px solid var(--rail-c);
+    }
+
+    .sd-seg.is-future .sd-rail { --rail-c: #B1B8BC; --sleeper-c: #CDD1CD; }
+    .sd-seg.is-selected .sd-rail { --rail-c: var(--rail); --sleeper-c: #A9BCCD; }
+
+    .sd-seg--ghost { flex: 0 0 11rem; }
+    .sd-seg--ghost .sd-seg-year,
+    .sd-seg--ghost .sd-seg-state { color: var(--grey); }
+    .sd-seg--ghost .sd-rail::after { display: none; }
+    .sd-seg--ghost .sd-rail::before {
+        right: 30%;
+        -webkit-mask-image: linear-gradient(90deg, #000 30%, transparent);
+        mask-image: linear-gradient(90deg, #000 30%, transparent);
+    }
+    .sd-buffer {
+        position: absolute;
+        right: 30%;
+        top: 4px;
+        width: 5px;
+        height: 22px;
+        border-radius: 2px;
+        background: var(--grey);
+    }
+
+    .sd-station {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: center;
+    }
+    .sd-rail .sd-lamp {
+        width: 18px;
+        height: 18px;
+        box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px rgba(30, 43, 51, 0.2);
+    }
+    .sd-rail .sd-lamp--owing {
+        box-shadow: 0 0 0 3px var(--paper), 0 0 0 8px rgba(184, 55, 43, 0.2);
+    }
+    .sd-rail .sd-lamp--unset {
+        box-shadow: 0 0 0 3px var(--paper), 0 0 0 8px rgba(217, 154, 30, 0.25);
+    }
+    .sd-rail .sd-lamp--off {
+        box-shadow: inset 0 0 0 2px var(--grey), 0 0 0 3px var(--paper);
+    }
+
+    .sd-marker {
+        position: absolute;
+        bottom: calc(100% + 7px);
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1.5;
+        color: #fff;
+        background: var(--ink);
+        padding: 0 0.45rem;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+
+    .sd-stops {
+        display: flex;
+        justify-content: space-around;
+        margin: 0 -1rem;
+    }
+    .sd-stop {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.3;
+    }
+    .sd-stop-name { font-size: 0.75rem; font-weight: 650; }
+    .sd-stop-date { font-size: 0.75rem; color: var(--grey); }
+
+    .sd-legend {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 1.25rem;
+        margin: 0.35rem 0 0;
+        padding: 0;
+        font-size: 0.75rem;
+        color: var(--ink-2);
+    }
+    .sd-legend li { display: flex; align-items: center; gap: 0.45rem; }
+    .sd-legend .sd-lamp { width: 9px; height: 9px; box-shadow: none; }
+    .sd-legend .sd-lamp--off { box-shadow: inset 0 0 0 1.5px var(--grey); }
+
+    /* ---------- Main split ---------- */
+
+    .sd-main {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(270px, 1fr);
+        gap: 2rem 2.5rem;
+        align-items: start;
+    }
+
+    .sd-section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.25rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .sd-section-note { margin: 0; font-size: 0.875rem; color: var(--ink-2); }
+
+    /* ---------- Statement ---------- */
+
+    .sd-ledger {
+        --cols: minmax(0, 1fr) 6rem 6rem 7.5rem 1rem;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .sd-ledger-cols,
+    .sd-row-sum,
+    .sd-ledger-total {
+        display: grid;
+        grid-template-columns: var(--cols);
+        gap: 1rem;
+        align-items: center;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    .sd-ledger-cols {
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--grey);
+        border-bottom: 1px solid var(--line);
+    }
+
+    .sd-num { text-align: right; }
+
+    .sd-row { border-bottom: 1px solid var(--line); }
+
+    .sd-row-sum {
+        padding-top: 0.95rem;
+        padding-bottom: 0.95rem;
+        cursor: pointer;
+        list-style: none;
+        transition: background-color 0.15s ease;
+    }
+    .sd-row-sum::-webkit-details-marker { display: none; }
+    .sd-row-sum:hover,
+    .sd-row[open] > .sd-row-sum { background: var(--wash); }
+
+    .sd-row-title { display: flex; align-items: flex-start; gap: 0.8rem; }
+    .sd-row-title > .sd-lamp { margin-top: 0.4rem; }
+    .sd-row-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 700;
+    }
+    .sd-row-meta { display: block; font-size: 0.8125rem; color: var(--ink-2); }
+    .sd-row-level { font-weight: 500; color: var(--ink-2); font-size: 0.875rem; }
+
+    .sd-chip {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1.5;
+        padding: 0 0.45rem;
+        border-radius: 4px;
+    }
+    .sd-chip--now { background: var(--ink); color: #fff; }
+
+    .sd-row-bal { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+    .sd-fig--strong { font-size: 1.0625rem; font-weight: 750; }
+    .sd-state { font-size: 0.75rem; font-weight: 650; color: var(--grey); }
+    .sd-row--owing .sd-fig--strong,
+    .sd-row--owing .sd-state { color: var(--red); }
+    .sd-row--unset .sd-state { color: var(--amber); }
+    .sd-row--paid .sd-state { color: var(--green); }
+    .sd-row--credit .sd-fig--strong,
+    .sd-row--credit .sd-state { color: var(--blue); }
+
+    .sd-chev { color: var(--grey); transition: transform 0.2s ease; justify-self: end; }
+    .sd-row[open] .sd-chev { transform: rotate(180deg); }
+
+    .sd-row-body { padding: 0 1.25rem 1.1rem 3.3rem; background: var(--wash); }
+    .sd-row[open] .sd-row-body { animation: sd-reveal 0.25s ease-out; }
+
+    .sd-split { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+
+    .sd-items { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+    .sd-items li {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 0.45rem 0;
+        border-bottom: 1px dashed var(--line);
+        font-size: 0.875rem;
+    }
+    .sd-items li:last-child { border-bottom: 0; }
+    .sd-receipt { font-weight: 650; }
+    .sd-fig--paid { color: var(--green); }
+
+    .sd-callout {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+        margin-top: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: var(--amber-soft);
+        color: var(--amber-ink);
+        font-size: 0.875rem;
+    }
+    .sd-callout p { margin: 0; flex: 1 1 16rem; }
+
+    .sd-ledger-total {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        background: var(--wash);
+    }
+    .sd-total-label { font-weight: 750; }
+    .sd-total-bal {
+        font-size: 1.75rem;
+        font-weight: 800;
+        font-stretch: 88%;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        white-space: nowrap;
+    }
+    .sd-total-bal.is-owing { color: var(--red); }
+    .sd-total-bal.is-credit { color: var(--blue); }
+
+    .sd-incomplete {
+        margin: 0;
+        padding: 0.7rem 1.25rem;
+        font-size: 0.8125rem;
+        color: var(--amber-ink);
+        background: var(--amber-soft);
+        border-top: 1px solid #EEDDB5;
+    }
+
+    .sd-statement-body { animation: sd-reveal 0.3s ease-out; }
+
+    .sd-empty {
+        background: var(--paper);
+        border: 1px dashed #C3C9C4;
+        border-radius: var(--radius);
+        padding: 1.25rem;
+    }
+    .sd-empty p { margin: 0 0 0.75rem; }
+    .sd-empty p:last-child { margin-bottom: 0; }
+
+    /* ---------- Profile ---------- */
+
+    .sd-profile { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .sd-panel {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1rem 1.15rem;
+    }
+
+    .sd-dl { margin: 0.35rem 0 0; }
+    .sd-dl > div { padding: 0.55rem 0; border-bottom: 1px solid var(--line); }
+    .sd-dl > div:last-child { border-bottom: 0; }
+    .sd-dl dt { font-size: 0.75rem; font-weight: 500; color: var(--grey); }
+    .sd-dl dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .sd-dl dd a { text-decoration: none; }
+    .sd-dl dd a:hover { text-decoration: underline; }
+    .sd-missing { color: var(--amber); font-weight: 500; }
+
+    .sd-fold {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+    }
+    .sd-fold > summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.85rem 1.15rem;
+        cursor: pointer;
+        font-weight: 700;
+        border-radius: var(--radius);
+        transition: background-color 0.15s ease;
+    }
+    .sd-fold > summary::-webkit-details-marker { display: none; }
+    .sd-fold > summary:hover { background: var(--wash); }
+    .sd-fold > summary .sd-chev { margin-left: auto; }
+    .sd-fold[open] > summary .sd-chev { transform: rotate(180deg); }
+    .sd-fold-body { padding: 0 1.15rem 0.9rem; }
+    .sd-fold[open] .sd-fold-body { animation: sd-reveal 0.25s ease-out; }
+    .sd-fold .sd-count { background: var(--ballast); color: var(--ink); }
+
+    .sd-log { list-style: none; margin: 0; padding: 0; }
+    .sd-log li { padding: 0.55rem 0; border-bottom: 1px solid var(--line); font-size: 0.875rem; }
+    .sd-log li:last-child { border-bottom: 0; }
+    .sd-log-status { font-weight: 700; }
+    .sd-log-date { color: var(--grey); }
+    .sd-log-note { color: var(--ink-2); margin-top: 0.1rem; }
+
+    /* ---------- Motion ---------- */
+
+    @keyframes sd-reveal {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+    }
+    @keyframes sd-lay { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes sd-light {
+        0% { transform: scale(0); opacity: 0; }
+        70% { transform: scale(1.25); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    @keyframes sd-select {
+        from { transform: scale(0.97); opacity: 0.6; }
+        to { transform: none; opacity: 1; }
+    }
+
+    .sd-seg.is-selected .sd-seg-link { animation: sd-select 0.3s ease-out; }
+
+    .sd[data-intro] .sd-head > *,
+    .sd[data-intro] .sd-todo {
+        animation: sd-reveal 0.5s cubic-bezier(.2, .7, .2, 1) both;
+    }
+    .sd[data-intro] .sd-head-actions { animation-delay: 80ms; }
+    .sd[data-intro] .sd-todo { animation-delay: 120ms; }
+    .sd[data-intro] .sd-todo-item {
+        animation: sd-reveal 0.45s cubic-bezier(.2, .7, .2, 1) both;
+        animation-delay: calc(220ms + var(--i) * 80ms);
+    }
+    .sd[data-intro] .sd-rail::before,
+    .sd[data-intro] .sd-rail::after {
+        animation: sd-lay 0.55s cubic-bezier(.5, 0, .2, 1) both;
+        animation-delay: calc(300ms + min(var(--i), 4) * 160ms);
+    }
+    .sd[data-intro] .sd-rail .sd-lamp,
+    .sd[data-intro] .sd-marker {
+        animation: sd-light 0.4s ease-out both;
+        animation-delay: calc(700ms + min(var(--i), 4) * 160ms);
+    }
+    .sd[data-intro] .sd-main { animation: sd-reveal 0.5s ease-out 0.35s both; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .sd *,
+        .sd *::before,
+        .sd *::after {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
+
+    /* ---------- Narrow screens ---------- */
+
+    @media (max-width: 1099.98px) {
+        .sd-main { grid-template-columns: minmax(0, 1fr); }
+        .sd-profile { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
+    }
+
+    @media (max-width: 640px) {
+        .sd-head-actions { width: 100%; }
+        .sd-head-actions .sd-btn--solid,
+        .sd-head-actions .sd-btn--quiet { flex: 1; }
+        .sd-todo-item { grid-template-columns: auto minmax(0, 1fr); }
+        .sd-todo-item > .sd-btn { grid-column: 2; justify-self: start; }
+        .sd-band { margin-left: -0.5rem; margin-right: -0.5rem; padding: 0.9rem 0.75rem; }
+        .sd-seg { flex-basis: 13rem; }
+
+        .sd-ledger-cols { display: none; }
+        .sd-row-sum,
+        .sd-ledger-total {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) 1.25rem;
+            gap: 0.6rem 0.75rem;
+        }
+        .sd-row-title,
+        .sd-total-label { grid-column: 1 / -1; }
+        .sd-row-sum .sd-num,
+        .sd-ledger-total .sd-num { text-align: left; align-items: flex-start; align-self: start; }
+        .sd-row-sum [data-label]::before,
+        .sd-ledger-total [data-label]::before {
+            content: attr(data-label);
+            display: block;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            font-stretch: 100%;
+            color: var(--grey);
+        }
+        .sd-total-bal { font-size: 1.375rem; }
+        .sd-row-body { padding-left: 1.25rem; }
+        .sd-split { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="sd" data-intro>
+
+    <header class="sd-head">
+        <div class="sd-id">
+            <h1 class="sd-name">{{ student.first_name }} {{ student.last_name }}</h1>
+
+            <ul class="sd-facts">
+                <li>
+                    <span class="sd-fact-label">Student number</span>
+                    <span class="sd-fact-value">{{ student.student_number }}</span>
+                </li>
+                <li>
+                    <span class="sd-fact-label">Trade</span>
+                    <span class="sd-fact-value">
+                        {{ student.program.name }}{% if current_year_level %}, Year {{ current_year_level }}{% endif %}
+                    </span>
+                </li>
+                <li>
+                    <span class="sd-fact-label">Status</span>
+                    <span class="sd-fact-value sd-status sd-status--{{ student.status }}">
+                        <span class="sd-lamp" aria-hidden="true"></span>{{ student.get_status_display }}
+                    </span>
+                </li>
+            </ul>
+
+            <p class="sd-owed">
+                {% if total_owed > 0 %}
+                    Owes <strong class="sd-fig is-owing">${{ total_owed|floatformat:2 }}</strong>
+                    across {{ owing_count }} semester{{ owing_count|pluralize }}.
+                {% elif total_credit > 0 %}
+                    Nothing owed. <strong class="sd-fig is-credit">${{ total_credit|floatformat:2 }}</strong> in credit.
                 {% else %}
-                    text-success
-                {% endif %}"
-            >
-                ${{ total_year_balance|floatformat:2 }}
-            </div>
-
+                    <strong class="is-clear">Nothing owed.</strong>
+                {% endif %}
+            </p>
         </div>
 
-
-        {% if total_year_balance > 0 %}
-
-            <div class="mt-2 small text-danger">
-                <i class="bi bi-exclamation-triangle"></i>
-                Amount outstanding for {{ current_year.name }}
+        <div class="sd-head-actions">
+            <a class="sd-btn sd-btn--ghost" href="{% url 'student_list' %}" aria-label="Back to students">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M9.5 3.5L5 8l4.5 4.5M5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Back
+            </a>
+            {% if perms.school.can_record_payments %}
+                <a class="sd-btn {% if actions %}sd-btn--quiet{% else %}sd-btn--solid{% endif %}"
+                   href="{% url 'payment_create' %}?student={{ student.pk }}">
+                    Record payment
+                </a>
+            {% endif %}
+            {% if perms.school.change_student %}
+            <div class="dropdown">
+                <button class="sd-btn sd-btn--ghost" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    More <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="{% url 'student_edit' student.pk %}">
+                            Edit details
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'student_status_change' student.pk %}">
+                            Change status
+                        </a>
+                    </li>
+                </ul>
             </div>
+            {% endif %}
+        </div>
+    </header>
 
-        {% elif total_year_balance < 0 %}
-
-            <div class="mt-2 small text-primary">
-                <i class="bi bi-cash-coin"></i>
-                Credit balance of
-                ${{ total_year_balance|floatformat:2|slice:"1:" }}
+    <section class="sd-todo" aria-labelledby="sd-todo-title">
+        {% if actions %}
+            <div class="sd-todo-head">
+                <h2 class="sd-h2" id="sd-todo-title">Needs doing</h2>
+                <span class="sd-count">{{ actions|length }}</span>
             </div>
-
+            <ol class="sd-todo-list">
+                {% for action in actions|slice:":3" %}
+                    {% include "school/partials/_student_action.html" with index=forloop.counter0 primary=forloop.first %}
+                {% endfor %}
+            </ol>
+            {% if actions|length > 3 %}
+            <details class="sd-more">
+                <summary>
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Show {{ actions|length|add:"-3" }} more
+                </summary>
+                <ol class="sd-todo-list" start="4">
+                    {% for action in actions|slice:"3:" %}
+                        {% include "school/partials/_student_action.html" with index=0 primary=False %}
+                    {% endfor %}
+                </ol>
+            </details>
+            {% endif %}
         {% else %}
-
-            <div class="mt-2 small text-success">
-                <i class="bi bi-check-circle"></i>
-                Fully paid for {{ current_year.name }}
+            <div class="sd-todo-done">
+                <span class="sd-lamp sd-lamp--paid" aria-hidden="true"></span>
+                <div>
+                    <h2 class="sd-h2" id="sd-todo-title">Nothing needs doing</h2>
+                    <p class="sd-quiet">Fees are up to date and contact details are complete.</p>
+                </div>
             </div>
-
         {% endif %}
+    </section>
 
-
-    {% elif current_year %}
-
-        <div class="text-center py-4 text-muted">
-            No enrollments in {{ current_year.name }}.
+    <section class="sd-band" id="sd-band" hx-indicator="#sd-band">
+        <div id="sd-line">
+            {% include "school/partials/_student_line.html" %}
         </div>
+    </section>
 
+    <div class="sd-main">
+        <section id="sd-statement" class="sd-statement" aria-live="polite">
+            {% include "school/partials/_student_statement.html" %}
+        </section>
 
-    {% else %}
-
-        <div class="text-center py-4 text-muted">
-            No current academic year configured.
-
-            <a
-                href="{% url 'academic_year_list' %}"
-                class="text-decoration-none"
-            >
-                Set one up
-            </a>.
-        </div>
-
-    {% endif %}
-
-</div>
-
-
-</div>
-
-<div class="row g-4">
-
-<!-- =========================================================
-     STUDENT INFORMATION
-     ========================================================= -->
-<div class="col-lg-4">
-
-    <div class="card border-0 shadow-sm">
-
-        <div class="card-body">
-
-            <h5>Student Information</h5>
-
-            <hr>
-
-            <div class="row">
-
-                <div class="col-md-6">
-
-                    <div class="mb-2">
-                        <strong>Student Number:</strong><br>
-                        {{ student.student_number }}
+        <aside class="sd-profile" aria-label="Student profile">
+            <section class="sd-panel">
+                <h2 class="sd-h2">Contact</h2>
+                <dl class="sd-dl">
+                    <div>
+                        <dt>Student phone</dt>
+                        <dd>
+                            {% if student.student_phone %}
+                                <a href="tel:{{ student.student_phone }}">{{ student.student_phone }}</a>
+                            {% else %}<span class="sd-missing">Not recorded</span>{% endif %}
+                        </dd>
                     </div>
-
-                    <div class="mb-2">
-                        <strong>Program:</strong><br>
-                        {{ student.program.name }}
+                    <div>
+                        <dt>Guardian</dt>
+                        <dd>
+                            {% if student.guardian_name %}{{ student.guardian_name }}
+                            {% else %}<span class="sd-missing">Not recorded</span>{% endif %}
+                        </dd>
                     </div>
-
-                    <div class="mb-2">
-                        <strong>Intake Year:</strong><br>
-                        {{ student.intake_year.name }}
+                    <div>
+                        <dt>Guardian phone</dt>
+                        <dd>
+                            {% if student.guardian_phone %}
+                                <a href="tel:{{ student.guardian_phone }}">{{ student.guardian_phone }}</a>
+                            {% else %}<span class="sd-missing">Not recorded</span>{% endif %}
+                        </dd>
                     </div>
-
-                    <div class="mb-2">
-                        <strong>Current Year Level:</strong><br>
-
-                        {{ current_year_level|default:"—" }}
-
-                        {% if current_year_level %}
-                            <span class="badge bg-info text-dark ms-1">
-                                Year {{ current_year_level }}
-                            </span>
-                        {% endif %}
-
-                        {% if current_enrollment %}
-                            <div class="small text-muted mt-1">
-                                {{ current_enrollment.semester }}
-                            </div>
-                        {% endif %}
+                    <div>
+                        <dt>Home address</dt>
+                        <dd>
+                            {% if student.address %}{{ student.address|linebreaksbr }}
+                            {% else %}<span class="sd-missing">Not recorded</span>{% endif %}
+                        </dd>
                     </div>
+                </dl>
+            </section>
 
+            <details class="sd-fold">
+                <summary>Personal details <svg class="sd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+                <div class="sd-fold-body">
+                    <dl class="sd-dl">
+                        <div>
+                            <dt>Date of birth</dt>
+                            <dd>{% if student.date_of_birth %}{{ student.date_of_birth|date:"j F Y" }}{% else %}<span class="sd-missing">Not recorded</span>{% endif %}</dd>
+                        </div>
+                        <div>
+                            <dt>Gender</dt>
+                            <dd>{% if student.gender %}{{ student.get_gender_display }}{% else %}<span class="sd-missing">Not recorded</span>{% endif %}</dd>
+                        </div>
+                        <div>
+                            <dt>National ID</dt>
+                            <dd>{% if student.national_id %}{{ student.national_id }}{% else %}<span class="sd-missing">Not recorded</span>{% endif %}</dd>
+                        </div>
+                    </dl>
                 </div>
+            </details>
 
-
-                <div class="col-md-6">
-
-                    <div class="mb-2">
-                        <strong>Gender:</strong><br>
-                        {{ student.gender|default:"—" }}
-                    </div>
-
-                    <div class="mb-2">
-                        <strong>Date of Birth:</strong><br>
-                        {{ student.date_of_birth|default:"—" }}
-                    </div>
-
-                    <div class="mb-2">
-                        <strong>Student Phone:</strong><br>
-                        {{ student.student_phone|default:"—" }}
-                    </div>
-
-                    <div class="mb-2">
-                        <strong>Guardian:</strong><br>
-                        {{ student.guardian_name|default:"—" }}
-                    </div>
-
-                    <div class="mb-2">
-                        <strong>Guardian Phone:</strong><br>
-                        {{ student.guardian_phone|default:"—" }}
-                    </div>
-
-                    <div class="mb-2">
-                        <strong>National ID:</strong><br>
-                        {{ student.national_id|default:"—" }}
-                    </div>
-
+            <details class="sd-fold">
+                <summary>Course <svg class="sd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+                <div class="sd-fold-body">
+                    <dl class="sd-dl">
+                        <div>
+                            <dt>Trade</dt>
+                            <dd>{{ student.program.name }} ({{ student.program.code }})</dd>
+                        </div>
+                        <div>
+                            <dt>Qualification</dt>
+                            <dd>{{ student.program.get_category_display }}, {{ student.program.duration_years }} year{{ student.program.duration_years|pluralize }}</dd>
+                        </div>
+                        <div>
+                            <dt>Intake</dt>
+                            <dd>{{ student.intake_year.name|default:"Not recorded" }}</dd>
+                        </div>
+                        <div>
+                            <dt>{% if current_enrollment and current_enrollment.semester.is_upcoming %}Next semester{% else %}Current semester{% endif %}</dt>
+                            <dd>
+                                {% if current_enrollment %}
+                                    {{ current_enrollment.semester.academic_year.name }} Semester {{ current_enrollment.semester.number }}, Year {{ current_enrollment.year_level }}
+                                {% else %}Not enrolled{% endif %}
+                            </dd>
+                        </div>
+                        {% if completion_year %}
+                        <div>
+                            <dt>Course ends</dt>
+                            <dd>{{ completion_year }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
                 </div>
+            </details>
 
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-<!-- =========================================================
-     FINANCIAL INFORMATION
-     ========================================================= -->
-<div class="col-lg-8">
-
-    <!-- =====================================================
-         ALL SEMESTERS
-         ===================================================== -->
-    <div class="card border-0 shadow-sm">
-
-        <div class="card-body">
-
-            <h5>All Semesters — Fee Tracking</h5>
-
-            <div class="table-responsive">
-
-                <table class="table table-hover">
-
-                    <thead>
-                        <tr>
-                            <th>Semester</th>
-                            <th>Charged</th>
-                            <th>Paid</th>
-                            <th>Balance</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-
-                        {% for item in balances %}
-
-                            <tr>
-
-                                <td class="fw-semibold">
-                                    {{ item.semester }}
-                                </td>
-
-                                <td>
-                                    ${{ item.charged|floatformat:2 }}
-                                </td>
-
-                                <td class="text-success">
-                                    ${{ item.paid|floatformat:2 }}
-                                </td>
-
-                                <td>
-
-                                    {% if item.balance > 0 %}
-
-                                        <span class="text-danger fw-bold">
-                                            ${{ item.balance|floatformat:2 }}
-                                        </span>
-
-                                    {% elif item.balance == 0 %}
-
-                                        <span class="badge text-bg-success">
-                                            PAID
-                                        </span>
-
-                                    {% else %}
-
-                                        <span class="text-primary fw-bold">
-                                            Credit
-                                            ${{ item.balance|floatformat:2|slice:"1:" }}
-                                        </span>
-
-                                    {% endif %}
-
-                                </td>
-
-                            </tr>
-
-                        {% empty %}
-
-                            <tr>
-                                <td
-                                    colspan="4"
-                                    class="text-center text-muted"
-                                >
-                                    No charges or payments recorded
-                                    for this student yet.
-                                </td>
-                            </tr>
-
+            <details class="sd-fold">
+                <summary>
+                    Status history
+                    {% if status_logs %}<span class="sd-count">{{ status_logs|length }}</span>{% endif %}
+                    <svg class="sd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </summary>
+                <div class="sd-fold-body">
+                    {% if status_logs %}
+                    <ul class="sd-log">
+                        {% for log in status_logs %}
+                        <li>
+                            <span class="sd-log-status">{{ log.get_status_display }}</span>
+                            <span class="sd-log-date">on {{ log.date_changed|date:"j M Y" }}</span>
+                            {% if log.note %}<div class="sd-log-note">{{ log.note }}</div>{% endif %}
+                        </li>
                         {% endfor %}
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         PAYMENT HISTORY
-         ===================================================== -->
-    <div class="card border-0 shadow-sm mt-4">
-
-        <div class="card-body">
-
-            <h5>Payment History</h5>
-
-            <div class="table-responsive">
-
-                <table class="table table-hover">
-
-                    <thead>
-                        <tr>
-                            <th>Receipt</th>
-                            <th>Date</th>
-                            <th>Semester</th>
-                            <th>Method</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-
-                        {% for payment in payments %}
-
-                            <tr>
-
-                                <td class="fw-bold">
-                                    {{ payment.receipt_number }}
-                                </td>
-
-                                <td>
-                                    {{ payment.payment_date }}
-                                </td>
-
-                                <td>
-                                    {{ payment.semester }}
-                                </td>
-
-                                <td>
-                                    {{ payment.get_method_display }}
-                                </td>
-
-                                <td class="text-success fw-bold">
-                                    ${{ payment.amount|floatformat:2 }}
-                                </td>
-
-                            </tr>
-
-                        {% empty %}
-
-                            <tr>
-                                <td
-                                    colspan="5"
-                                    class="text-center text-muted"
-                                >
-                                    No payments recorded.
-                                </td>
-                            </tr>
-
-                        {% endfor %}
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-
+                    </ul>
+                    {% else %}
+                    <p class="sd-quiet">No status changes recorded since registration.</p>
+                    {% endif %}
+                </div>
+            </details>
+        </aside>
     </div>
 
 </div>
+{% endblock %}
 
+{% block extra_js %}
+<script src="{% static 'vendor/htmx/htmx.min.js' %}"></script>
+<script>
+    (function () {
+        var root = document.querySelector('.sd');
+        if (root && root.hasAttribute('data-intro')) {
+            setTimeout(function () { root.removeAttribute('data-intro'); }, 2000);
+        }
 
-</div>
+        function centerSelected() {
+            var track = document.querySelector('.sd-track');
+            var seg = track ? track.querySelector('.sd-seg.is-selected') : null;
+            if (!track || !seg) return;
+            var t = track.getBoundingClientRect();
+            var s = seg.getBoundingClientRect();
+            track.scrollLeft += (s.left - t.left) - (t.width - s.width) / 2;
+        }
 
+        centerSelected();
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            if (e.detail.target && e.detail.target.id === 'sd-line') centerSelected();
+        });
+    })();
+</script>
 {% endblock %}

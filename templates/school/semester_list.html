@@ -1,187 +1,160 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Semesters{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
+{% endblock %}
+
 {% block content %}
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">Semesters</h1>
+            <p class="fee-sub">
+                Each semester holds its own fees and enrollments. Open one to see what is set up.
+            </p>
+        </div>
+        <div class="fee-head-actions">
+            {% if perms.school.add_semester %}
+            <a class="fee-btn fee-btn--solid" href="{% url 'semester_create' %}">+ New semester</a>
+            {% endif %}
+        </div>
+    </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Semesters</h2>
-    <a href="{% url 'semester_create' %}" class="btn btn-primary">+ New Semester</a>
-</div>
+    {% if not active_semesters and not upcoming_semesters %}
+    <div class="fee-empty" style="margin-bottom: 1rem;">
+        <strong>No current or upcoming semesters.</strong>
+        Create a semester to start setting up fees.
+        {% if perms.school.add_semester %}
+        <a class="fee-btn fee-btn--quiet" href="{% url 'semester_create' %}">New semester</a>
+        {% endif %}
+    </div>
+    {% endif %}
 
-<!-- Active Semesters -->
-{% if active_semesters %}
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-light">
-        <h5 class="mb-0">Active Semester</h5>
+    {% if active_semesters %}
+    <h2 class="fee-card-title" style="margin: 0 0 0.6rem;">Current</h2>
+    <div class="fee-sem-list" style="margin-bottom: 1.5rem;">
+        {% for semester in active_semesters %}
+        <div class="fee-sem-row">
+            <div class="fee-sem-name">
+                <span>{{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</span>
+                <span class="fee-status"><span class="fee-dot fee-dot--green"></span>Active</span>
+            </div>
+            <div class="fee-sem-dates">
+                {{ semester.start_date|date:"j M Y" }} to {{ semester.end_date|date:"j M Y" }}
+            </div>
+            <div class="fee-sem-fees">
+                <span class="fee-sem-fees-text {% if semester.fee_progress.complete %}is-complete{% else %}is-incomplete{% endif %}">
+                    <span class="fee-dot {% if semester.fee_progress.complete %}fee-dot--green{% else %}fee-dot--amber{% endif %}"></span>
+                    {{ semester.fee_progress.set_up }} of {{ semester.fee_progress.total }} set up
+                </span>
+                <span class="fee-bar" aria-hidden="true">
+                    <span class="fee-bar-fill{% if semester.fee_progress.complete %}{% else %} fee-bar-fill--partial{% endif %}"
+                          style="width: {% widthratio semester.fee_progress.set_up semester.fee_progress.total 100 %}%;"></span>
+                </span>
+            </div>
+            <div class="fee-sem-actions">
+                {% if semester.fee_progress.complete %}
+                <a class="fee-btn fee-btn--quiet" href="{% url 'fee_structure_list' semester.pk %}">Review fees</a>
+                {% else %}
+                <a class="fee-btn fee-btn--solid" href="{% url 'fee_structure_list' semester.pk %}?filter=needs">Set up fees</a>
+                {% endif %}
+                {% if perms.school.change_semester %}
+                <a class="fee-btn fee-btn--ghost fee-btn--sm" href="{% url 'semester_edit' semester.pk %}">Edit dates</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Academic Year</th>
-                    <th>Semester</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for semester in active_semesters %}
-                <tr>
-                    <td>{{ semester.academic_year.name }}</td>
-                    <td class="fw-bold">Semester {{ semester.number }}</td>
-                    <td>{{ semester.start_date }}</td>
-                    <td>{{ semester.end_date }}</td>
-                    <td><span class="badge text-bg-success">Active</span></td>
-                    <td class="text-end">
-                        <div class="btn-group" role="group">
-                            <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-primary">
-                                <i class="bi bi-pencil me-1"></i>Edit
-                            </a>
-                            <button class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="visually-hidden">Toggle Dropdown</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'fee_structure_list' semester.pk %}">
-                                        <i class="bi bi-cash me-2"></i>Manage Fees
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'bulk_fee_configuration' semester.pk %}">
-                                        <i class="bi bi-speedometer2 me-2"></i>Bulk Configure
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
+    {% endif %}
 
-<!-- Upcoming Semesters -->
-{% if upcoming_semesters %}
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-light">
-        <h5 class="mb-0">Upcoming Semesters</h5>
+    {% if upcoming_semesters %}
+    <h2 class="fee-card-title" style="margin: 0 0 0.6rem;">Upcoming</h2>
+    <div class="fee-sem-list" style="margin-bottom: 1.5rem;">
+        {% for semester in upcoming_semesters %}
+        <div class="fee-sem-row">
+            <div class="fee-sem-name">
+                <span>{{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</span>
+                <span class="fee-status"><span class="fee-dot fee-dot--amber"></span>Upcoming</span>
+            </div>
+            <div class="fee-sem-dates">
+                {{ semester.start_date|date:"j M Y" }} to {{ semester.end_date|date:"j M Y" }}
+            </div>
+            <div class="fee-sem-fees">
+                <span class="fee-sem-fees-text {% if semester.fee_progress.complete %}is-complete{% else %}is-incomplete{% endif %}">
+                    <span class="fee-dot {% if semester.fee_progress.complete %}fee-dot--green{% else %}fee-dot--amber{% endif %}"></span>
+                    {{ semester.fee_progress.set_up }} of {{ semester.fee_progress.total }} set up
+                </span>
+                <span class="fee-bar" aria-hidden="true">
+                    <span class="fee-bar-fill{% if semester.fee_progress.complete %}{% else %} fee-bar-fill--partial{% endif %}"
+                          style="width: {% widthratio semester.fee_progress.set_up semester.fee_progress.total 100 %}%;"></span>
+                </span>
+            </div>
+            <div class="fee-sem-actions">
+                {% if semester.fee_progress.complete %}
+                <a class="fee-btn fee-btn--quiet" href="{% url 'fee_structure_list' semester.pk %}">Review fees</a>
+                {% else %}
+                <a class="fee-btn fee-btn--solid" href="{% url 'fee_structure_list' semester.pk %}?filter=needs">Set up fees</a>
+                {% endif %}
+                {% if perms.school.change_semester %}
+                <a class="fee-btn fee-btn--ghost fee-btn--sm" href="{% url 'semester_edit' semester.pk %}">Edit dates</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Academic Year</th>
-                    <th>Semester</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for semester in upcoming_semesters %}
-                <tr>
-                    <td>{{ semester.academic_year.name }}</td>
-                    <td class="fw-bold">Semester {{ semester.number }}</td>
-                    <td>{{ semester.start_date }}</td>
-                    <td>{{ semester.end_date }}</td>
-                    <td><span class="badge text-bg-warning">Upcoming</span></td>
-                    <td class="text-end">
-                        <div class="btn-group" role="group">
-                            <a href="{% url 'semester_edit' semester.pk %}" class="btn btn-sm btn-primary">
-                                <i class="bi bi-pencil me-1"></i>Edit
-                            </a>
-                            <button class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="visually-hidden">Toggle Dropdown</span>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'fee_structure_list' semester.pk %}">
-                                        <i class="bi bi-cash me-2"></i>Manage Fees
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'bulk_fee_configuration' semester.pk %}">
-                                        <i class="bi bi-speedometer2 me-2"></i>Bulk Configure
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
+    {% endif %}
 
-<!-- Completed Semesters (paginated) -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Completed Semesters</h5>
-        <span class="badge bg-secondary">{{ completed_page_obj.paginator.count }}</span>
+    <h2 class="fee-card-title" style="margin: 0 0 0.6rem;">
+        Completed
+        <span class="fee-pill-count" style="vertical-align: middle;">{{ completed_page_obj.paginator.count }}</span>
+    </h2>
+    {% if completed_page_obj %}
+    <div class="fee-sem-list">
+        {% for semester in completed_page_obj %}
+        <div class="fee-sem-row fee-sem-row--completed">
+            <div class="fee-sem-name">
+                <span>{{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</span>
+                <span class="fee-status"><span class="fee-dot fee-dot--grey"></span>Completed</span>
+            </div>
+            <div class="fee-sem-dates">
+                {{ semester.start_date|date:"j M Y" }} to {{ semester.end_date|date:"j M Y" }}
+            </div>
+            <div class="fee-sem-fees">
+                <span class="fee-sem-fees-text {% if semester.fee_progress.complete %}is-complete{% else %}is-incomplete{% endif %}">
+                    <span class="fee-dot {% if semester.fee_progress.complete %}fee-dot--green{% else %}fee-dot--amber{% endif %}"></span>
+                    {{ semester.fee_progress.set_up }} of {{ semester.fee_progress.total }} set up
+                </span>
+                <span class="fee-bar" aria-hidden="true">
+                    <span class="fee-bar-fill{% if semester.fee_progress.complete %}{% else %} fee-bar-fill--partial{% endif %}"
+                          style="width: {% widthratio semester.fee_progress.set_up semester.fee_progress.total 100 %}%;"></span>
+                </span>
+            </div>
+            <div class="fee-sem-actions">
+                <a class="fee-btn fee-btn--quiet" href="{% url 'fee_structure_list' semester.pk %}">View fees</a>
+            </div>
+        </div>
+        {% endfor %}
     </div>
-    <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Academic Year</th>
-                    <th>Semester</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Status</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for semester in completed_page_obj %}
-                <tr class="table-secondary">
-                    <td>{{ semester.academic_year.name }}</td>
-                    <td class="fw-bold">Semester {{ semester.number }}</td>
-                    <td>{{ semester.start_date }}</td>
-                    <td>{{ semester.end_date }}</td>
-                    <td><span class="badge text-bg-secondary">Completed</span></td>
-                    <td class="text-end">
-                        <button type="button" class="btn btn-sm btn-secondary" disabled title="Completed semesters are locked">
-                            <i class="bi bi-lock-fill me-1"></i>Locked
-                        </button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted">No completed semesters.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% else %}
+    <div class="fee-empty">
+        <strong>No completed semesters yet.</strong>
+        Semesters appear here once their end date passes.
     </div>
+    {% endif %}
+
     {% if completed_page_obj.paginator.num_pages > 1 %}
-    <div class="card-footer bg-white">
-        <nav>
-            <ul class="pagination justify-content-center mb-0">
-                {% if completed_page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?completed_page={{ completed_page_obj.previous_page_number }}">&laquo; Previous</a>
-                </li>
-                {% endif %}
-                <li class="page-item disabled">
-                    <span class="page-link">Page {{ completed_page_obj.number }} of {{ completed_page_obj.paginator.num_pages }}</span>
-                </li>
-                {% if completed_page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?completed_page={{ completed_page_obj.next_page_number }}">Next &raquo;</a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
+    <div class="fee-head-actions" style="justify-content: center; margin-top: 1rem;">
+        {% if completed_page_obj.has_previous %}
+        <a class="fee-btn fee-btn--quiet fee-btn--sm" href="?completed_page={{ completed_page_obj.previous_page_number }}">Previous</a>
+        {% endif %}
+        <span class="fee-quiet">Page {{ completed_page_obj.number }} of {{ completed_page_obj.paginator.num_pages }}</span>
+        {% if completed_page_obj.has_next %}
+        <a class="fee-btn fee-btn--quiet fee-btn--sm" href="?completed_page={{ completed_page_obj.next_page_number }}">Next</a>
+        {% endif %}
     </div>
     {% endif %}
 </div>
-
 {% endblock %}

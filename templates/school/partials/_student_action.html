@@ -1,0 +1,50 @@
+<li class="sd-todo-item sd-todo--{{ action.kind }}" style="--i: {{ index }}">
+    {% if action.kind == "owing" %}
+        <span class="sd-lamp sd-lamp--owing" aria-hidden="true"></span>
+        <div class="sd-todo-text">
+            <strong>Collect <span class="sd-fig">${{ action.row.balance|floatformat:2 }}</span> for {{ action.row.semester.academic_year.name }} Semester {{ action.row.semester.number }}</strong>
+            <span>
+                Charged ${{ action.row.charged|floatformat:2 }}, paid ${{ action.row.paid|floatformat:2 }}.
+                {% if action.row.is_past %}The semester ended {{ action.row.semester.end_date|date:"j M Y" }}, so this is overdue.
+                {% elif action.row.is_current %}The semester runs until {{ action.row.semester.end_date|date:"j M Y" }}.
+                {% else %}The semester starts {{ action.row.semester.start_date|date:"j M Y" }}; payments can be taken now.{% endif %}
+            </span>
+        </div>
+        {% if perms.school.can_record_payments %}
+            <a class="sd-btn {% if primary %}sd-btn--solid{% else %}sd-btn--quiet{% endif %}"
+               href="{% url 'payment_create' %}?student={{ student.pk }}&semester={{ action.row.semester.pk }}">Record payment</a>
+        {% endif %}
+
+    {% elif action.kind == "unset" %}
+        <span class="sd-lamp sd-lamp--unset" aria-hidden="true"></span>
+        <div class="sd-todo-text">
+            <strong>Set up fees for {{ action.row.program.name }} &middot; Course year {{ action.row.year_level }} &middot; {{ action.row.semester.academic_year.name }} Semester {{ action.row.semester.number }}</strong>
+            <span>
+                {{ student.first_name }} is enrolled, but nothing has been charged because no fees are set.
+                {% if not perms.school.add_feestructure %}Ask an administrator to set them up.{% endif %}
+            </span>
+        </div>
+        {% if perms.school.add_feestructure %}
+            <a class="sd-btn {% if primary %}sd-btn--solid{% else %}sd-btn--quiet{% endif %}"
+               href="{% url 'fee_structure_list' action.row.semester.pk %}?program={{ action.row.program.pk }}&year={{ action.row.year_level }}#fee-cell-{{ action.row.program.pk }}-{{ action.row.year_level }}">Set up fees</a>
+        {% endif %}
+
+    {% elif action.kind == "details" %}
+        <span class="sd-lamp sd-lamp--details" aria-hidden="true"></span>
+        <div class="sd-todo-text">
+            <strong>Complete contact details</strong>
+            <span>Missing {{ action.missing|join:", " }}.</span>
+        </div>
+        {% if perms.school.change_student %}
+            <a class="sd-btn {% if primary %}sd-btn--solid{% else %}sd-btn--quiet{% endif %}"
+               href="{% url 'student_edit' student.pk %}">Add details</a>
+        {% endif %}
+
+    {% elif action.kind == "credit" %}
+        <span class="sd-lamp sd-lamp--credit" aria-hidden="true"></span>
+        <div class="sd-todo-text">
+            <strong><span class="sd-fig">${{ action.row.credit|floatformat:2 }}</span> overpaid for {{ action.row.semester.academic_year.name }} Semester {{ action.row.semester.number }}</strong>
+            <span>Check whether it should cover a later semester or be refunded.</span>
+        </div>
+    {% endif %}
+</li>

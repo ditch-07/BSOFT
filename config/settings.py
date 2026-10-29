@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Use separate data directory that works both in development and packaged
 # In development: project/data
-# In packaged: ProgramData/NRZ Student Management (or env var)
+# In packaged: ProgramData/BSOFT Student Management (or env var)
 APP_DATA_DIR = Path(
     os.environ.get(
         "NRZ_DATA_DIR",
@@ -35,12 +35,15 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
+    "corsheaders",
+
     "school",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
 
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -65,7 +68,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "school.context_processors.time_override_enabled",
                 "school.context_processors.backup_config",
-                "school.context_processors.reminders_count",
+                "school.context_processors.navigation_summary",
             ],
         },
     },
@@ -94,6 +97,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_DIRS = [
     STATIC_DIR,
+    BASE_DIR / "frontend" / "static",
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -104,7 +108,26 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # The frozen time is set via the Time Override UI at /time-override/
 ENABLE_TIME_OVERRIDE = True  # Set to False in production
 
+# Session / authentication timeout settings
+# Auto-logout after 2 hours of inactivity and reset the idle timer on each request.
+SESSION_COOKIE_AGE = 7200
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
 # Authentication
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+# CORS for Nuxt dev server (port 3000)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"

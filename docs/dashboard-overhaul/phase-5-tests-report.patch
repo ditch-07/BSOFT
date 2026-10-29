@@ -1,0 +1,1102 @@
+--- /dev/null
++++ b/school/test_dashboard.py
+@@ -0,0 +1,999 @@
++from datetime import date, datetime, timedelta
++from decimal import Decimal
++from html.parser import HTMLParser
++from itertools import product
++from unittest.mock import patch
++
++from django.contrib import messages
++from django.contrib.auth import get_user_model
++from django.contrib.auth.models import Permission
++from django.contrib.messages.storage.base import Message
++from django.contrib.messages.storage.cookie import CookieStorage
++from django.core.cache import cache
++from django.db import connection
++from django.template.loader import render_to_string
++from django.test import Client, RequestFactory, TestCase, override_settings
++from django.test.utils import CaptureQueriesContext
++from django.urls import resolve, reverse
++from django.utils import timezone
++
++from .context_processors import navigation_summary
++from .models import (
++    AcademicYear,
++    BackupConfig,
++    Enrollment,
++    FeeStructure,
++    FeeStructureItem,
++    Payment,
++    Program,
++    Semester,
++    Student,
++    StudentCharge,
++    TimeOverride,
++)
++from .views import dashboard
++
++
++class HTMLNode:
++    """Small DOM for assertions scoped to dashboard or sidebar, not navbar."""
++
++    def __init__(self, tag="", attrs=()):
++        self.tag = tag
++        self.attrs = dict(attrs)
++        self.children = []
++
++    @property
++    def text(self):
++        return " ".join(
++            " ".join(
++                child.text if isinstance(child, HTMLNode) else child
++                for child in self.children
++            ).split()
++        )
++
++    def select(self, tag=None, class_name=None, **attrs):
++        matches = []
++        if (
++            (tag is None or self.tag == tag)
++            and (class_name is None or class_name in self.attrs.get("class", "").split())
++            and all(self.attrs.get(key) == value for key, value in attrs.items())
++        ):
++            matches.append(self)
++        for child in self.children:
++            if isinstance(child, HTMLNode):
++                matches.extend(child.select(tag, class_name, **attrs))
++        return matches
++
++    @property
++    def hrefs(self):
++        return {node.attrs["href"] for node in self.select("a") if "href" in node.attrs}
++
++
++class HTMLDocument(HTMLParser):
++    VOID_TAGS = {
++        "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
++        "meta", "param", "source", "track", "wbr",
++    }
++
++    def __init__(self, html):
++        super().__init__(convert_charrefs=True)
++        self.root = HTMLNode()
++        self.stack = [self.root]
++        self.feed(html)
++        self.close()
++
++    def handle_starttag(self, tag, attrs):
++        node = HTMLNode(tag, attrs)
++        self.stack[-1].children.append(node)
++        if tag not in self.VOID_TAGS:
++            self.stack.append(node)
++
++    def handle_startendtag(self, tag, attrs):
++        self.stack[-1].children.append(HTMLNode(tag, attrs))
++
++    def handle_endtag(self, tag):
++        for index in range(len(self.stack) - 1, 0, -1):
++            if self.stack[index].tag == tag:
++                del self.stack[index:]
++                break
++
++    def handle_data(self, data):
++        self.stack[-1].children.append(data)
++
++
++@override_settings(
++    ENABLE_TIME_OVERRIDE=True,
++    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
++    CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
++)
++class DashboardTestCase(TestCase):
++    @classmethod
++    def setUpTestData(cls):
++        cls.today = date(2027, 3, 1)
++        cls.year = AcademicYear.objects.create(
++            name="2027", start_date=date(2027, 1, 1), end_date=date(2027, 12, 31)
++        )
++        cls.semester = Semester.objects.create(
++            academic_year=cls.year, number=1,
++            start_date=date(2027, 1, 12), end_date=date(2027, 6, 30),
++        )
++        cls.program = Program.objects.create(
++            code="DASH", name="Dashboard Trade", duration_years=2, category="NC"
++        )
++        BackupConfig.objects.update_or_create(pk=1, defaults={"strict_mode": False})
++
++    def setUp(self):
++        cache.clear()
++        self.addCleanup(cache.clear)
++        self.freeze(self.today)
++        # The real availability probe writes to the configured backup drive.
++        probe = patch.object(BackupConfig, "is_backup_available", return_value=True)
++        self.backup_available = probe.start()
++        self.addCleanup(probe.stop)
++
++    def freeze(self, day):
++        TimeOverride.set_frozen_time(
++            timezone.make_aware(datetime.combine(day, datetime.min.time()).replace(hour=12))
++        )
++        cache.clear()
++
++    def make_user(self, name, *permissions, superuser=False, staff=False):
++        user = get_user_model().objects.create_user(
++            username=name, password="dashboard-test",
++            is_superuser=superuser, is_staff=staff or superuser,
++        )
++        for codename in permissions:
++            user.user_permissions.add(Permission.objects.get(
++                content_type__app_label="school", codename=codename
++            ))
++        return user
++
++    def make_student(self, number, status=Student.ACTIVE):
++        return Student.objects.create(
++            student_number=number, first_name="Ada", last_name=number,
++            program=self.program, intake_year=self.year, status=status,
++        )
++
++    def enroll(self, student, semester=None, year_level=1, status=Enrollment.ACTIVE):
++        return Enrollment.objects.create(
++            student=student, program=self.program, semester=semester or self.semester,
++            year_level=year_level, status=status,
++        )
++
++    def charge(self, enrollment, amount="100.00"):
++        structure, _ = FeeStructure.objects.get_or_create(
++            semester=enrollment.semester, program=self.program,
++            year_level=enrollment.year_level,
++        )
++        item, _ = FeeStructureItem.objects.get_or_create(
++            fee_structure=structure, name="Tuition", defaults={"amount": amount}
++        )
++        return StudentCharge.objects.create(
++            student=enrollment.student, enrollment=enrollment,
++            fee_item=item, amount=amount,
++        )
++
++    def pay(self, student, receipt, amount="25.00", semester=None, day=None,
++            method=Payment.CASH):
++        return Payment.objects.create(
++            student=student, semester=semester or self.semester,
++            receipt_number=receipt, amount=amount,
++            payment_date=day or self.today, method=method,
++        )
++
++    def past_semester(self, year=2026, number=2):
++        academic_year, _ = AcademicYear.objects.get_or_create(
++            name=str(year), defaults={
++                "start_date": date(year, 1, 1), "end_date": date(year, 12, 31),
++            },
++        )
++        return Semester.objects.create(
++            academic_year=academic_year, number=number,
++            start_date=date(year, 1 if number == 1 else 7, 12),
++            end_date=date(year, 6 if number == 1 else 12, 28),
++        )
++
++    def next_year(self):
++        return AcademicYear.objects.create(
++            name="2028", start_date=date(2028, 1, 1), end_date=date(2028, 12, 31)
++        )
++
++    def next_year_semester(self, year, number=1):
++        return Semester.objects.create(
++            academic_year=year, number=number,
++            start_date=date(2028, 1 if number == 1 else 7, 12),
++            end_date=date(2028, 6 if number == 1 else 12, 28),
++        )
++
++    def get_dashboard(self, user):
++        self.client.force_login(user)
++        response = self.client.get(reverse("dashboard"))
++        self.assertEqual(response.status_code, 200)
++        return response
++
++    def one(self, node, **selector):
++        matches = node.select(**selector)
++        self.assertEqual(len(matches), 1, f"Expected one node matching {selector}, got {len(matches)}")
++        return matches[0]
++
++    def document(self, response):
++        return HTMLDocument(response.content.decode()).root
++
++    def db(self, response):
++        node = self.one(self.document(response), class_name="db")
++        self.assertIn("ui", node.attrs.get("class", "").split())
++        return node
++
++    def sidebar(self, user, route="dashboard", args=(), semester=True):
++        request = RequestFactory().get(reverse(route, args=args))
++        request.user = user
++        request.resolver_match = resolve(request.path)
++        context = {} if semester else {"nav_semester": None}
++        html = render_to_string("base.html", context, request=request)
++        return self.one(HTMLDocument(html).root, tag="nav", **{"aria-label": "Main"})
++
++
++class DashboardPermissionTests(DashboardTestCase):
++    def test_anonymous_dashboard_redirects_to_login(self):
++        response = self.client.get(reverse("dashboard"))
++        self.assertRedirects(
++            response, f'{reverse("login")}?next={reverse("dashboard")}',
++            fetch_redirect_response=False,
++        )
++
++    def test_every_money_permission_combination_and_student_link_gate(self):
++        student = self.make_student("MATRIX")
++        self.charge(self.enroll(student), "1250.00")
++        self.pay(student, "MATRIX-PAY")
++        permissions = (
++            "can_view_financial_reports", "can_record_payments",
++            "can_view_outstanding_reports", "view_student",
++        )
++        for index, bits in enumerate(product((False, True), repeat=4)):
++            with self.subTest(permissions=dict(zip(permissions, bits))):
++                user = self.make_user(
++                    f"matrix-{index}", *(p for p, enabled in zip(permissions, bits) if enabled)
++                )
++                response = self.get_dashboard(user)
++                db = self.db(response)
++                reports, payments, outstanding, students = bits
++                financial = reports or payments
++                self.assertEqual(response.context["show_financials"], financial)
++                self.assertEqual(response.context["show_outstanding"], outstanding)
++                expected = {"students"}
++                if financial:
++                    expected.update(("billed", "collected"))
++                if outstanding:
++                    expected.add("owed")
++                self.assertEqual(
++                    {node.attrs["data-kpi"] for node in db.select(class_name="db-kpi")}, expected
++                )
++                self.assertEqual(bool(db.select(class_name="db-payments")), financial)
++                self.assertEqual(bool(db.select(class_name="db-balances")), outstanding)
++                for key in ("total_charged", "total_paid", "today_total", "today_count", "recent_payments"):
++                    self.assertEqual(key in response.context, financial, key)
++                for key in ("outstanding", "students_with_balance", "top_outstanding"):
++                    self.assertEqual(key in response.context, outstanding, key)
++                for route, allowed in (
++                    ("student_list", students),
++                    ("financial_records", reports),
++                    ("daily_collections_report", reports),
++                    ("outstanding_report", outstanding),
++                ):
++                    self.assertEqual(reverse(route) in db.hrefs, allowed, route)
++                if not financial and not outstanding:
++                    self.assertNotIn("$", db.text)
++                    self.assertNotIn(student.student_number, db.text)
++
++    def test_superuser_gets_all_four_figures_and_both_lists(self):
++        response = self.get_dashboard(self.make_user("root", superuser=True))
++        db = self.db(response)
++        self.assertEqual(len(db.select(class_name="db-kpi")), 4)
++        self.one(db, class_name="db-payments")
++        self.one(db, class_name="db-balances")
++
++    def test_all_logged_in_users_count_only_active_students(self):
++        for index, status in enumerate((Student.ACTIVE, Student.ACTIVE, Student.DEFERRED,
++                                        Student.WITHDRAWN, Student.COMPLETED)):
++            self.make_student(f"STATUS-{index}", status=status)
++        response = self.get_dashboard(self.make_user("count-only"))
++        self.assertEqual(response.context["total_students"], 2)
++        card = self.one(self.db(response), **{"data-kpi": "students"})
++        self.assertEqual(self.one(card, class_name="db-kpi-value").text, "2")
++        self.assertFalse(card.hrefs)
++
++    def test_unprivileged_user_does_not_compute_financial_or_outstanding_queries(self):
++        user = self.make_user("no-finance", "view_student", "view_feestructure")
++        with patch("school.views.semester_financials") as financials, patch(
++            "school.views.outstanding_students"
++        ) as outstanding:
++            response = self.get_dashboard(user)
++        financials.assert_not_called()
++        outstanding.assert_not_called()
++        self.assertNotIn("$", self.db(response).text)
++
++    def test_widget_student_and_payment_actions_need_exact_permissions(self):
++        active = self.make_student("ACTIVE-LINK")
++        deferred = self.make_student("DEFERRED-LINK", status=Student.DEFERRED)
++        for student in (active, deferred):
++            self.charge(self.enroll(student), "200.00")
++            self.pay(student, f"PAY-{student.pk}")
++        for index, (view_student, record_payment) in enumerate(product((False, True), repeat=2)):
++            with self.subTest(view_student=view_student, record_payment=record_payment):
++                perms = ["can_view_financial_reports", "can_view_outstanding_reports"]
++                if view_student:
++                    perms.append("view_student")
++                if record_payment:
++                    perms.append("can_record_payments")
++                db = self.db(self.get_dashboard(self.make_user(f"links-{index}", *perms)))
++                for widget_name in ("db-payments", "db-balances"):
++                    widget = self.one(db, class_name=widget_name)
++                    for student in (active, deferred):
++                        self.assertEqual(
++                            reverse("student_detail", args=[student.pk]) in widget.hrefs, view_student
++                        )
++                    self.assertEqual(
++                        f'{reverse("payment_create")}?student={active.pk}' in widget.hrefs,
++                        record_payment,
++                    )
++                    self.assertNotIn(
++                        f'{reverse("payment_create")}?student={deferred.pk}', widget.hrefs
++                    )
++                    if record_payment:
++                        disabled = widget.select(**{"aria-disabled": "true"})
++                        self.assertEqual(len(disabled), 1)
++                        self.assertIn("active", disabled[0].attrs.get("title", "").lower())
++
++    def test_navbar_actions_are_not_duplicated_inside_dashboard(self):
++        response = self.get_dashboard(self.make_user("actions-root", superuser=True))
++        whole_page = self.document(response)
++        db = self.db(response)
++        self.assertIn(reverse("student_create"), whole_page.hrefs)
++        self.assertIn(reverse("payment_create"), whole_page.hrefs)
++        self.assertNotIn(reverse("student_create"), db.hrefs)
++        self.assertNotIn(reverse("payment_create"), db.hrefs)
++        for action in db.select("a") + db.select("button"):
++            self.assertNotIn("register student", action.text.lower())
++            self.assertNotIn("record payment", action.text.lower())
++        self.assertNotIn("Fees not set up", db.text)
++        self.assertNotIn("Missing details", db.text)
++
++
++class DashboardNextStepsTests(DashboardTestCase):
++    def test_next_steps_card_is_absent_when_no_lifecycle_work_exists(self):
++        response = self.get_dashboard(self.make_user("empty-steps", superuser=True))
++        self.assertEqual(response.context["next_steps"], [])
++        self.assertFalse(self.db(response).select(class_name="db-next"))
++        self.assertFalse(self.db(response).select(class_name="modal"))
++
++    def test_working_semester_fee_gap_stays_in_bell_not_next_steps(self):
++        response = self.get_dashboard(self.make_user("fee-bell", "add_feestructure"))
++        self.assertGreater(response.context["nav_fee_count"], 0)
++        self.assertEqual(response.context["next_steps"], [])
++        self.assertFalse(self.db(response).select(class_name="db-next"))
++        self.assertNotIn("Fees not set up", self.db(response).text)
++        bell_link = [link for link in self.document(response).select("a")
++                     if "Fees not set up" in link.text]
++        self.assertEqual(len(bell_link), 1)
++        self.assertEqual(
++            bell_link[0].attrs["href"], reverse("fee_structure_create", args=[self.semester.pk])
++        )
++        self.assertEqual(self.client.get(bell_link[0].attrs["href"]).status_code, 200)
++
++    def test_progress_counts_only_active_students_with_active_ended_enrollments(self):
++        source = self.past_semester()
++        for number, student_status, enrollment_status in (
++            ("ELIGIBLE", Student.ACTIVE, Enrollment.ACTIVE),
++            ("DEFERRED", Student.DEFERRED, Enrollment.ACTIVE),
++            ("WITHDRAWN", Student.WITHDRAWN, Enrollment.ACTIVE),
++            ("GRADUATED", Student.COMPLETED, Enrollment.ACTIVE),
++            ("OLD-DONE", Student.ACTIVE, Enrollment.COMPLETED),
++            ("OLD-DEFERRED", Student.ACTIVE, Enrollment.DEFERRED),
++        ):
++            self.enroll(self.make_student(number, student_status), source, status=enrollment_status)
++        self.enroll(self.make_student("CURRENT"))
++        for index, perms in enumerate(((), ("add_semester",), ("view_student",), ("change_student",))):
++            with self.subTest(permissions=perms):
++                response = self.get_dashboard(self.make_user(f"progress-gate-{index}", *perms))
++                steps = response.context["next_steps"]
++                if "change_student" in perms:
++                    self.assertEqual(len(steps), 1)
++                    self.assertEqual(steps[0]["kind"], "progress")
++                    self.assertEqual(steps[0]["semester"], source)
++                    self.assertEqual(steps[0]["next_semester"], self.semester)
++                    self.assertEqual(steps[0]["active_students"], 1)
++                    self.one(self.db(response), class_name="db-next")
++                else:
++                    self.assertEqual(steps, [])
++                    self.assertFalse(self.db(response).select(class_name="db-next"))
++
++    def test_no_successor_requires_add_semester_not_change_student(self):
++        self.freeze(date(2027, 7, 1))
++        self.enroll(self.make_student("NO-SUCCESSOR"))
++        for index, perms in enumerate(((), ("change_student",), ("add_semester",),
++                                       ("add_semester", "change_student"))):
++            with self.subTest(permissions=perms):
++                response = self.get_dashboard(self.make_user(f"missing-{index}", *perms))
++                steps = response.context["next_steps"]
++                if "add_semester" in perms:
++                    self.assertEqual([step["kind"] for step in steps], ["missing_semester"])
++                    self.assertEqual(steps[0]["semester"], self.semester)
++                    self.assertEqual(steps[0]["active_students"], 1)
++                    card = self.one(self.db(response), class_name="db-next")
++                    self.assertIn(reverse("semester_create"), card.hrefs)
++                    self.assertIn("New semester", card.text)
++                else:
++                    self.assertEqual(steps, [])
++                self.assertFalse(self.db(response).select(class_name="modal"))
++
++    def test_next_year_missing_semesters_requires_add_permission(self):
++        self.freeze(date(2027, 12, 15))
++        year = self.next_year()
++        for index, perms in enumerate(((), ("view_semester",), ("add_feestructure",), ("add_semester",))):
++            with self.subTest(permissions=perms):
++                response = self.get_dashboard(self.make_user(f"year-sem-{index}", *perms))
++                steps = response.context["next_steps"]
++                if "add_semester" in perms:
++                    self.assertEqual([s["kind"] for s in steps], ["year_semesters"])
++                    self.assertEqual(steps[0]["next_year"], year)
++                    self.assertIn(
++                        f'{reverse("semester_create")}?academic_year={year.pk}', self.db(response).hrefs
++                    )
++                else:
++                    self.assertEqual(steps, [])
++
++    def test_next_year_fee_gap_excludes_working_semester_and_uses_accessible_url(self):
++        self.freeze(date(2027, 12, 15))
++        year = self.next_year()
++        working = self.next_year_semester(year)
++        later = self.next_year_semester(year, 2)
++        for index, perms in enumerate(((), ("view_feestructure",), ("add_semester",),
++                                       ("add_feestructure",),
++                                       ("add_feestructure", "view_feestructure"))):
++            with self.subTest(permissions=perms):
++                response = self.get_dashboard(self.make_user(f"year-fee-{index}", *perms))
++                self.assertEqual(response.context["financial_semester"], working)
++                steps = response.context["next_steps"]
++                if "add_feestructure" in perms:
++                    self.assertEqual([s["kind"] for s in steps], ["year_fees"])
++                    self.assertEqual(steps[0]["semester"], later)
++                    route = "fee_structure_list" if "view_feestructure" in perms else "fee_structure_create"
++                    url = reverse(route, args=[later.pk])
++                    self.assertEqual(steps[0]["url"], url)
++                    card = self.one(self.db(response), class_name="db-next")
++                    self.assertEqual(card.hrefs, {url})
++                else:
++                    self.assertEqual(steps, [])
++
++    def test_next_year_fees_need_items_for_every_applicable_course_year(self):
++        self.freeze(date(2027, 12, 15))
++        year = self.next_year()
++        self.next_year_semester(year)
++        later = self.next_year_semester(year, 2)
++        user = self.make_user("fee-completeness", "add_feestructure")
++        structures = [FeeStructure.objects.create(
++            semester=later, program=self.program, year_level=level
++        ) for level in (1, 2)]
++        response = self.get_dashboard(user)
++        self.assertEqual([s["kind"] for s in response.context["next_steps"]], ["year_fees"])
++        for structure in structures:
++            FeeStructureItem.objects.create(fee_structure=structure, name="Tuition", amount="100")
++        response = self.get_dashboard(user)
++        self.assertEqual(response.context["next_steps"], [])
++        self.assertFalse(self.db(response).select(class_name="db-next"))
++
++    def test_next_year_setup_only_appears_in_last_thirty_days(self):
++        self.next_year()
++        user = self.make_user("year-window", "add_semester")
++        for day, expected in ((date(2027, 11, 30), False), (date(2027, 12, 1), True),
++                              (date(2027, 12, 31), True)):
++            with self.subTest(day=day):
++                self.freeze(day)
++                response = self.get_dashboard(user)
++                self.assertEqual(bool(response.context["next_steps"]), expected)
++
++    def test_modal_csrf_post_progresses_eligible_students(self):
++        source = self.past_semester()
++        student = self.make_student("MODAL-ACTIVE")
++        old_enrollment = self.enroll(student, source)
++        deferred = self.make_student("MODAL-DEFERRED", Student.DEFERRED)
++        self.enroll(deferred, source)
++        user = self.make_user("modal-user", "change_student")
++        csrf_client = Client(enforce_csrf_checks=True)
++        csrf_client.force_login(user)
++        response = csrf_client.get(reverse("dashboard"))
++        self.assertEqual(response.status_code, 200)
++        db = self.db(response)
++        trigger = self.one(db, tag="button", **{"data-bs-target": f"#progress-{source.pk}"})
++        self.assertEqual(trigger.attrs["data-bs-toggle"], "modal")
++        self.assertNotIn("onclick", trigger.attrs)
++        modal = self.one(db, id=f"progress-{source.pk}")
++        self.assertIn("Progress 1 student?", modal.text)
++        self.assertIn("2026", modal.text)
++        self.assertIn("2027", modal.text)
++        form = self.one(modal, tag="form")
++        url = reverse("bulk_progress_students", args=[source.pk])
++        self.assertEqual(form.attrs["method"].lower(), "post")
++        self.assertEqual(form.attrs["action"], url)
++        token = self.one(form, tag="input", name="csrfmiddlewaretoken")
++        self.assertTrue(token.attrs["value"])
++        self.assertFalse(Enrollment.objects.filter(student=student, semester=self.semester).exists())
++        self.assertEqual(csrf_client.get(url).status_code, 405)
++        self.assertEqual(csrf_client.post(url).status_code, 403)
++        old_enrollment.refresh_from_db()
++        self.assertEqual(old_enrollment.status, Enrollment.ACTIVE)
++        response = csrf_client.post(url, {"csrfmiddlewaretoken": token.attrs["value"]})
++        self.assertRedirects(response, reverse("semester_list"), fetch_redirect_response=False)
++        target = Enrollment.objects.get(student=student, semester=self.semester)
++        self.assertEqual(target.year_level, 2)
++        self.assertEqual(target.status, Enrollment.ACTIVE)
++        old_enrollment.refresh_from_db()
++        self.assertEqual(old_enrollment.status, Enrollment.COMPLETED)
++        self.assertFalse(Enrollment.objects.filter(student=deferred, semester=self.semester).exists())
++        refreshed = csrf_client.get(reverse("dashboard"))
++        self.assertEqual(refreshed.context["next_steps"], [])
++
++
++class DashboardStateTests(DashboardTestCase):
++    def test_flash_messages_are_updates_below_dashboard_not_extra_banners(self):
++        user = self.make_user("updates-root", superuser=True)
++        self.client.force_login(user)
++        storage = CookieStorage(RequestFactory().get(reverse("dashboard")))
++        self.client.cookies[storage.cookie_name] = storage._encode([
++            Message(messages.SUCCESS, "Saved update"),
++            Message(messages.WARNING, "Review update"),
++        ])
++        BackupConfig.objects.filter(pk=1).update(strict_mode=True)
++        self.backup_available.return_value = False
++        response = self.client.get(reverse("dashboard"))
++        document = self.document(response)
++        self.assertEqual(len(document.select(role="alert")), 1)
++        notices = self.one(document, class_name="db-notices", role="status")
++        self.assertEqual(len(notices.select(class_name="db-notice")), 2)
++        self.assertIn("Saved update", notices.text)
++        self.assertIn("Review update", notices.text)
++        self.assertNotIn("Saved update", self.db(response).text)
++        main = self.one(document, tag="main")
++        children = [child for child in main.children if isinstance(child, HTMLNode)]
++        self.assertLess(children.index(self.one(main, class_name="db")), children.index(notices))
++        self.assertEqual(len(notices.select("button", **{"data-dismiss-notice": None})), 2)
++
++    def test_no_academic_year_and_no_semester_is_a_safe_nonfinancial_state(self):
++        Semester.objects.all().delete()
++        AcademicYear.objects.all().delete()
++        response = self.get_dashboard(self.make_user("no-year"))
++        self.assertIsNone(response.context["current_year"])
++        self.assertIsNone(response.context["financial_year"])
++        self.assertIsNone(response.context["financial_semester"])
++        self.assertIsNone(response.context["nav_semester"])
++        db = self.db(response)
++        self.assertIn("No current academic year", db.text)
++        self.assertIn("No semester is active or scheduled", db.text)
++        self.assertNotIn("$", db.text)
++        self.assertNotIn(reverse("academic_year_list"), db.hrefs)
++        self.assertNotIn(reverse("semester_create"), db.hrefs)
++
++    def test_current_year_without_semesters_has_honest_financial_empty_states(self):
++        self.semester.delete()
++        response = self.get_dashboard(self.make_user("no-sem-root", superuser=True))
++        self.assertEqual(response.context["current_year"], self.year)
++        self.assertIsNone(response.context["financial_semester"])
++        self.assertFalse(response.context["financial_semester_is_upcoming"])
++        db = self.db(response)
++        self.assertFalse(db.select(role="alert"))
++        self.assertIn("No semester is active or scheduled", db.text)
++        self.assertIn("No semester to report on", db.text)
++        self.assertIn("No payments recorded yet", db.text)
++        self.assertNotIn("Everyone is up to date", db.text)
++        self.assertIn(reverse("semester_create"), db.hrefs)
++
++    def test_no_current_year_can_still_report_an_upcoming_semester(self):
++        self.freeze(date(2026, 12, 1))
++        response = self.get_dashboard(self.make_user("future-root", superuser=True))
++        self.assertIsNone(response.context["current_year"])
++        self.assertEqual(response.context["financial_year"], self.year)
++        self.assertEqual(response.context["financial_semester"], self.semester)
++        self.assertTrue(response.context["financial_semester_is_upcoming"])
++        self.assertIn("Upcoming", self.db(response).text)
++        self.assertIn("No current academic year", self.db(response).text)
++
++    def test_only_one_banner_with_backup_priority_over_missing_year(self):
++        user = self.make_user("banner-root", superuser=True)
++        for strict, available, current_year in product((False, True), repeat=3):
++            with self.subTest(strict=strict, available=available, current_year=current_year):
++                self.freeze(self.today if current_year else date(2030, 3, 1))
++                BackupConfig.objects.filter(pk=1).update(strict_mode=strict)
++                self.backup_available.return_value = available
++                db = self.db(self.get_dashboard(user))
++                alerts = db.select(role="alert")
++                expected = "Backup media missing" if strict and not available else (
++                    "No current academic year" if not current_year else None
++                )
++                self.assertEqual(len(alerts), int(expected is not None))
++                if expected:
++                    self.assertIn(expected, alerts[0].text)
++                if strict and not available:
++                    self.assertNotIn("No current academic year", db.text)
++
++    def test_backup_banner_does_not_link_non_superusers_to_backups(self):
++        BackupConfig.objects.filter(pk=1).update(strict_mode=True)
++        self.backup_available.return_value = False
++        db = self.db(self.get_dashboard(self.make_user("banner-reader")))
++        alert = self.one(db, role="alert")
++        self.assertIn("Backup media missing", alert.text)
++        self.assertNotIn(reverse("backup_index"), alert.hrefs)
++
++    def test_working_semester_and_navbar_agree_across_clock_boundaries(self):
++        later = Semester.objects.create(
++            academic_year=self.year, number=2,
++            start_date=date(2027, 7, 12), end_date=date(2027, 12, 28),
++        )
++        user = self.make_user("clock-root", superuser=True)
++        cases = (
++            (date(2027, 1, 11), self.semester, True),
++            (date(2027, 1, 12), self.semester, False),
++            (date(2027, 6, 30), self.semester, False),
++            (date(2027, 7, 1), later, True),
++            (date(2027, 7, 12), later, False),
++            (date(2027, 12, 28), later, False),
++            (date(2027, 12, 29), None, False),
++        )
++        for day, expected, upcoming in cases:
++            with self.subTest(day=day):
++                self.freeze(day)
++                request = RequestFactory().get(reverse("dashboard"))
++                request.user = user
++                navigation_summary(request)  # Exercise the cached navbar result too.
++                response = self.get_dashboard(user)
++                self.assertEqual(response.context["today"], day)
++                self.assertEqual(response.context["nav_testing_date"], day)
++                self.assertEqual(response.context["nav_semester"], expected)
++                self.assertEqual(response.context["financial_semester"], expected)
++                self.assertEqual(response.context["nav_semester_is_upcoming"], upcoming)
++                self.assertEqual(response.context["financial_semester_is_upcoming"], upcoming)
++        self.freeze(date(2027, 1, 12))
++        self.assertContains(self.get_dashboard(user), "Testing clock: 12 Jan 2027")
++
++    @override_settings(ENABLE_TIME_OVERRIDE=False)
++    def test_disabled_testing_clock_ignores_frozen_date_for_both_contexts(self):
++        self.freeze(date(2030, 1, 1))
++        real_now = timezone.make_aware(datetime(2027, 3, 1, 12))
++        with patch("school.utils.time_utils.timezone.now", return_value=real_now):
++            response = self.get_dashboard(self.make_user("clock-disabled", superuser=True))
++        self.assertEqual(response.context["today"], self.today)
++        self.assertEqual(response.context["nav_semester"], self.semester)
++        self.assertEqual(response.context["financial_semester"], self.semester)
++        self.assertIsNone(response.context["nav_testing_date"])
++        self.assertNotContains(response, "Testing clock:")
++
++
++class DashboardFinancialTests(DashboardTestCase):
++    def test_positive_balances_are_not_offset_by_another_students_credit(self):
++        debtor = self.make_student("DEBTOR")
++        credited = self.make_student("CREDITED")
++        for student in (debtor, credited):
++            self.charge(self.enroll(student), "100.00")
++        self.pay(debtor, "DEBTOR-PAY", "20.00")
++        self.pay(credited, "CREDIT-PAY", "300.00")
++        response = self.get_dashboard(self.make_user("balances-root", superuser=True))
++        self.assertEqual(response.context["total_charged"], Decimal("200.00"))
++        self.assertEqual(response.context["total_paid"], Decimal("320.00"))
++        self.assertEqual(response.context["outstanding"], Decimal("80.00"))
++        self.assertEqual(response.context["students_with_balance"], 1)
++        self.assertEqual([s.pk for s in response.context["top_outstanding"]], [debtor.pk])
++        balances = self.one(self.db(response), class_name="db-balances")
++        self.assertIn("$80.00", balances.text)
++        self.assertNotIn(credited.student_number, balances.text)
++
++    def test_top_five_balances_have_course_year_proportions_and_remainder(self):
++        students = []
++        for index in range(8):
++            student = self.make_student(f"BALANCE-{index}")
++            students.append(student)
++            self.charge(self.enroll(student, year_level=2), str((index + 1) * 100))
++        response = self.get_dashboard(self.make_user("top-five", "can_view_outstanding_reports"))
++        top = response.context["top_outstanding"]
++        self.assertIsInstance(top, list)
++        self.assertEqual([s.pk for s in top], [s.pk for s in reversed(students[3:])])
++        self.assertEqual(response.context["outstanding"], Decimal("3600"))
++        self.assertEqual(response.context["students_with_balance"], 8)
++        self.assertEqual(response.context["more_outstanding"], 3)
++        self.assertTrue(response.context["has_semester_charges"])
++        self.assertEqual([s.course_year for s in top], [2] * 5)
++        self.assertEqual(top[0].balance_percent, 100)
++        self.assertEqual(top[-1].balance_percent, 50)
++        balances = self.one(self.db(response), class_name="db-balances")
++        self.assertEqual(len(balances.select("li")), 5)
++        self.assertIn("Course year 2", balances.text)
++        self.assertIn("And 3 more", balances.text)
++        self.assertIn(reverse("outstanding_report"), balances.hrefs)
++
++    def test_outstanding_annotation_is_evaluated_once_not_aggregate_count_and_slice(self):
++        self.charge(self.enroll(self.make_student("ONE-QUERY")))
++        user = self.make_user("one-query", "can_view_outstanding_reports")
++        request = RequestFactory().get(reverse("dashboard"))
++        request.user = user
++        request.resolver_match = resolve(request.path)
++        navigation_summary(request)
++        with CaptureQueriesContext(connection) as queries:
++            response = dashboard(request)
++        self.assertEqual(response.status_code, 200)
++        # The outstanding helper aliases its correlated result as balance;
++        # counting SQL with that alias catches aggregate/count/slice re-evaluation.
++        balance_queries = [q["sql"] for q in queries if 'AS "balance"' in q["sql"]]
++        self.assertEqual(len(balance_queries), 1, balance_queries)
++
++    def test_no_charges_does_not_claim_everyone_is_up_to_date(self):
++        response = self.get_dashboard(self.make_user("unbilled", "can_view_outstanding_reports"))
++        self.assertFalse(response.context["has_semester_charges"])
++        balances = self.one(self.db(response), class_name="db-balances")
++        self.assertIn("No charges recorded yet", balances.text)
++        self.assertNotIn("Everyone is up to date", balances.text)
++
++    def test_fully_paid_charges_show_up_to_date_empty_state(self):
++        student = self.make_student("PAID")
++        self.charge(self.enroll(student))
++        self.pay(student, "PAID-IN-FULL", "100.00")
++        response = self.get_dashboard(self.make_user("paid-report", "can_view_outstanding_reports"))
++        self.assertTrue(response.context["has_semester_charges"])
++        self.assertEqual(response.context["outstanding"], 0)
++        self.assertEqual(response.context["top_outstanding"], [])
++        balances = self.one(self.db(response), class_name="db-balances")
++        self.assertIn("Everyone is up to date", balances.text)
++        self.one(balances, class_name="ui-lamp--green")
++
++    def test_recent_payments_are_latest_eight_with_joined_students_trades_and_semesters(self):
++        payments = []
++        for index in range(10):
++            student = self.make_student(f"RECENT-{index}")
++            payments.append(self.pay(student, f"RECENT-PAY-{index}", method=Payment.BANK))
++        response = self.get_dashboard(self.make_user("recent-reader", "can_view_financial_reports"))
++        recent = list(response.context["recent_payments"])
++        self.assertEqual([p.pk for p in recent], [p.pk for p in reversed(payments[-8:])])
++        with self.assertNumQueries(0):
++            for payment in recent:
++                self.assertEqual(payment.student.program.name, self.program.name)
++                self.assertEqual(payment.semester.pk, self.semester.pk)
++        widget = self.one(self.db(response), class_name="db-payments")
++        self.assertEqual(len(self.one(widget, tag="tbody").select("tr")), 8)
++        self.assertIn(self.program.name, widget.text)
++        self.assertIn("Bank", widget.text)
++        self.assertIn("$25.00", widget.text)
++
++    def test_today_totals_span_semesters_but_kpis_use_working_semester(self):
++        self.freeze(date(2027, 1, 1))
++        day = date(2027, 1, 1)
++        past = self.past_semester()
++        student = self.make_student("DAILY")
++        self.charge(self.enroll(student), "1500.00")
++        yesterday = self.pay(student, "YESTERDAY", "40", day=day - timedelta(days=1))
++        older = self.pay(student, "OLDER", "10", day=day - timedelta(days=10), method=Payment.OTHER)
++        self.pay(student, "TODAY-WORKING", "1250.50", day=day, method=Payment.ECOCASH)
++        self.pay(student, "TODAY-PAST", "20", semester=past, day=day, method=Payment.BANK)
++        response = self.get_dashboard(self.make_user("daily", "can_record_payments"))
++        self.assertTrue(response.context["financial_semester_is_upcoming"])
++        self.assertEqual(response.context["total_charged"], Decimal("1500"))
++        self.assertEqual(response.context["total_paid"], Decimal("1300.50"))
++        self.assertEqual(response.context["today_total"], Decimal("1270.50"))
++        self.assertEqual(response.context["today_count"], 2)
++        widget = self.one(self.db(response), class_name="db-payments")
++        self.assertIn("Today", widget.text)
++        self.assertIn("Yesterday", widget.text)
++        self.assertIn("22 Dec 2026", widget.text)
++        self.assertIn("$1,250.50", widget.text)
++        for method in ("Cash", "Bank", "EcoCash", "Other"):
++            self.assertIn(method, widget.text)
++        ids = {p.pk for p in response.context["recent_payments"]}
++        self.assertTrue({yesterday.pk, older.pk}.issubset(ids))
++
++
++class DashboardQueryCountTests(DashboardTestCase):
++    def measured_dashboard(self, user):
++        cache.clear()
++        request = RequestFactory().get(reverse("dashboard"))
++        request.user = user
++        request.resolver_match = resolve(request.path)
++        user.get_all_permissions()
++        navigation_summary(request)
++        # Warm both template/context caches before measuring the complete render.
++        dashboard(request)
++        with CaptureQueriesContext(connection) as queries:
++            response = dashboard(request)
++        self.assertEqual(response.status_code, 200)
++        return len(queries), response
++
++    def test_queries_do_not_grow_from_two_to_ten_ended_semesters(self):
++        user = self.make_user("query-progress", superuser=True)
++
++        def add_ended(index):
++            source = self.past_semester(2010 + index)
++            self.enroll(self.make_student(f"ENDED-{index}"), source)
++
++        for index in range(2):
++            add_ended(index)
++        small_count, small = self.measured_dashboard(user)
++        self.assertEqual(len(self.db(small).select(class_name="modal")), 2)
++        for index in range(2, 10):
++            add_ended(index)
++        large_count, large = self.measured_dashboard(user)
++        self.assertEqual(len(self.db(large).select(class_name="modal")), 10)
++        self.assertEqual(large_count, small_count, "Ended-semester rendering introduced per-semester queries")
++
++    def test_queries_do_not_grow_from_five_to_fifty_payments(self):
++        user = self.make_user("query-payments", superuser=True)
++
++        def add_payment(index):
++            student = self.make_student(f"PAYMENT-STUDENT-{index}")
++            self.pay(student, f"QUERY-RECEIPT-{index}")
++
++        for index in range(5):
++            add_payment(index)
++        small_count, small = self.measured_dashboard(user)
++        small_table = self.one(self.db(small), tag="tbody")
++        self.assertEqual(len(small_table.select("tr")), 5)
++        for index in range(5, 50):
++            add_payment(index)
++        large_count, large = self.measured_dashboard(user)
++        large_table = self.one(self.db(large), tag="tbody")
++        self.assertEqual(len(large_table.select("tr")), 8)
++        self.assertEqual(large_count, small_count, "Recent payments introduced per-row related-object queries")
++
++
++class SidebarNavigationTests(DashboardTestCase):
++    def test_each_permission_exposes_only_its_destinations(self):
++        cases = (
++            ((), ()),
++            (("can_record_payments",), ()),
++            (("view_student",), ("student_list", "archive_list", "enrollment_report")),
++            (("view_studentstatuslog",), ("status_history_report",)),
++            (("can_view_financial_reports",), (
++                "financial_records", "daily_collections_report", "payment_methods_report", "program_revenue_report",
++            )),
++            (("can_view_outstanding_reports",), ("outstanding_report",)),
++            (("view_academicyear",), ("academic_year_list",)),
++            (("view_semester",), ("semester_list",)),
++            (("view_feestructure",), ("fee_structure_list", "fee_audit_report")),
++            (("view_program",), ("program_list",)),
++            (("view_auditlog",), ("audit_log_list",)),
++            (("add_student", "change_student", "add_semester", "add_feestructure"), ()),
++        )
++        for index, (perms, routes) in enumerate(cases):
++            with self.subTest(permissions=perms):
++                nav = self.sidebar(self.make_user(f"sidebar-{index}", *perms))
++                expected = {reverse("dashboard"), reverse("reports_index")}
++                expected.update(reverse(route, args=[self.semester.pk] if route == "fee_structure_list" else [])
++                                for route in routes)
++                self.assertEqual(nav.hrefs, expected)
++                for group in nav.select("details"):
++                    self.assertTrue(group.select("a"), "Empty sidebar section must not render")
++                if not routes:
++                    self.assertFalse(nav.select("details"))
++
++    def test_superuser_sidebar_has_all_retained_destinations_and_no_duplicates(self):
++        nav = self.sidebar(self.make_user("sidebar-root", superuser=True))
++        routes = (
++            "dashboard", "student_list", "archive_list", "enrollment_report", "status_history_report",
++            "financial_records", "outstanding_report", "daily_collections_report", "payment_methods_report",
++            "program_revenue_report", "academic_year_list", "semester_list", "program_list", "fee_audit_report",
++            "user_list", "audit_log_list", "backup_index", "admin:index", "time_override", "reports_index",
++        )
++        expected = {reverse(route) for route in routes}
++        expected.add(reverse("fee_structure_list", args=[self.semester.pk]))
++        self.assertEqual(nav.hrefs, expected)
++        self.assertEqual(len(nav.select("a")), len(expected))
++        self.assertIn("Trades", nav.text)
++        self.assertNotIn("Programs", nav.text)
++        for route in ("reminders", "payment_create", "student_create", "user_create", "backup_settings"):
++            self.assertNotIn(reverse(route), nav.hrefs)
++        self.assertNotIn("All Reports", nav.text)
++        for node in nav.select():
++            self.assertFalse(any(c.startswith("bi-") for c in node.attrs.get("class", "").split()))
++
++    def test_superuser_staff_and_testing_flag_are_independent_system_gates(self):
++        for index, (superuser, staff, enabled) in enumerate(product((False, True), repeat=3)):
++            with self.subTest(superuser=superuser, staff=staff, enabled=enabled):
++                user = self.make_user(f"system-{index}", superuser=superuser)
++                user.is_staff = staff
++                user.save(update_fields=["is_staff"])
++                with override_settings(ENABLE_TIME_OVERRIDE=enabled):
++                    nav = self.sidebar(user)
++                self.assertEqual(reverse("user_list") in nav.hrefs, superuser)
++                self.assertEqual(reverse("backup_index") in nav.hrefs, superuser)
++                self.assertEqual(reverse("admin:index") in nav.hrefs, staff)
++                self.assertEqual(reverse("time_override") in nav.hrefs, superuser and enabled)
++
++    def test_fees_grid_and_semester_fallback_obey_separate_permissions(self):
++        for index, (view_fees, view_semester, working) in enumerate(product((False, True), repeat=3)):
++            with self.subTest(view_fees=view_fees, view_semester=view_semester, working=working):
++                perms = []
++                if view_fees:
++                    perms.append("view_feestructure")
++                if view_semester:
++                    perms.append("view_semester")
++                nav = self.sidebar(self.make_user(f"fees-fallback-{index}", *perms), semester=working)
++                links = [node for node in nav.select("a") if node.text == "Fees"]
++                if working and view_fees:
++                    self.assertEqual(len(links), 1)
++                    self.assertEqual(links[0].attrs["href"], reverse("fee_structure_list", args=[self.semester.pk]))
++                elif view_semester:
++                    self.assertEqual(len(links), 1)
++                    self.assertEqual(links[0].attrs["href"], reverse("semester_list"))
++                else:
++                    self.assertEqual(links, [])
++
++    def assert_active_routes(self, cases, label, destination):
++        user = self.make_user(f"active-{label}", superuser=True)
++        for route, args in cases:
++            with self.subTest(route=route):
++                nav = self.sidebar(user, route, args)
++                active = nav.select("a", **{"aria-current": "page"})
++                self.assertEqual(len(active), 1)
++                self.assertEqual(active[0].text, label)
++                self.assertEqual(active[0].attrs["href"], destination)
++                self.assertIn("active", active[0].attrs.get("class", "").split())
++                owning_groups = [group for group in nav.select("details")
++                                 if group.select("a", **{"aria-current": "page"})]
++                self.assertEqual(len(owning_groups), 1)
++                self.assertIn("open", owning_groups[0].attrs)
++
++    def test_fees_active_state_includes_create_edit_bulk_and_copy(self):
++        structure = FeeStructure.objects.create(semester=self.semester, program=self.program, year_level=1)
++        self.assert_active_routes(
++            [(route, [self.semester.pk]) for route in (
++                "fee_structure_list", "fee_structure_create", "bulk_fee_configuration", "fee_structure_copy",
++            )] + [("fee_structure_edit", [structure.pk])],
++            "Fees", reverse("fee_structure_list", args=[self.semester.pk]),
++        )
++
++    def test_students_active_state_covers_all_owned_names(self):
++        student = self.make_student("ACTIVE-STUDENT")
++        self.assert_active_routes(
++            [(route, []) for route in ("student_list", "student_create", "student_import",
++                                      "student_search", "student_list_search")]
++            + [(route, [student.pk]) for route in ("student_detail", "student_edit", "student_status_change")],
++            "Students", reverse("student_list"),
++        )
++
++    def test_archive_active_state_never_marks_students_active(self):
++        student = self.make_student("ARCHIVED", Student.COMPLETED)
++        self.assert_active_routes(
++            [("archive_list", []), ("archive_search", []), ("archive_detail", [student.pk])],
++            "Archive", reverse("archive_list"),
++        )
++
++    def test_resolver_match_none_is_safe_and_does_not_mark_a_link_current(self):
++        request = RequestFactory().get("/not-resolved/")
++        request.user = self.make_user("no-match", superuser=True)
++        request.resolver_match = None
++        html = render_to_string("base.html", request=request)
++        nav = self.one(HTMLDocument(html).root, tag="nav", **{"aria-label": "Main"})
++        self.assertIn(reverse("dashboard"), nav.hrefs)
++        self.assertFalse(nav.select(**{"aria-current": "page"}))
++
++    def test_system_is_collapsed_by_default_and_open_for_an_owned_route(self):
++        user = self.make_user("system-open", superuser=True)
++        for route, opened in (("dashboard", False), ("audit_log_list", True)):
++            with self.subTest(route=route):
++                nav = self.sidebar(user, route)
++                system = [group for group in nav.select("details")
++                          if self.one(group, tag="summary").text == "System"]
++                self.assertEqual(len(system), 1)
++                self.assertEqual("open" in system[0].attrs, opened)
++
++    def test_removed_destinations_remain_reachable_in_their_new_locations(self):
++        user = self.make_user("relocations", superuser=True)
++        self.make_student("MISSING-DETAILS")
++        response = self.get_dashboard(user)
++        nav = self.one(self.document(response), tag="nav", **{"aria-label": "Main"})
++        for route in ("reminders", "payment_create", "student_create"):
++            self.assertIn(reverse(route), self.document(response).hrefs)
++            self.assertNotIn(reverse(route), nav.hrefs)
++        self.assertIn(reverse("reports_index"), nav.hrefs)
++        users = self.client.get(reverse("user_list"))
++        self.assertEqual(users.status_code, 200)
++        self.assertIn(reverse("user_create"), self.document(users).hrefs)
++        # Avoid reading the user's real backup folder while checking the link.
++        with patch("school.views.os.listdir", return_value=[]):
++            backups = self.client.get(reverse("backup_index"))
++        self.assertEqual(backups.status_code, 200)
++        self.assertIn(reverse("backup_settings"), self.document(backups).hrefs)
+--- a/school/test_navbar.py
++++ b/school/test_navbar.py
+@@ -157,7 +157,7 @@
+ 
+         response = self.client.get(reverse("dashboard"))
+ 
+-        expected_fees = len(unconfigured_fee_structures(response.context["fee_setup_semester"]))
++        expected_fees = len(unconfigured_fee_structures(response.context["nav_semester"]))
+         expected_reminders = students_with_missing_details().count()
+         self.assertEqual(response.context["nav_fee_count"], expected_fees)
+         self.assertEqual(response.context["reminders_count"], expected_reminders)
+--- /dev/null
++++ b/docs/DASHBOARD_SIDEBAR_OVERHAUL.md
+@@ -0,0 +1,86 @@
++# Dashboard and Sidebar Overhaul — Report
++
++Date: 2026-10-28 · Django templates / Bootstrap / vanilla JS · runserver only.
++
++## What changed
++
++- **Foundation:** `.ui` tokens/components in `static/css/ui.css`, reusing the existing local Archivo Navbar declaration. Buttons, lamps, chips and figures match the Student detail reference in measured dimensions, weights, padding and numeric settings. Dashboard-specific density lives in `dashboard.css`. The generated 2,188-byte light contour SVG derives paths/palette from `nav-waves.svg`; it is decorative, static and hidden in print.
++- **Sidebar:** People / Money / Academics / System, one SVG sprite, exact permission gates and route ownership, automatic opening of the current section, per-user guarded localStorage, a persistent 64px rail with tooltips, and Bootstrap offcanvas at 768px and below. System starts closed unless active. Empty groups disappear; no group exceeds five links.
++- **Backend:** dashboard and cached navigation share `get_working_semester()` (current, otherwise upcoming). Navigation retains its 45-second cache. Financial computation is permission-gated; progression uses grouped enrollment counts plus one ordered semester list; outstanding students are evaluated once; receipts/trades and course years avoid per-row queries. Credits never offset another student's positive balance.
++- **Dashboard:** compact semester rail/header, four conditional figures, eight recent receipts, five highest balances with Open/Pay shortcuts, and one conditional Next steps card. Progression uses a CSRF-protected Bootstrap modal. No current-semester fee nudge or generic Register/Record duplication. Missing setup has explanatory empty states. Ordinary flash messages sit below the dashboard rather than creating extra banners above the figures.
++
++## Acceptance checks
++
++| Admin test | Result / evidence |
++| --- | --- |
++| Four figures without scrolling at 1280×720 | Pass: all four end at **378px** in the standard state; **434px** with the blocking banner and no semester. |
++| At most one banner; setup in Next steps | Pass: strict backup takes priority over missing academic year. Progression and year-end readiness remain in Next steps; working-semester fee gaps remain in the bell. |
++| No duplicated navbar/bell actions | Pass: no generic Register student, Record payment, fee-gap or missing-detail prompt inside the dashboard. Student-specific Pay shortcuts remain. |
++| One click from either list | Pass with a non-superuser bursar: Open reaches the correct record; Pay opens a form with the correct student already selected. Deferred Pay is disabled, focusable and carries a reason. Modal Cancel/focus return and successful progression POST also pass. |
++| Exact permissions | Pass: 16 financial/student permission combinations, sidebar gates/active routes, and no financial-helper execution for unauthorized readers. Add-only fee users get a direct-create bell link, not a forbidden grid. |
++| Same product language | Pass: side-by-side component comparison, 44px reference buttons, tabular Archivo figures, navy/white surfaces, lamps with words and no Bootstrap colour badges. |
++
++### Dashboard permission mapping and tested users
++
++| Surface/action | Required permission |
++| --- | --- |
++| Active student count | Authenticated; link requires `view_student` |
++| Billed, Collected, Recent payments | `can_view_financial_reports` **or** `can_record_payments` |
++| Financial records / daily-collection links | `can_view_financial_reports` |
++| Still owed / Highest balances | `can_view_outstanding_reports` |
++| Student record links / Pay links | `view_student` / `can_record_payments`; Pay also requires active student |
++| Progress now | `change_student` |
++| Missing/next-year semesters / next-year fees | `add_semester` / `add_feestructure` |
++
++**Superuser:** four figures, both lists, all permitted navigation and applicable setup tasks. **Payments-only** (`can_record_payments`): student count, Billed, Collected and receipts/Pay; no debt widget, student-record or restricted report links. **Read-only** (`view_student`, `view_feestructure`): student count, People and permitted Fees/Fee audit navigation; no dollar amounts. An additional bursar with the three money permissions plus `view_student` verified all one-click workflows.
++
++## Every old sidebar destination
++
++Route names identify the original Django `href` targets; paths and views are preserved.
++
++| Old item / href target | New location | Access |
++| --- | --- | --- |
++| Dashboard · `dashboard` | Dashboard | Login |
++| Reminders · `reminders` | Navbar attention menu; page retained | Existing bell visibility |
++| Students · `student_list` | People → Students | `view_student` |
++| Archive · `archive_list` | People → Archive | `view_student` |
++| Payments · `payment_create` | Navbar Record payment; student Pay shortcuts | `can_record_payments` |
++| Academic years · `academic_year_list` | Academics → Academic years | `view_academicyear` |
++| Semesters · `semester_list` | Academics → Semesters | `view_semester` |
++| Programs · `program_list` | Academics → Trades; list heading retitled | `view_program` |
++| Fees · `fee_structure_list(semester)` | Academics → Fees, working semester | `view_feestructure` |
++| Fees fallback · `semester_list` | Same fallback; hidden if inaccessible | `view_semester` |
++| All Reports · `#reportsSubmenu` | Removed presentation-only toggle; links redistributed | — |
++| Index · `reports_index` | Standalone Reports index below groups | Login |
++| Financial records · `financial_records` | Money → Financial records | `can_view_financial_reports` |
++| Enrollment · `enrollment_report` | People → Enrollment report | `view_student` |
++| Outstanding · `outstanding_report` | Money → Outstanding | `can_view_outstanding_reports` |
++| Fee audit · `fee_audit_report` | Academics → Fee audit | `view_feestructure` |
++| Payment methods · `payment_methods_report` | Money → Payment methods | `can_view_financial_reports` |
++| Revenue · `program_revenue_report` | Money → Revenue | `can_view_financial_reports` |
++| Daily collections · `daily_collections_report` | Money → Daily collections | `can_view_financial_reports` |
++| Status history · `status_history_report` | People → Status history | `view_studentstatuslog` |
++| Administration · `/admin/` | System → Administration; user menu retained | Staff |
++| Backup & Restore · `backup_index` | System → Backups | Superuser |
++| Backup Settings · `backup_settings` | Backups header; existing return link retained | Superuser |
++| Audit Trail · `audit_log_list` | System → Audit trail | `view_auditlog` |
++| Users · `user_list` | System → Users | Superuser |
++| Add User · `user_create` | Existing Add user button on Users | Superuser |
++| Time Override · `time_override` | System → Time override | Superuser + `ENABLE_TIME_OVERRIDE` |
++
++## Decisions and verification
++
++- `--side-w: 232px` replaces `16.6667%`; desktop rail is 64px and mobile main offset is zero. The old percentage dependencies were confined to `base.html`; application-template/style searches now find none. Register Student's action bar is sticky, not percentage-positioned, and was left unchanged.
++- Global body background remains `#f8f9fa`. Small secondary/sidebar text uses `--ink-2` rather than low-contrast `--grey`. Computed dashboard/sidebar text contrast: **5.04:1–14.50:1**. The header note has a nearly opaque wash backing over the decorative contours.
++- All four `base.html` blocks are preserved. Student detail and Register Student match their pre-task SHA-256 hashes. Three token copies intentionally remain: their two inline sets and `.ui`; migrate the reference pages to `.ui` in a separate follow-up.
++- `NRZ_DISABLE_SCHEDULER=1 python manage.py test school` → **74 tests, OK**, including **43 dashboard/sidebar tests**. Coverage includes permissions, relocation, active ownership/404 safety, modal CSRF, clock boundaries, positive balances, empty states, banner priority, flash-message placement and query stability for 2→10 ended semesters and 5→50 payments. JavaScript syntax, template/system checks and scoped `git diff --check` pass.
++- Live Edge/runserver QA used a separate SQLite copy with scheduling disabled; no real enrollments/payments were changed. Required 1440/1280/1024/768 matrix passed; extra 390px checks caught and fixed screen-reader text escaping the table scroller. Also verified rail/group persistence, tooltips, 49 visible focus targets, drawer focus trap/Escape/return focus, reduced motion, print, navbar search/attention stacking, Fees, Student list/detail and Register Student. No browser runtime/network errors occurred in successful checks.
++- **Screenshots:** `docs/dashboard-overhaul/before-{superuser,payments,reader}-{1440,1280,1024,768}.png` and matching `after-*` files; supplementary modal, deferred Pay, bursar, rail/drawer, year-end, empty/backup states, component comparison, navbar and reference-page captures. The standard matrix uses the same data before/after; extra scenario captures use isolated QA fixtures.
++- **Logical diffs:** `docs/dashboard-overhaul/phase-1-foundation.patch` through `phase-5-tests-report.patch` compare against the pre-task source snapshot, excluding unrelated pre-existing edits. No commits: the working tree contains overlapping uncommitted earlier work, and the view/template phases are coupled. Screenshot binaries are delivered separately.
++
++## Not changed / follow-up
++
++- **Security follow-up:** `bulk_progress_students` still lacks a permission decorator, as explicitly scoped to report-only. Hiding Progress now with `change_student` is not endpoint authorization; add matching server-side enforcement separately.
++- Reminders redesign, existing Flatpickr console logging and older Bootstrap-styled pages remain out of scope. Suggested visual follow-up order: Semesters/academic setup → financial reports → Reminders/system pages.
++- Optional collected-by-trade strip and login artwork were not added; the dashboard stays focused on the required figures/lists. No artwork was added elsewhere.
++- No API/Nuxt/SPA changes, models/migrations, production/PyInstaller builds, new dependencies, remote assets or chart libraries.

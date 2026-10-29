@@ -1,144 +1,359 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Set one fee for many{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-xl-10">
-        <div class="mb-4">
-            <div class="mb-3">
-                <a href="{% url back_url_name back_semester_id %}" class="text-decoration-none text-muted fw-500">
-                    <i class="bi bi-chevron-left"></i> Back to Fees
-                </a>
-            </div>
-            <h2 class="fw-bold mb-1">{{ title }}</h2>
-            <p class="text-muted">Configure a single fee item across multiple programs and year levels at once. Existing fee items with the same name will be updated; new ones will be created. Year levels exceeding a program's duration will be skipped.</p>
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">Set one fee for many: {{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</h1>
+            <p class="fee-sub">
+                Add or change one fee line across several trades and course years at once.
+                Anything you don't select is left untouched.
+            </p>
         </div>
+        <div class="fee-head-actions">
+            <a class="fee-btn fee-btn--ghost" href="{{ back_url }}">&larr; Back</a>
+        </div>
+    </div>
 
-        <form method="post" id="bulkFeeForm">
-            {% csrf_token %}
+    <form method="post" id="bulk-form">
+        {% csrf_token %}
 
-            {% if form.non_field_errors %}
-                <div class="alert alert-danger">
-                    {% for error in form.non_field_errors %}
-                        <div>{{ error }}</div>
+        {% if form.non_field_errors %}
+        <div class="fee-banner fee-banner--warn">
+            <div>
+                {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">1</span>
+                <div>
+                    <h2 class="fee-card-title">Trades</h2>
+                    <p class="fee-card-note">Choose every trade this fee applies to.</p>
+                </div>
+                <div class="fee-head-actions" style="margin-left: auto;">
+                    <button type="button" class="fee-btn fee-btn--ghost fee-btn--sm" data-select-all="programs">Select all</button>
+                    <button type="button" class="fee-btn fee-btn--ghost fee-btn--sm" data-select-none="programs">Select none</button>
+                </div>
+            </div>
+            <div class="fee-card-body">
+                {% if form.programs.errors %}
+                <div class="fee-error" style="margin-bottom: 0.6rem;">{{ form.programs.errors|striptags }}</div>
+                {% endif %}
+                <div class="fee-grid-fields">
+                    {% for program in programs_data %}
+                    <label class="fee-radio">
+                        <input type="checkbox" name="programs" value="{{ program.id }}"
+                               data-program data-duration="{{ program.duration }}"
+                               {% if program.id|stringformat:"s" in selected_programs %}checked{% endif %}>
+                        <span>
+                            <strong>{{ program.name }}</strong>
+                            <span>{{ program.duration }} course year{{ program.duration|pluralize }}</span>
+                        </span>
+                    </label>
+                    {% empty %}
+                    <p class="fee-quiet">No active trades yet.</p>
                     {% endfor %}
                 </div>
-            {% endif %}
+            </div>
+        </div>
 
-            <!-- Programs Selection -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-3">Programs <span class="text-muted small">(select one or more)</span></h5>
-                    {% if form.programs.errors %}
-                        <div class="text-danger small mb-2">{{ form.programs.errors }}</div>
-                    {% endif %}
-                    <div class="row">
-                        {% for choice in form.programs %}
-                        <div class="col-md-4 mb-2">
-                            <div class="form-check">
-                                {{ choice.tag }}
-                                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                                    {{ choice.choice_label }}
-                                </label>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% if form.programs.help_text %}
-                        <div class="form-text">{{ form.programs.help_text }}</div>
-                    {% endif %}
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">2</span>
+                <div>
+                    <h2 class="fee-card-title">Course years</h2>
+                    <p class="fee-card-note">Only years offered by the selected trades can be chosen.</p>
+                </div>
+                <div class="fee-head-actions" style="margin-left: auto;">
+                    <button type="button" class="fee-btn fee-btn--ghost fee-btn--sm" id="all-years">All years</button>
+                    <button type="button" class="fee-btn fee-btn--ghost fee-btn--sm" data-select-none="year_levels">Clear</button>
                 </div>
             </div>
+            <div class="fee-card-body">
+                {% if form.year_levels.errors %}
+                <div class="fee-error" style="margin-bottom: 0.6rem;">{{ form.year_levels.errors|striptags }}</div>
+                {% endif %}
+                <div class="fee-pills" id="year-chips">
+                    {% for level in year_level_options %}
+                    <label class="fee-pill" data-year-chip data-year="{{ level }}">
+                        <input type="checkbox" name="year_levels" value="{{ level }}"
+                               style="accent-color: currentColor;"
+                               {% if level|stringformat:"s" in selected_years %}checked{% endif %}>
+                        Course year {{ level }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="fee-quiet" id="year-hint">Select a trade first to unlock its course years.</p>
+            </div>
+        </div>
 
-            <!-- Year Levels Selection -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-3">Year Levels <span class="text-muted small">(select one or more)</span></h5>
-                    {% if form.year_levels.errors %}
-                        <div class="text-danger small mb-2">{{ form.year_levels.errors }}</div>
-                    {% endif %}
-                    <div class="row">
-                        {% for choice in form.year_levels %}
-                        <div class="col-md-2 mb-2">
-                            <div class="form-check">
-                                {{ choice.tag }}
-                                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                                    Year {{ choice.choice_label }}
-                                </label>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% if form.year_levels.help_text %}
-                        <div class="form-text">{{ form.year_levels.help_text }}</div>
-                    {% endif %}
+        <div class="fee-card">
+            <div class="fee-card-head">
+                <span class="fee-step">3</span>
+                <div>
+                    <h2 class="fee-card-title">The fee</h2>
+                    <p class="fee-card-note">One line, charged per student in every chosen trade and course year.</p>
                 </div>
             </div>
-
-            <!-- Fee Item Details -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h5 class="mb-3">Fee Item Details</h5>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="{{ form.fee_name.id_for_label }}" class="form-label fw-semibold">{{ form.fee_name.label }}</label>
-                            {{ form.fee_name }}
-                            {% if form.fee_name.errors %}<div class="text-danger small">{{ form.fee_name.errors }}</div>{% endif %}
-                            {% if form.fee_name.help_text %}<div class="form-text">{{ form.fee_name.help_text }}</div>{% endif %}
-                        </div>
-                        <div class="col-md-6">
-                            <label for="{{ form.amount.id_for_label }}" class="form-label fw-semibold">{{ form.amount.label }}</label>
+            <div class="fee-card-body">
+                <div class="fee-grid-fields">
+                    <label class="fee-field">
+                        <span class="fee-label">Fee name <span class="req">*</span></span>
+                        {{ form.fee_name }}
+                        {% if form.fee_name.errors %}<div class="fee-error">{{ form.fee_name.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">Amount per student <span class="req">*</span></span>
+                        <div class="fee-amount-wrap">
+                            <span class="fee-amount-prefix">$</span>
                             {{ form.amount }}
-                            {% if form.amount.errors %}<div class="text-danger small">{{ form.amount.errors }}</div>{% endif %}
-                            {% if form.amount.help_text %}<div class="form-text">{{ form.amount.help_text }}</div>{% endif %}
                         </div>
-                        <div class="col-12">
-                            <label for="{{ form.description.id_for_label }}" class="form-label fw-semibold">{{ form.description.label }}</label>
-                            {{ form.description }}
-                            {% if form.description.errors %}<div class="text-danger small">{{ form.description.errors }}</div>{% endif %}
-                            {% if form.description.help_text %}<div class="form-text">{{ form.description.help_text }}</div>{% endif %}
-                        </div>
-                    </div>
+                        {% if form.amount.errors %}<div class="fee-error">{{ form.amount.errors|striptags }}</div>{% endif %}
+                    </label>
+                    <label class="fee-field">
+                        <span class="fee-label">Note (optional)</span>
+                        {{ form.description }}
+                        {% if form.description.errors %}<div class="fee-error">{{ form.description.errors|striptags }}</div>{% endif %}
+                    </label>
+                </div>
+
+                <div class="fee-banner" style="margin: 1rem 0 0;">
+                    <div id="bulk-preview">Pick a fee name and amount to preview what will change.</div>
                 </div>
             </div>
+        </div>
 
-            <div class="d-flex gap-2 justify-content-end">
-                <a href="{% url back_url_name back_semester_id %}" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary px-4">
-                    Apply Bulk Configuration
+        <div class="fee-actionbar">
+            <p class="fee-action-text" id="bulk-action-text">
+                Nothing has been saved yet.
+            </p>
+            <div class="fee-action-buttons">
+                <a class="fee-btn fee-btn--quiet" href="{{ back_url }}">Cancel</a>
+                <button type="submit" class="fee-btn fee-btn--solid" id="bulk-apply" disabled>
+                    Apply
                 </button>
             </div>
-        </form>
-    </div>
-</div>
+        </div>
+    </form>
 
+    <datalist id="fee-name-options">
+        {% for name in fee_names %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+
+    {{ preview_json|json_script:"bulk-preview-data" }}
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const placeholders = {
-        'id_fee_name': 'e.g. Tuition',
-        'id_amount': '0.00',
-        'id_description': 'Optional description',
-    };
-    
-    Object.entries(placeholders).forEach(([id, placeholder]) => {
-        const el = document.getElementById(id);
-        if (el && placeholder) {
-            el.placeholder = placeholder;
+(function () {
+    const form = document.getElementById('bulk-form');
+    if (!form) return;
+
+    let data = { programs: [], items: {}, students: {} };
+    try {
+        data = JSON.parse(document.getElementById('bulk-preview-data').textContent);
+    } catch (error) {
+        return;
+    }
+
+    const programBoxes = Array.from(form.querySelectorAll('input[data-program]'));
+    const yearChips = Array.from(form.querySelectorAll('[data-year-chip]'));
+    const yearInputs = yearChips.map(function (chip) {
+        return chip.querySelector('input');
+    });
+    const feeName = document.getElementById('id_fee_name');
+    const amount = document.getElementById('id_amount');
+    const preview = document.getElementById('bulk-preview');
+    const actionText = document.getElementById('bulk-action-text');
+    const applyButton = document.getElementById('bulk-apply');
+    const allYearsButton = document.getElementById('all-years');
+    const yearHint = document.getElementById('year-hint');
+
+    function selectedPrograms() {
+        return programBoxes.filter(function (box) { return box.checked; });
+    }
+
+    function maxSelectedDuration() {
+        return selectedPrograms().reduce(function (max, box) {
+            return Math.max(max, parseInt(box.dataset.duration, 10) || 0);
+        }, 0);
+    }
+
+    function syncYears() {
+        const maxDuration = maxSelectedDuration();
+        yearChips.forEach(function (chip) {
+            const level = parseInt(chip.dataset.year, 10);
+            const input = chip.querySelector('input');
+            const available = maxDuration > 0 && level <= maxDuration;
+            input.disabled = !available;
+            chip.classList.toggle('is-disabled', !available);
+            chip.style.opacity = available ? '' : '0.45';
+            chip.style.cursor = available ? '' : 'not-allowed';
+            if (!available) input.checked = false;
+        });
+        if (yearHint) {
+            yearHint.textContent = maxDuration
+                ? 'Only years offered by the selected trades are available.'
+                : 'Select a trade first to unlock its course years.';
+        }
+        updatePreview();
+    }
+
+    function selectedYears() {
+        return yearInputs
+            .filter(function (input) { return input.checked && !input.disabled; })
+            .map(function (input) { return parseInt(input.value, 10); });
+    }
+
+    function money(value) {
+        return '$' + (Number(value) || 0).toFixed(2);
+    }
+
+    function updatePreview() {
+        const programs = selectedPrograms().map(function (box) {
+            return parseInt(box.value, 10);
+        });
+        const years = selectedYears();
+        const name = (feeName.value || '').trim();
+        const feeAmount = parseFloat(amount.value || 0) || 0;
+        const cells = [];
+
+        programs.forEach(function (programId) {
+            const program = data.programs.find(function (item) {
+                return item.id === programId;
+            });
+            if (!program) return;
+            years.forEach(function (year) {
+                if (year <= program.duration) {
+                    cells.push(programId + '-' + year);
+                }
+            });
+        });
+
+        if (!cells.length || !name || amount.value === '') {
+            preview.textContent = 'Pick at least one trade, one course year, a fee name and an amount to preview what will change.';
+            actionText.textContent = 'Nothing has been saved yet.';
+            applyButton.disabled = true;
+            applyButton.textContent = 'Apply';
+            return;
+        }
+
+        let added = 0;
+        let changed = 0;
+        let unchanged = 0;
+        let students = 0;
+
+        cells.forEach(function (key) {
+            const existing = data.items[key] || {};
+            const matchKey = Object.keys(existing).find(function (existingName) {
+                return existingName.toLowerCase() === name.toLowerCase();
+            });
+            if (!matchKey) {
+                added += 1;
+                students += Number(data.students[key] || 0);
+            } else if (Number(existing[matchKey]) !== feeAmount) {
+                changed += 1;
+            } else {
+                unchanged += 1;
+            }
+        });
+
+        preview.textContent = '';
+        const lead = document.createElement('strong');
+        lead.textContent = name + ' ' + money(feeAmount);
+        preview.appendChild(lead);
+        let changeText = '';
+        if (added && changed) {
+            changeText = ' will be added to ' + added + ' trade-year' + (added === 1 ? '' : 's') +
+                ' and changed on ' + changed;
+        } else if (added) {
+            changeText = ' will be added to ' + added + ' trade-year' + (added === 1 ? '' : 's');
+        } else if (changed) {
+            changeText = ' will be changed on ' + changed + ' trade-year' + (changed === 1 ? '' : 's');
+        } else {
+            changeText = ' already matches ' + unchanged + ' trade-year' + (unchanged === 1 ? '' : 's');
+        }
+        preview.appendChild(document.createTextNode(
+            changeText + '.'
+        ));
+        if (students) {
+            preview.appendChild(document.createTextNode(
+                ' ' + students + ' student' + (students === 1 ? '' : 's') + ' will be charged for the new lines.'
+            ));
+        }
+
+        const total = added + changed + unchanged;
+        actionText.textContent = '';
+        const strong = document.createElement('strong');
+        strong.textContent = String(total);
+        actionText.appendChild(strong);
+        actionText.appendChild(document.createTextNode(
+            ' trade-year' + (total === 1 ? '' : 's') + ' will be updated. Nothing has been saved yet.'
+        ));
+        applyButton.disabled = total === 0;
+        applyButton.textContent = 'Apply to ' + total + ' trade-year' + (total === 1 ? '' : 's');
+    }
+
+    form.addEventListener('change', function (event) {
+        if (event.target.matches('input[data-program]')) {
+            syncYears();
+        } else if (event.target.matches('input[name="year_levels"]')) {
+            updatePreview();
         }
     });
-    
-    // Update select empty options
-    document.querySelectorAll('select').forEach(select => {
-        const firstOption = select.querySelector('option[value=""]');
-        if (firstOption && !firstOption.disabled) {
-            firstOption.disabled = true;
-            firstOption.selected = true;
+
+    form.addEventListener('input', function (event) {
+        if (event.target === feeName || event.target === amount) {
+            updatePreview();
         }
     });
-});
+
+    form.querySelectorAll('[data-select-all]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            programBoxes.forEach(function (box) { box.checked = true; });
+            syncYears();
+        });
+    });
+
+    form.querySelectorAll('[data-select-none]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const name = button.dataset.selectNone;
+            if (name === 'programs') {
+                programBoxes.forEach(function (box) { box.checked = false; });
+                syncYears();
+            } else {
+                yearInputs.forEach(function (input) {
+                    if (!input.disabled) input.checked = false;
+                });
+                updatePreview();
+            }
+        });
+    });
+
+    if (allYearsButton) {
+        allYearsButton.addEventListener('click', function () {
+            const maxDuration = maxSelectedDuration();
+            if (!maxDuration) return;
+            yearInputs.forEach(function (input) {
+                input.checked = !input.disabled;
+            });
+            updatePreview();
+        });
+    }
+
+    syncYears();
+    updatePreview();
+})();
 </script>
 {% endblock %}

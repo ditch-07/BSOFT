@@ -1,0 +1,123 @@
+--- /dev/null
++++ b/static/css/ui.css
+@@ -0,0 +1,77 @@
++.ui {
++    --ink: #1E2B33;
++    --ink-2: #4E5C66;
++    --grey: #7D878E;
++    --line: #D6DAD5;
++    --paper: #FFFFFF;
++    --wash: #F5F6F3;
++    --rail: #1F4F7A;
++    --rail-dark: #163B5C;
++    --rail-soft: #E5EDF4;
++    --red: #B8372B;
++    --red-soft: #FBEDEB;
++    --amber: #A86E06;
++    --amber-lamp: #D99A1E;
++    --green: #2F7D4F;
++    --blue: #2C6FB0;
++    --radius: 10px;
++    color: var(--ink);
++    font-family: "Archivo Navbar", system-ui, -apple-system, "Segoe UI", sans-serif;
++    font-size: 1rem;
++    line-height: 1.5;
++}
++.ui a { color: var(--rail); }
++.ui :focus-visible { outline: 3px solid var(--rail); outline-offset: 2px; border-radius: 6px; }
++.ui .ui-fig { font-variant-numeric: tabular-nums; font-stretch: 88%; font-weight: 600; white-space: nowrap; }
++.ui .ui-btn {
++    display: inline-flex;
++    align-items: center;
++    justify-content: center;
++    gap: .45rem;
++    min-height: 44px;
++    padding: .6rem 1rem;
++    border: 1px solid transparent;
++    border-radius: 7px;
++    font: inherit;
++    font-size: .875rem;
++    font-weight: 650;
++    line-height: 1.2;
++    text-decoration: none;
++    white-space: nowrap;
++    cursor: pointer;
++    transition: background-color .15s ease, border-color .15s ease, transform .12s ease;
++}
++.ui .ui-btn:active { transform: translateY(1px) scale(.99); }
++.ui .ui-btn--solid { background: var(--rail); color: #fff; box-shadow: 0 1px 0 #0000001a, 0 4px 12px -6px #1f4f7ab3; }
++.ui .ui-btn--solid:hover { background: var(--rail-dark); color: #fff; }
++.ui .ui-btn--quiet { background: var(--paper); color: var(--rail); border-color: #BFCEDC; }
++.ui .ui-btn--quiet:hover { background: var(--rail-soft); border-color: var(--rail); }
++.ui .ui-btn--ghost { background: transparent; color: var(--ink); border-color: var(--line); }
++.ui .ui-btn--ghost:hover { background: var(--paper); border-color: var(--grey); }
++.ui .ui-btn[aria-disabled="true"] { background: var(--wash); color: var(--ink-2); border-color: var(--line); cursor: not-allowed; box-shadow: none; }
++.ui .ui-lamp { --c: var(--grey); display: inline-block; flex-shrink: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px #1e2b3329; }
++.ui .ui-lamp--green { --c: var(--green); }
++.ui .ui-lamp--amber { --c: var(--amber-lamp); }
++.ui .ui-lamp--red { --c: var(--red); }
++.ui .ui-lamp--blue { --c: var(--blue); }
++.ui .ui-chip { display: inline-block; font-size: .6875rem; font-weight: 700; line-height: 1.5; padding: 0 .45rem; border-radius: 4px; background: var(--wash); color: var(--ink-2); }
++.ui .ui-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
++.ui .ui-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .25rem 1rem; margin-bottom: .75rem; }
++.ui .ui-section-head h2 { font-size: 1.3125rem; font-weight: 750; font-stretch: 106%; letter-spacing: -.005em; line-height: 1.25; margin: 0; }
++.ui .ui-section-head p { margin: 0; color: var(--ink-2); font-size: .875rem; }
++.ui .ui-todo { list-style: none; margin: 0; padding: 0; }
++.ui .ui-todo-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .4rem 1rem; padding: .85rem 1.25rem; border-top: 1px solid var(--line); }
++.ui .ui-todo-item > .ui-lamp { align-self: start; margin-top: .35rem; }
++.ui .ui-todo-text { display: flex; flex-direction: column; gap: .1rem; }
++.ui .ui-todo-text strong { font-weight: 700; }
++.ui .ui-todo-text > span { color: var(--ink-2); font-size: .875rem; }
++.ui .ui-table { width: 100%; border-collapse: collapse; }
++.ui .ui-table th { padding: .6rem 1.25rem; font-size: .75rem; font-weight: 600; color: var(--ink-2); text-align: left; border-bottom: 1px solid var(--line); }
++.ui .ui-table td { padding: .95rem 1.25rem; font-size: .8125rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
++.ui .ui-table tbody tr:hover { background: var(--wash); }
++.ui .ui-table tbody tr:last-child td { border-bottom: 0; }
++.ui .ui-table .ui-num { text-align: right; }
++.ui .ui-muted { color: var(--ink-2); }
++.ui .ui-banner { display: flex; gap: .75rem; align-items: center; padding: .85rem 1.15rem; border: 1px solid #E6B8B2; border-left: 4px solid var(--red); border-radius: var(--radius); background: var(--red-soft); font-size: .875rem; }
++.ui .ui-banner a { font-weight: 700; }
++@media (prefers-reduced-motion: reduce) { .ui *, .ui *::before, .ui *::after { transition: none !important; animation: none !important; } }
+--- /dev/null
++++ b/tools/make_dashboard_waves.py
+@@ -0,0 +1,21 @@
++from pathlib import Path
++import xml.etree.ElementTree as ET
++
++root = Path(__file__).resolve().parent.parent
++source = ET.parse(root / 'static/img/nav-waves.svg').getroot()
++ns = {'svg': 'http://www.w3.org/2000/svg'}
++navy = source.find(".//svg:linearGradient[@id='base']/svg:stop[@offset='1']", ns).get('stop-color')
++teal = source.find(".//svg:linearGradient[@id='contour']/svg:stop[@offset='0']", ns).get('stop-color')
++contours = source.findall("svg:g[@class='c']/svg:path", ns)
++lines = [
++    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 180" preserveAspectRatio="xMaxYMax slice">',
++    '<rect width="1440" height="180" fill="#F5F6F3"/>',
++    '<defs><linearGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".45" stop-color="white"/></linearGradient><mask id="right"><rect x="480" width="960" height="180" fill="url(#fade)"/></mask></defs>',
++    '<g mask="url(#right)"><g transform="translate(480 100) scale(.5 1.1)" fill="none" stroke-width="1" stroke-linecap="round">',
++]
++for index, contour in enumerate(contours):
++    color = navy if index % 3 == 0 else teal
++    opacity = '.22' if index % 3 == 0 else '.15'
++    lines.append(f'<path d="{contour.get("d")}" stroke="{color}" opacity="{opacity}" vector-effect="non-scaling-stroke"/>')
++lines.append('</g></g></svg>')
++(root / 'static/img/dashboard-waves.svg').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+--- /dev/null
++++ b/static/img/dashboard-waves.svg
+@@ -0,0 +1,16 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 180" preserveAspectRatio="xMaxYMax slice">
++<rect width="1440" height="180" fill="#F5F6F3"/>
++<defs><linearGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".45" stop-color="white"/></linearGradient><mask id="right"><rect x="480" width="960" height="180" fill="url(#fade)"/></mask></defs>
++<g mask="url(#right)"><g transform="translate(480 100) scale(.5 1.1)" fill="none" stroke-width="1" stroke-linecap="round">
++<path d="M0 42C170 35 260 7 420 20S690 58 850 37 1110 3 1290 17 1600 54 1920 21" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
++<path d="M0 47C170 40 260 12 420 25S690 63 850 42 1110 8 1290 22 1600 59 1920 26" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M0 52C170 45 260 17 420 30S690 68 850 47 1110 13 1290 27 1600 64 1920 31" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M0 55C140 30 310 39 460 49S720 19 890 24 1150 61 1330 44 1660 12 1920 39" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
++<path d="M0 60C140 35 310 44 460 54S720 24 890 29 1150 66 1330 49 1660 17 1920 44" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M80 64C190 46 325 51 460 59S720 29 890 34 1150 71 1330 54 1660 22 1920 49" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M0 51C190 65 330 13 520 27S790 66 970 48 1250 19 1430 31 1720 58 1920 45" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
++<path d="M0 56C190 70 330 18 520 32S790 71 970 53 1250 24 1430 36 1720 63 1920 50" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M35 64C220 70 345 25 520 37S790 76 970 58 1250 29 1430 41 1720 68 1920 55" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++<path d="M0 61C210 44 365 58 550 51S840 31 1020 39 1340 66 1510 49 1770 30 1920 39" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
++<path d="M30 66C230 49 375 63 550 56S840 36 1020 44 1340 71 1510 54 1770 35 1920 44" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
++</g></g></svg>

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Copy fees{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">Copy fees into {{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</h1>
+            <p class="fee-sub">
+                Pick a semester to copy from. Only trade and course years with no
+                fees are filled in; anything already set up here stays untouched.
+            </p>
+        </div>
+        <div class="fee-head-actions">
+            <a class="fee-btn fee-btn--ghost" href="{{ back_url }}">&larr; Back</a>
+        </div>
+    </div>
+
+    <div class="fee-card" style="margin-bottom: 1rem;">
+        <div class="fee-card-body">
+            <form method="get" class="fee-grid-fields" style="align-items: end;">
+                <label class="fee-field">
+                    <span class="fee-label">Copy from</span>
+                    <select name="source" class="fee-select" onchange="this.form.submit()">
+                        {% for option in sources %}
+                        <option value="{{ option.pk }}" {% if option.pk == source.pk %}selected{% endif %}>
+                            {{ option.academic_year.name }} &middot; Semester {{ option.number }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <div>
+                    <button type="submit" class="fee-btn fee-btn--quiet">Preview this semester</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="fee-progress">
+        <div class="fee-progress-main">
+            <span class="fee-progress-fig">{{ will_copy }}</span>
+            <span>set{{ will_copy|pluralize }} will be copied</span>
+        </div>
+        <div class="fee-progress-meta">
+            {% if already %}
+            <span><strong>{{ already }}</strong> already set up and left alone</span>
+            {% endif %}
+            {% if unavailable %}
+            <span><strong>{{ unavailable }}</strong> not offered here</span>
+            {% endif %}
+            <span><strong>{{ source.academic_year.name }} &middot; Semester {{ source.number }}</strong> is the source</span>
+        </div>
+    </div>
+
+    {% if preview %}
+    <div class="fee-card">
+        <div class="fee-card-body">
+            <div class="fee-lines" style="gap: 0.35rem;">
+                {% for item in preview %}
+                <div class="fee-sem-row" style="grid-template-columns: minmax(180px, 1.4fr) minmax(120px, 0.8fr) auto; padding: 0.6rem 0.85rem;">
+                    <div class="fee-sem-name">
+                        <span>{{ item.program_name }}</span>
+                        <span class="fee-grid-trade-meta">Course year {{ item.year_level }}</span>
+                    </div>
+                    <div class="fee-sem-fees">
+                        <span class="fee-quiet fee-num">{{ item.fee_count }} fee{{ item.fee_count|pluralize }} &middot; ${{ item.total|floatformat:2 }} per student</span>
+                    </div>
+                    <div>
+                        {% if item.state == "copy" %}
+                        <span class="fee-status"><span class="fee-dot fee-dot--green"></span>Will be copied</span>
+                        {% elif item.state == "exists" %}
+                        <span class="fee-status"><span class="fee-dot fee-dot--grey"></span>Already set up &mdash; left as it is</span>
+                        {% else %}
+                        <span class="fee-status"><span class="fee-dot fee-dot--amber"></span>Not offered here</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="fee-empty">
+        <strong>{{ source.academic_year.name }} &middot; Semester {{ source.number }} has no fees set up.</strong>
+        Pick another semester, or set fees up by hand.
+    </div>
+    {% endif %}
+
+    <div class="fee-actionbar">
+        <p class="fee-action-text">
+            {% if will_copy %}
+            <strong>{{ will_copy }}</strong> set{{ will_copy|pluralize }} of fees will be copied.
+            Enrolled students are charged automatically.
+            {% else %}
+            Nothing to copy from {{ source.academic_year.name }} &middot; Semester {{ source.number }}.
+            {% endif %}
+        </p>
+        <div class="fee-action-buttons">
+            <a class="fee-btn fee-btn--quiet" href="{{ back_url }}">Cancel</a>
+            <form method="post" class="fee-inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="source" value="{{ source.pk }}">
+                <button type="submit" class="fee-btn fee-btn--solid" {% if not will_copy %}disabled{% endif %}>
+                    Copy {{ will_copy }} set{{ will_copy|pluralize }} of fees
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

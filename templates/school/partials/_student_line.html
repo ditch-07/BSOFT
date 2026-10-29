@@ -1,0 +1,100 @@
+{% if line %}
+<div class="sd-line-head">
+    <h2 class="sd-h2" id="sd-line-title">Course line</h2>
+    <div class="sd-line-nav">
+        {% if previous_year %}
+            <a class="sd-nav-btn"
+               href="?year={{ previous_year.pk }}"
+               hx-get="{% url 'student_detail' student.pk %}?year={{ previous_year.pk }}"
+               hx-target="#sd-line" hx-swap="innerHTML" hx-replace-url="true"
+               aria-label="Show {{ previous_year.name }}">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        {% else %}
+            <span class="sd-nav-btn is-disabled" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        {% endif %}
+        {% if next_year %}
+            <a class="sd-nav-btn"
+               href="?year={{ next_year.pk }}"
+               hx-get="{% url 'student_detail' student.pk %}?year={{ next_year.pk }}"
+               hx-target="#sd-line" hx-swap="innerHTML" hx-replace-url="true"
+               aria-label="Show {{ next_year.name }}">
+                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        {% else %}
+            <span class="sd-nav-btn is-disabled" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        {% endif %}
+    </div>
+</div>
+
+<nav class="sd-track" aria-labelledby="sd-line-title">
+    <ol class="sd-track-list">
+        {% for seg in line %}
+        <li class="sd-seg sd-seg--{{ seg.state }}{% if seg.is_selected %} is-selected{% endif %}{% if seg.is_future %} is-future{% endif %}" style="--i: {{ forloop.counter0 }}">
+            <a class="sd-seg-link"
+               href="?year={{ seg.year.pk }}"
+               hx-get="{% url 'student_detail' student.pk %}?year={{ seg.year.pk }}"
+               hx-target="#sd-line" hx-swap="innerHTML" hx-replace-url="true"
+               {% if seg.is_selected %}aria-current="true"{% endif %}>
+                <span class="sd-seg-year">
+                    {{ seg.year.name }}
+                    {% if seg.is_final %}<span class="sd-seg-tag">Final year</span>{% endif %}
+                </span>
+                <span class="sd-seg-state">
+                    {% if seg.state == "owing" %}${{ seg.owed|floatformat:2 }} owed
+                    {% elif seg.state == "unset" %}Fees not set
+                    {% elif seg.state == "credit" %}In credit
+                    {% elif seg.state == "paid" %}Paid up
+                    {% elif seg.state == "nocharge" %}No charges
+                    {% elif not seg.rows %}No semesters scheduled
+                    {% else %}Not enrolled{% endif %}
+                </span>
+
+                <span class="sd-rail" aria-hidden="true">
+                    {% for row in seg.rows %}
+                        <span class="sd-station">
+                            {% if row.marker %}<span class="sd-marker">{{ row.marker }}</span>{% endif %}
+                            <span class="sd-lamp sd-lamp--{{ row.state }}"></span>
+                        </span>
+                    {% endfor %}
+                </span>
+
+                {% if seg.rows %}
+                <span class="sd-stops">
+                    {% for row in seg.rows %}
+                        <span class="sd-stop">
+                            <span class="sd-stop-name">Semester {{ row.semester.number }}</span>
+                            <span class="sd-stop-date">{% with start=row.semester.start_date|date:"M" end=row.semester.end_date|date:"M" %}{{ start }}{% if end != start %}–{{ end }}{% endif %}{% endwith %}</span>
+                        </span>
+                    {% endfor %}
+                </span>
+                {% endif %}
+            </a>
+        </li>
+        {% endfor %}
+
+        {% if track_continues %}
+        <li class="sd-seg sd-seg--ghost" style="--i: {{ line|length }}">
+            <span class="sd-seg-link">
+                <span class="sd-seg-year">{{ completion_year }}</span>
+                <span class="sd-seg-state">Course ends</span>
+                <span class="sd-rail" aria-hidden="true"><span class="sd-buffer"></span></span>
+            </span>
+        </li>
+        {% endif %}
+    </ol>
+</nav>
+
+<ul class="sd-legend" aria-label="Signal colours">
+    <li><span class="sd-lamp sd-lamp--owing"></span>Owes money</li>
+    <li><span class="sd-lamp sd-lamp--unset"></span>Fees not set</li>
+    <li><span class="sd-lamp sd-lamp--paid"></span>Paid</li>
+    <li><span class="sd-lamp sd-lamp--credit"></span>In credit</li>
+    <li><span class="sd-lamp sd-lamp--off"></span>Not enrolled</li>
+</ul>
+{% else %}
+<div class="sd-empty">
+    <p>No academic years are set up yet, so there is nothing to track.</p>
+    <a class="sd-btn sd-btn--quiet" href="{% url 'academic_year_list' %}">Set up academic years</a>
+</div>
+{% endif %}

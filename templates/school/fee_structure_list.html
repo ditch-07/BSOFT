@@ -1,195 +1,229 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Fee Structures{% endblock %}
+{% block title %}Fees{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/fees.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-1">Fee Structures</h2>
-        <p class="text-muted mb-0">{{ semester }}</p>
+<div class="fee">
+    <div class="fee-head">
+        <div>
+            <h1 class="fee-title">Fees: {{ semester.academic_year.name }} &middot; Semester {{ semester.number }}</h1>
+            <p class="fee-sub">
+                Review what each trade and course year is charged, and set up the ones still missing.
+            </p>
+        </div>
+        <div class="fee-head-actions">
+            <a class="fee-btn fee-btn--ghost" href="{% url 'semester_list' %}">&larr; Back</a>
+        </div>
     </div>
-    <a href="{% url 'semester_list' %}" class="btn btn-secondary">Back to Semesters</a>
-</div>
 
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3 align-items-end" id="fee-structure-filter-form">
-            <div class="col-md-4">
-                <label for="id_program" class="form-label">Program</label>
-                <select name="program" id="id_program" class="form-select">
-                    <option value="">All Programs</option>
-                    {% for p in all_programs %}
-                    <option value="{{ p.pk }}" {% if program_filter == p.pk|stringformat:"s" %}selected{% endif %}>
-                        {{ p.code }} - {{ p.name }} ({{ p.duration_years }} years)
-                    </option>
-                    {% endfor %}
-                </select>
+    {% if is_locked %}
+    <div class="fee-banner fee-banner--locked">
+        <div>
+            <strong>This semester is completed. Fees are locked.</strong>
+            You can still review the amounts below.
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not total_cells %}
+    <div class="fee-empty">
+        <strong>No active trades yet.</strong>
+        College years appear here once a trade is active and has a duration.
+        {% if perms.school.add_program %}
+        <a class="fee-btn fee-btn--quiet" href="{% url 'program_create' %}">Add a trade</a>
+        {% endif %}
+    </div>
+    {% else %}
+
+    <div class="fee-progress">
+        <div class="fee-progress-main">
+            <span class="fee-progress-fig">{{ set_up_count }} of {{ total_cells }}</span>
+            <span>set up</span>
+        </div>
+        <span class="fee-bar" aria-hidden="true">
+            <span class="fee-bar-fill{% if set_up_count and set_up_count < total_cells %} fee-bar-fill--partial{% endif %}"
+                  style="width: {{ set_up_pct }}%;"></span>
+        </span>
+        <div class="fee-progress-meta">
+            {% if needs_count %}
+            <span><strong>{{ needs_count }}</strong> need fees</span>
+            {% else %}
+            <span>Every trade and course year is set up</span>
+            {% endif %}
+            {% if waiting_count %}
+            <span><strong>{{ waiting_count }}</strong> student{{ waiting_count|pluralize }} waiting</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not is_locked and perms.school.add_feestructure %}
+    <div class="fee-head-actions" style="margin-bottom: 1rem; justify-content: flex-end;">
+        <a class="fee-btn {% if not set_up_count %}fee-btn--solid{% else %}fee-btn--quiet{% endif %}"
+           href="{% url 'fee_structure_copy' semester.pk %}">
+            Copy from previous
+        </a>
+        <a class="fee-btn fee-btn--quiet" href="{% url 'bulk_fee_configuration' semester.pk %}">
+            Set one fee for many
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="fee-pills" role="group" aria-label="Filter fee setup">
+        <button type="button" class="fee-pill" data-fee-filter="all">
+            Everything <span class="fee-pill-count">{{ total_cells }}</span>
+        </button>
+        <button type="button" class="fee-pill" data-fee-filter="needs">
+            Needs fees <span class="fee-pill-count">{{ needs_count }}</span>
+        </button>
+        <button type="button" class="fee-pill" data-fee-filter="set-up">
+            Set up <span class="fee-pill-count">{{ set_up_count }}</span>
+        </button>
+    </div>
+
+    <div class="fee-grid-scroll">
+        <div class="fee-grid" id="fee-grid" data-filter="{{ filter_value }}"
+             style="--fee-cols: {{ max_year }};">
+            <div class="fee-grid-head" style="grid-row: 1; grid-column: 1;">Trade</div>
+            {% for year in year_range %}
+            <div class="fee-grid-head" style="grid-row: 1; grid-column: {{ forloop.counter0|add:2 }};">
+                Course year {{ year }}
             </div>
-            <div class="col-md-3">
-                <label for="id_year_level" class="form-label">Year Level</label>
-                <select name="year_level" id="id_year_level" class="form-select">
-                    <option value="">All Years</option>
-                    {% for y in year_level_choices %}
-                    <option value="{{ y }}" {% if year_level_filter == y|stringformat:"s" %}selected{% endif %}>
-                        Year {{ y }}
-                    </option>
-                    {% endfor %}
-                </select>
+            {% endfor %}
+
+            {% for row in rows %}
+            <div class="fee-grid-trade"
+                 style="grid-row: {{ forloop.counter0|add:2 }}; grid-column: 1;"
+                 data-has-needs="{% if row.has_needs %}1{% else %}0{% endif %}"
+                 data-has-set-up="{% if row.has_set_up %}1{% else %}0{% endif %}">
+                <span class="fee-grid-trade-name">{{ row.program.name }}</span>
+                <span class="fee-grid-trade-meta">
+                    {{ row.program.duration_years }} course year{{ row.program.duration_years|pluralize }}
+                </span>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">Apply</button>
-            </div>
-            <div class="col-md-2">
-                <a href="{% url 'fee_structure_list' semester.pk %}" class="btn btn-outline-secondary w-100">Clear</a>
-            </div>
-        </form>
-        
-        {% if program_filter or year_level_filter %}
-        <div class="mt-3">
-            <small class="text-muted">
-                Showing results
-                {% if selected_program %}
-                    for {{ selected_program.name }}
+
+            {% for cell in row.cells %}
+                {% if not cell.applicable %}
+                <div class="fee-cell--na"
+                     style="grid-row: {{ forloop.parentloop.counter0|add:2 }}; grid-column: {{ forloop.counter0|add:2 }};"
+                     title="This trade does not run this course year">
+                    Not offered
+                </div>
+                {% elif cell.set_up %}
+                    {% if perms.school.change_feestructure %}
+                    <a class="fee-cell fee-cell--set{% if highlight_program == cell.program.pk and highlight_year == cell.year_level %} fee-cell--focus{% endif %}"
+                       id="fee-cell-{{ cell.program.pk }}-{{ cell.year_level }}"
+                       style="grid-row: {{ forloop.parentloop.counter0|add:2 }}; grid-column: {{ forloop.counter0|add:2 }};"
+                       href="{% url 'fee_structure_edit' cell.fee_structure.pk %}">
+                        <span class="fee-cell-total">${{ cell.total|floatformat:2 }}</span>
+                        <span class="fee-cell-meta">{{ cell.fee_count }} fee{{ cell.fee_count|pluralize }}</span>
+                        <span class="fee-status">
+                            <span class="fee-dot fee-dot--green"></span>
+                            {% if is_locked %}View fees{% else %}Set up{% endif %}
+                        </span>
+                    </a>
+                    {% else %}
+                    <div class="fee-cell fee-cell--set{% if highlight_program == cell.program.pk and highlight_year == cell.year_level %} fee-cell--focus{% endif %}"
+                         id="fee-cell-{{ cell.program.pk }}-{{ cell.year_level }}"
+                         style="grid-row: {{ forloop.parentloop.counter0|add:2 }}; grid-column: {{ forloop.counter0|add:2 }};">
+                        <span class="fee-cell-total">${{ cell.total|floatformat:2 }}</span>
+                        <span class="fee-cell-meta">{{ cell.fee_count }} fee{{ cell.fee_count|pluralize }}</span>
+                        <span class="fee-status"><span class="fee-dot fee-dot--green"></span>Set up</span>
+                    </div>
+                    {% endif %}
                 {% else %}
-                    for all programs
+                    {% if not is_locked and perms.school.add_feestructure %}
+                    <a class="fee-cell fee-cell--needs{% if highlight_program == cell.program.pk and highlight_year == cell.year_level %} fee-cell--focus{% endif %}"
+                       id="fee-cell-{{ cell.program.pk }}-{{ cell.year_level }}"
+                       style="grid-row: {{ forloop.parentloop.counter0|add:2 }}; grid-column: {{ forloop.counter0|add:2 }};"
+                       href="{% url 'fee_structure_create' semester.pk %}?program={{ cell.program.pk }}&amp;year_level={{ cell.year_level }}">
+                        <span class="fee-cell-action">+ Set up fees</span>
+                        <span class="fee-cell-meta">
+                            {% if cell.students %}
+                                {{ cell.students }} student{{ cell.students|pluralize }} waiting
+                            {% else %}
+                                No students yet
+                            {% endif %}
+                        </span>
+                    </a>
+                    {% else %}
+                    <div class="fee-cell fee-cell--needs{% if highlight_program == cell.program.pk and highlight_year == cell.year_level %} fee-cell--focus{% endif %}"
+                         id="fee-cell-{{ cell.program.pk }}-{{ cell.year_level }}"
+                         style="grid-row: {{ forloop.parentloop.counter0|add:2 }}; grid-column: {{ forloop.counter0|add:2 }};">
+                        <span class="fee-cell-action">Needs fees</span>
+                        <span class="fee-cell-meta">
+                            {% if cell.students %}
+                                {{ cell.students }} student{{ cell.students|pluralize }} waiting
+                            {% else %}
+                                No students yet
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% endif %}
                 {% endif %}
-                {% if year_level_filter %}
-                    (Year {{ year_level_filter }})
-                {% endif %}
-                <a href="{% url 'fee_structure_list' semester.pk %}" class="text-decoration-none ms-2">(clear)</a>
-            </small>
+            {% endfor %}
+            {% endfor %}
         </div>
-        {% endif %}
     </div>
-</div>
 
-<div class="card border-0 shadow-sm">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Program</th>
-                        <th>Year Level</th>
-                        <th>Total Fees</th>
-                        <th>Status</th>
-                        <th class="text-end">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in page_obj %}
-                    <tr>
-                        <td>{{ row.program.name }}</td>
-                        <td>Year {{ row.year_level }}</td>
-                        <td>
-                            {% if row.total is not None %}
-                                ${{ row.total|floatformat:2 }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if row.fee_structure %}
-                                <span class="badge text-bg-success">Configured</span>
-                            {% else %}
-                                <span class="badge text-bg-warning">Not configured</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            {% if row.fee_structure %}
-                                <a href="{% url 'fee_structure_edit' row.fee_structure.pk %}?program={{ program_filter }}&year_level={{ year_level_filter }}"
-                                   class="btn btn-sm btn-outline-primary">Edit</a>
-                            {% else %}
-                                <a href="{% url 'fee_structure_create' semester.pk %}?program={{ row.program.pk }}&year_level={{ row.year_level }}&filter_program={{ program_filter }}&filter_year_level={{ year_level_filter }}"
-                                   class="btn btn-sm btn-primary">Configure</a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center text-muted">
-                            No fee structures found.
-                            {% if program_filter or year_level_filter %}
-                                <a href="{% url 'fee_structure_list' semester.pk %}" class="text-decoration-none">Clear filters</a> to see all.
-                            {% else %}
-                                <a href="{% url 'program_create' %}" class="text-decoration-none">Add a program</a> to get started.
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        {% if page_obj.paginator.num_pages > 1 %}
-        <nav class="mt-3">
-            <ul class="pagination justify-content-center mb-0">
-                {% if page_obj.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if program_filter %}&program={{ program_filter }}{% endif %}{% if year_level_filter %}&year_level={{ year_level_filter }}{% endif %}">Previous</a>
-                    </li>
-                {% endif %}
-                <li class="page-item disabled">
-                    <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                </li>
-                {% if page_obj.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if program_filter %}&program={{ program_filter }}{% endif %}{% if year_level_filter %}&year_level={{ year_level_filter }}{% endif %}">Next</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
+    {% if needs_count and not is_locked and perms.school.add_feestructure %}
+    <p class="fee-quiet" style="margin-top: 0.85rem;">
+        Fees are set up for {{ set_up_count }} of {{ total_cells }} trade and course year combinations.
+        {% if next_cell %}
+        Start with {{ next_cell.program.name }} course year {{ next_cell.year_level }}.
         {% endif %}
-    </div>
+    </p>
+    {% endif %}
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const programSelect = document.getElementById('id_program');
-    const yearLevelSelect = document.getElementById('id_year_level');
-    const maxYearLevel = {{ max_year_level }};
-    
-    // Build year level options for each program
-    const programYearLevels = {};
-    {% for p in all_programs %}
-    programYearLevels['{{ p.pk }}'] = {{ p.duration_years }};
-    {% endfor %}
-    
-    function updateYearLevelOptions() {
-        const selectedProgram = programSelect.value;
-        let maxYear = maxYearLevel;
-        
-        if (selectedProgram && programYearLevels[selectedProgram]) {
-            maxYear = programYearLevels[selectedProgram];
+(function () {
+    const grid = document.getElementById('fee-grid');
+    if (!grid) return;
+
+    const pills = Array.from(document.querySelectorAll('[data-fee-filter]'));
+    const valid = ['all', 'needs', 'set-up'];
+
+    function applyFilter(filter) {
+        if (!valid.includes(filter)) filter = 'all';
+        grid.dataset.filter = filter;
+        pills.forEach(function (pill) {
+            const active = pill.dataset.feeFilter === filter;
+            pill.classList.toggle('is-active', active);
+            pill.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        const url = new URL(window.location.href);
+        if (filter === 'all') {
+            url.searchParams.delete('filter');
+        } else {
+            url.searchParams.set('filter', filter);
         }
-        
-        // Store current selection
-        const currentValue = yearLevelSelect.value;
-        
-        // Rebuild options
-        yearLevelSelect.innerHTML = '<option value="">All Years</option>';
-        for (let i = 1; i <= maxYear; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = 'Year ' + i;
-            if (i == currentValue) {
-                option.selected = true;
-            }
-            yearLevelSelect.appendChild(option);
-        }
-        
-        // If current value exceeds max, reset to empty
-        if (currentValue && parseInt(currentValue) > maxYear) {
-            yearLevelSelect.value = '';
-        }
+        window.history.replaceState({}, '', url);
     }
-    
-    programSelect.addEventListener('change', updateYearLevelOptions);
-    
-    // Initialize on page load
-    updateYearLevelOptions();
-});
+
+    pills.forEach(function (pill) {
+        pill.addEventListener('click', function (event) {
+            event.preventDefault();
+            applyFilter(pill.dataset.feeFilter);
+        });
+    });
+
+    applyFilter(grid.dataset.filter || 'all');
+
+    const focusCell = grid.querySelector('.fee-cell--focus');
+    if (focusCell) {
+        window.requestAnimationFrame(function () {
+            focusCell.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+        });
+    }
+})();
 </script>
 {% endblock %}
