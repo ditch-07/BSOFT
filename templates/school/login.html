@@ -1,182 +1,423 @@
-{% extends "base_login.html" %}
-{% load static %}
+{% load static %}{% comment %}
+  NRZ Student Management: sign-in page (standalone, does not extend a base template).
 
-{% block title %}Login - Bsoft Student Management{% endblock %}
+  Depends on (already in the project):
+    static/css/ui.css      shared tokens and ui- components
+    static/css/navbar.css  declares the local Archivo font and .skip-link
+  No images, no CDN, no Bootstrap. Works offline.
 
-{% block content %}
+  Role selector: the chosen role is posted as "role" (admin, bursar, registrar, viewer).
+  The backend does not use it yet; permissions still come from the account. To rename or
+  add roles, edit the four <label class="lg-role"> blocks and the "names" map in the script.
+{% endcomment %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0B2238">
+    <title>Sign in - NRZ Student Management</title>
 
-<style>
-    .login-section {
-        min-height: 100vh;
+    <link rel="stylesheet" href="{% static 'css/ui.css' %}">
+    <link rel="stylesheet" href="{% static 'css/navbar.css' %}">
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body.lg-body { margin: 0; min-height: 100vh; background: var(--wash); }
+        :where(.lg) :is(h1, h2, p, fieldset) { margin: 0; }
+        :where(.lg) :is(button, input) { font: inherit; }
+
+        .lg { display: grid; grid-template-columns: minmax(420px, 46%) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+
+        /* ---------- Brand panel ---------- */
+        .lg-brand {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 640px;
+            padding: 2.25rem clamp(1.75rem, 4vw, 3.25rem) 2rem;
+            color: #fff;
+            background:
+                radial-gradient(520px 320px at 78% 24%, rgba(85, 183, 187, .22), transparent 70%),
+                linear-gradient(180deg, #0B2238 0%, #0E2B45 55%, #0B2238 100%);
+        }
+        .lg-art { position: absolute; left: 0; bottom: 0; z-index: -1; width: 100%; height: min(48%, 440px); pointer-events: none;
+            -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 32%); mask-image: linear-gradient(180deg, transparent 0, #000 32%); }
+        .ui .lg-lockup { display: inline-flex; align-items: center; gap: .65rem; color: #fff; text-decoration: none; }
+        .lg-lockup svg { width: 38px; height: 38px; flex: 0 0 auto; }
+        .lg-lockup-name { color: #fff; font-size: 1.35rem; font-weight: 800; letter-spacing: -.015em; line-height: 1; }
+        .lg-lockup-product { color: #D6E5EA; font-size: .875rem; font-weight: 450; letter-spacing: .015em; line-height: 1; }
+        .lg-copy { margin-top: clamp(2.5rem, 11vh, 6.5rem); max-width: 30rem; }
+        .lg-headline { font-size: clamp(1.75rem, 1.2rem + 1.5vw, 2.5rem); font-weight: 800; font-stretch: 106%; letter-spacing: -.02em; line-height: 1.12; }
+        .lg-points { display: grid; gap: .9rem; margin: 1.75rem 0 0; padding: 0; list-style: none; }
+        .lg-points li { display: grid; grid-template-columns: auto 1fr; gap: .15rem .7rem; align-items: start; }
+        .lg-points .lg-dot { width: 8px; height: 8px; margin-top: .45rem; border-radius: 50%; background: #8AD4CE; box-shadow: 0 0 0 3px rgba(138, 212, 206, .22); }
+        .lg-points strong { display: block; font-size: .9375rem; font-weight: 700; }
+        .lg-points span:not(.lg-dot) { display: block; color: #D6E5EA; font-size: .8125rem; line-height: 1.4; }
+        .lg-brand-foot { margin-top: auto; padding-top: 2rem; color: #C9DCE2; font-size: .75rem; letter-spacing: .02em; }
+
+        /* ---------- Form column ---------- */
+        .lg-main { display: grid; place-items: center; padding: 2rem 1.5rem; }
+        .lg-wrap { width: 100%; max-width: 460px; }
+        .lg-card { padding: 2rem 2rem 1.5rem; }
+        .lg-title { font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); font-weight: 800; font-stretch: 106%; letter-spacing: -.02em; line-height: 1.15; }
+        .lg-sub { margin-top: .4rem; color: var(--ink-2); font-size: .8125rem; }
+        .lg-alert { margin-top: 1.25rem; align-items: flex-start; }
+        .lg-alert strong { display: block; margin-bottom: .1rem; }
+        .lg-form { margin-top: 1.5rem; }
+
+        .lg-roles { min-width: 0; margin-bottom: 1.25rem; padding: 0; border: 0; }
+        .lg-roles legend { float: none; width: auto; margin: 0 0 .45rem; padding: 0; color: var(--ink-2); font-size: .75rem; font-weight: 650; }
+        .lg-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+        .lg-role { position: relative; display: block; min-width: 0; }
+        .lg-role input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+        .lg-role-card {
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .15rem .6rem; align-items: start;
+            height: 100%; min-height: 44px; padding: .7rem .75rem;
+            border: 1px solid #AEB7BC; border-radius: 8px; background: var(--paper);
+            transition: border-color .15s ease, background-color .15s ease;
+        }
+        .lg-role:hover .lg-role-card { border-color: var(--rail); }
+        .lg-role input:checked + .lg-role-card { border-color: var(--rail); background: var(--rail-soft); box-shadow: inset 0 0 0 1px var(--rail); }
+        .lg-role input:focus-visible + .lg-role-card { outline: 3px solid var(--rail); outline-offset: 2px; }
+        .lg-role-icon { width: 20px; height: 20px; margin-top: .1rem; color: var(--rail); }
+        .lg-role-text { min-width: 0; }
+        .lg-role-text strong { display: block; font-size: .8125rem; font-weight: 750; line-height: 1.3; }
+        .lg-role-text span { display: block; margin-top: .1rem; color: var(--ink-2); font-size: .6875rem; line-height: 1.35; }
+        .lg-role-check { position: relative; width: 16px; height: 16px; margin-top: .15rem; border: 1.5px solid var(--grey); border-radius: 50%; background: var(--paper); }
+        .lg-role input:checked + .lg-role-card .lg-role-check { border-color: var(--rail); background: var(--rail); }
+        .lg-role input:checked + .lg-role-card .lg-role-check::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+        .lg-field { margin-bottom: 1rem; }
+        .lg-field label { display: block; margin-bottom: .3rem; color: var(--ink-2); font-size: .75rem; font-weight: 650; }
+        .lg-input {
+            display: block; width: 100%; min-height: 46px; padding: .6rem .8rem;
+            border: 1px solid var(--grey); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: .9375rem;
+            transition: border-color .15s ease;
+        }
+        .lg-input:hover { border-color: var(--ink-2); }
+        .lg-input:focus-visible { border-color: var(--rail); outline: 3px solid var(--rail); outline-offset: 2px; }
+        .lg-input[aria-invalid="true"] { border-color: var(--red); }
+        .lg-pw { position: relative; }
+        .lg-pw .lg-input { padding-right: 4.75rem; }
+        .lg-toggle { position: absolute; top: 50%; right: .35rem; min-height: 36px; padding: 0 .65rem; border: 0; border-radius: 6px; background: transparent; color: var(--rail); font-size: .8125rem; font-weight: 650; cursor: pointer; transform: translateY(-50%); }
+        .lg-toggle:hover { background: var(--rail-soft); }
+        .lg-field-error { margin-top: .35rem; color: var(--red); font-size: .75rem; font-weight: 600; }
+        .lg-caps { display: flex; align-items: center; gap: .5rem; margin: -.4rem 0 1rem; color: var(--ink-2); font-size: .75rem; }
+        .lg-caps[hidden], .lg-field-error[hidden] { display: none; }
+        .ui .lg-submit { width: 100%; min-height: 48px; margin-top: .25rem; font-size: 1rem; }
+        .lg-submit:disabled { opacity: .75; cursor: progress; }
+        .lg-help { margin-top: 1.25rem; color: var(--ink-2); font-size: .8125rem; text-align: center; }
+        .lg-foot { margin-top: 1.25rem; color: var(--ink-2); font-size: .75rem; text-align: center; }
+
+        /* Short laptop screens: give the copy more room above the artwork. */
+        @media (min-width: 992px) and (max-height: 800px) {
+            .lg-art { height: 38%; }
+            .lg-copy { margin-top: clamp(1.5rem, 6vh, 3rem); }
+            .lg-points { margin-top: 1.5rem; gap: .75rem; }
+        }
+
+        /* ---------- Narrower screens ---------- */
+        @media (max-width: 991px) {
+            .lg { grid-template-columns: minmax(0, 1fr); }
+            .lg-brand { min-height: 0; padding: 1.25rem 1.5rem 4.5rem; }
+            .lg-art { height: 100%; -webkit-mask-image: none; mask-image: none; }
+            .lg-copy, .lg-brand-foot { display: none; }
+            .lg-main { align-items: start; padding: 0 1rem 2rem; }
+            .lg-wrap { position: relative; z-index: 1; margin-top: -2.75rem; }
+        }
+        @media (max-width: 479px) {
+            .lg-card { padding: 1.5rem 1.25rem 1.25rem; }
+            .lg-role-grid { grid-template-columns: minmax(0, 1fr); }
+            .lg-lockup-product { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) { .lg *, .lg *::before, .lg *::after { transition: none; } }
+    </style>
+</head>
+<body class="ui lg-body">
+<a class="skip-link" href="#login-main">Skip to sign in</a>
+
+<div class="lg">
+
+    <!-- ===== Brand panel ===== -->
+    <aside class="lg-brand">
+        <svg class="lg-art" viewBox="0 0 800 520" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+<defs>
+<path id="lg-r0" d="M-40 157.5C-33 163.2 -13 183.7 0 191.5C13 199.3 27 205.4 40 204.2C53 203.1 67 190.3 80 184.4C93 178.5 107 170.2 120 168.8C133 167.4 147 174.3 160 175.9C173 177.5 187 180.0 200 178.4C213 176.9 227 169.7 240 166.8C253 164.0 267 163.4 280 161.3C293 159.3 307 161.0 320 154.4C333 147.8 347 133.4 360 121.6C373 109.8 387 90.5 400 83.6C413 76.8 427 77.3 440 80.6C453 84.0 467 96.5 480 103.8C493 111.0 507 116.7 520 124.1C533 131.6 547 138.5 560 148.2C573 158.0 587 174.5 600 182.6C613 190.8 627 197.6 640 197.2C653 196.8 667 185.0 680 180.2C693 175.4 707 168.5 720 168.3C733 168.1 747 176.3 760 179.1C773 181.8 787 185.4 800 184.8C813 184.2 833 176.9 840 175.3" vector-effect="non-scaling-stroke"/>
+<path id="lg-r1" d="M-40 255.7C-33 261.0 -13 284.0 0 287.3C13 290.6 27 284.2 40 275.3C53 266.3 67 245.6 80 233.7C93 221.7 107 214.7 120 203.6C133 192.5 147 177.1 160 167.0C173 156.8 187 141.9 200 142.8C213 143.8 227 161.5 240 172.6C253 183.6 267 202.4 280 209.2C293 216.1 307 211.2 320 213.7C333 216.1 347 219.9 360 224.2C373 228.5 387 237.3 400 239.4C413 241.4 427 233.8 440 236.4C453 239.1 467 245.8 480 255.1C493 264.3 507 287.2 520 292.1C533 297.1 547 292.4 560 284.6C573 276.8 587 257.0 600 245.4C613 233.9 627 226.9 640 215.3C653 203.8 667 187.5 680 176.2C693 164.9 707 148.3 720 147.6C733 146.8 747 162.5 760 171.8C773 181.1 787 197.9 800 203.1C813 208.4 833 203.5 840 203.5" vector-effect="non-scaling-stroke"/>
+<path id="lg-r2" d="M-40 289.2C-33 288.8 -13 293.2 0 286.4C13 279.6 27 260.7 40 248.4C53 236.1 67 212.7 80 212.5C93 212.3 107 234.5 120 247.1C133 259.7 147 276.3 160 287.9C173 299.5 187 305.7 200 316.9C213 328.1 227 350.9 240 354.9C253 358.8 267 348.9 280 340.7C293 332.5 307 309.5 320 305.8C333 302.0 347 316.1 360 318.3C373 320.6 387 322.3 400 319.4C413 316.5 427 305.0 440 300.9C453 296.9 467 303.5 480 295.4C493 287.3 507 266.5 520 252.4C533 238.2 547 212.6 560 210.5C573 208.3 587 228.6 600 239.6C613 250.7 627 265.9 640 276.8C653 287.7 667 293.6 680 304.9C693 316.3 707 339.9 720 345.0C733 350.0 747 341.8 760 335.3C773 328.9 787 308.0 800 306.3C813 304.5 833 321.5 840 324.6" vector-effect="non-scaling-stroke"/>
+<path id="lg-r3" d="M-40 408.0C-33 409.4 -13 421.0 0 415.9C13 410.9 27 383.2 40 377.7C53 372.2 67 381.1 80 382.9C93 384.7 107 391.5 120 388.4C133 385.2 147 369.9 160 364.1C173 358.3 187 362.7 200 353.7C213 344.7 227 320.4 240 310.1C253 299.8 267 287.1 280 291.9C293 296.8 307 326.6 320 339.1C333 351.5 347 357.0 360 366.8C373 376.6 387 390.4 400 397.6C413 404.8 427 413.3 440 410.1C453 406.9 467 381.6 480 378.2C493 374.7 507 386.0 520 389.5C533 393.0 547 401.5 560 399.2C573 397.0 587 382.0 600 376.0C613 370.0 627 373.5 640 363.2C653 353.0 667 326.7 680 314.4C693 302.2 707 287.1 720 289.8C733 292.6 747 320.2 760 331.1C773 342.1 787 346.2 800 355.4C813 364.5 833 380.9 840 386.0" vector-effect="non-scaling-stroke"/>
+<path id="lg-r4" d="M-40 379.3C-33 386.8 -13 416.9 0 424.1C13 431.3 27 421.0 40 422.7C53 424.4 67 431.5 80 434.3C93 437.1 107 436.4 120 439.7C133 442.9 147 444.8 160 453.8C173 462.8 187 492.0 200 493.5C213 495.0 227 473.3 240 462.9C253 452.6 267 442.8 280 431.4C293 420.0 307 402.8 320 394.6C333 386.4 347 378.0 360 382.3C373 386.5 387 415.1 400 420.3C413 425.6 427 413.1 440 413.6C453 414.0 467 420.2 480 423.0C493 425.7 507 425.7 520 430.1C533 434.5 547 438.4 560 449.3C573 460.2 587 492.0 600 495.6C613 499.2 627 479.8 640 470.9C653 462.1 667 453.5 680 442.5C693 431.5 707 414.0 720 404.9C733 395.9 747 385.8 760 388.3C773 390.8 787 416.8 800 419.9C813 423.0 833 409.0 840 406.8" vector-effect="non-scaling-stroke"/>
+</defs>
+<path d="M-40 157.5C-33 163.2 -13 183.7 0 191.5C13 199.3 27 205.4 40 204.2C53 203.1 67 190.3 80 184.4C93 178.5 107 170.2 120 168.8C133 167.4 147 174.3 160 175.9C173 177.5 187 180.0 200 178.4C213 176.9 227 169.7 240 166.8C253 164.0 267 163.4 280 161.3C293 159.3 307 161.0 320 154.4C333 147.8 347 133.4 360 121.6C373 109.8 387 90.5 400 83.6C413 76.8 427 77.3 440 80.6C453 84.0 467 96.5 480 103.8C493 111.0 507 116.7 520 124.1C533 131.6 547 138.5 560 148.2C573 158.0 587 174.5 600 182.6C613 190.8 627 197.6 640 197.2C653 196.8 667 185.0 680 180.2C693 175.4 707 168.5 720 168.3C733 168.1 747 176.3 760 179.1C773 181.8 787 185.4 800 184.8C813 184.2 833 176.9 840 175.3L840 520L-40 520Z" fill="#0F2E49"/>
+<g fill="none" stroke="#8AD4CE" stroke-width="1">
+<use href="#lg-r0" y="0" stroke-opacity="0.72"/>
+<use href="#lg-r0" y="9" stroke-opacity="0.56"/>
+<use href="#lg-r0" y="18" stroke-opacity="0.44"/>
+<use href="#lg-r0" y="27" stroke-opacity="0.33"/>
+<use href="#lg-r0" y="36" stroke-opacity="0.24"/>
+<use href="#lg-r0" y="45" stroke-opacity="0.17"/>
+<use href="#lg-r0" y="54" stroke-opacity="0.11"/>
+</g>
+<path d="M-40 255.7C-33 261.0 -13 284.0 0 287.3C13 290.6 27 284.2 40 275.3C53 266.3 67 245.6 80 233.7C93 221.7 107 214.7 120 203.6C133 192.5 147 177.1 160 167.0C173 156.8 187 141.9 200 142.8C213 143.8 227 161.5 240 172.6C253 183.6 267 202.4 280 209.2C293 216.1 307 211.2 320 213.7C333 216.1 347 219.9 360 224.2C373 228.5 387 237.3 400 239.4C413 241.4 427 233.8 440 236.4C453 239.1 467 245.8 480 255.1C493 264.3 507 287.2 520 292.1C533 297.1 547 292.4 560 284.6C573 276.8 587 257.0 600 245.4C613 233.9 627 226.9 640 215.3C653 203.8 667 187.5 680 176.2C693 164.9 707 148.3 720 147.6C733 146.8 747 162.5 760 171.8C773 181.1 787 197.9 800 203.1C813 208.4 833 203.5 840 203.5L840 520L-40 520Z" fill="#0D2A44"/>
+<g fill="none" stroke="#74C8C6" stroke-width="1">
+<use href="#lg-r1" y="0" stroke-opacity="0.72"/>
+<use href="#lg-r1" y="9" stroke-opacity="0.56"/>
+<use href="#lg-r1" y="18" stroke-opacity="0.44"/>
+<use href="#lg-r1" y="27" stroke-opacity="0.33"/>
+<use href="#lg-r1" y="36" stroke-opacity="0.24"/>
+<use href="#lg-r1" y="45" stroke-opacity="0.17"/>
+<use href="#lg-r1" y="54" stroke-opacity="0.11"/>
+</g>
+<path d="M-40 289.2C-33 288.8 -13 293.2 0 286.4C13 279.6 27 260.7 40 248.4C53 236.1 67 212.7 80 212.5C93 212.3 107 234.5 120 247.1C133 259.7 147 276.3 160 287.9C173 299.5 187 305.7 200 316.9C213 328.1 227 350.9 240 354.9C253 358.8 267 348.9 280 340.7C293 332.5 307 309.5 320 305.8C333 302.0 347 316.1 360 318.3C373 320.6 387 322.3 400 319.4C413 316.5 427 305.0 440 300.9C453 296.9 467 303.5 480 295.4C493 287.3 507 266.5 520 252.4C533 238.2 547 212.6 560 210.5C573 208.3 587 228.6 600 239.6C613 250.7 627 265.9 640 276.8C653 287.7 667 293.6 680 304.9C693 316.3 707 339.9 720 345.0C733 350.0 747 341.8 760 335.3C773 328.9 787 308.0 800 306.3C813 304.5 833 321.5 840 324.6L840 520L-40 520Z" fill="#0C263F"/>
+<g fill="none" stroke="#55B7BB" stroke-width="1">
+<use href="#lg-r2" y="0" stroke-opacity="0.72"/>
+<use href="#lg-r2" y="9" stroke-opacity="0.56"/>
+<use href="#lg-r2" y="18" stroke-opacity="0.44"/>
+<use href="#lg-r2" y="27" stroke-opacity="0.33"/>
+<use href="#lg-r2" y="36" stroke-opacity="0.24"/>
+<use href="#lg-r2" y="45" stroke-opacity="0.17"/>
+<use href="#lg-r2" y="54" stroke-opacity="0.11"/>
+</g>
+<path d="M-40 408.0C-33 409.4 -13 421.0 0 415.9C13 410.9 27 383.2 40 377.7C53 372.2 67 381.1 80 382.9C93 384.7 107 391.5 120 388.4C133 385.2 147 369.9 160 364.1C173 358.3 187 362.7 200 353.7C213 344.7 227 320.4 240 310.1C253 299.8 267 287.1 280 291.9C293 296.8 307 326.6 320 339.1C333 351.5 347 357.0 360 366.8C373 376.6 387 390.4 400 397.6C413 404.8 427 413.3 440 410.1C453 406.9 467 381.6 480 378.2C493 374.7 507 386.0 520 389.5C533 393.0 547 401.5 560 399.2C573 397.0 587 382.0 600 376.0C613 370.0 627 373.5 640 363.2C653 353.0 667 326.7 680 314.4C693 302.2 707 287.1 720 289.8C733 292.6 747 320.2 760 331.1C773 342.1 787 346.2 800 355.4C813 364.5 833 380.9 840 386.0L840 520L-40 520Z" fill="#0B2238"/>
+<g fill="none" stroke="#4AA5B4" stroke-width="1">
+<use href="#lg-r3" y="0" stroke-opacity="0.72"/>
+<use href="#lg-r3" y="9" stroke-opacity="0.56"/>
+<use href="#lg-r3" y="18" stroke-opacity="0.44"/>
+<use href="#lg-r3" y="27" stroke-opacity="0.33"/>
+<use href="#lg-r3" y="36" stroke-opacity="0.24"/>
+<use href="#lg-r3" y="45" stroke-opacity="0.17"/>
+<use href="#lg-r3" y="54" stroke-opacity="0.11"/>
+</g>
+<path d="M-40 379.3C-33 386.8 -13 416.9 0 424.1C13 431.3 27 421.0 40 422.7C53 424.4 67 431.5 80 434.3C93 437.1 107 436.4 120 439.7C133 442.9 147 444.8 160 453.8C173 462.8 187 492.0 200 493.5C213 495.0 227 473.3 240 462.9C253 452.6 267 442.8 280 431.4C293 420.0 307 402.8 320 394.6C333 386.4 347 378.0 360 382.3C373 386.5 387 415.1 400 420.3C413 425.6 427 413.1 440 413.6C453 414.0 467 420.2 480 423.0C493 425.7 507 425.7 520 430.1C533 434.5 547 438.4 560 449.3C573 460.2 587 492.0 600 495.6C613 499.2 627 479.8 640 470.9C653 462.1 667 453.5 680 442.5C693 431.5 707 414.0 720 404.9C733 395.9 747 385.8 760 388.3C773 390.8 787 416.8 800 419.9C813 423.0 833 409.0 840 406.8L840 520L-40 520Z" fill="#0A1E32"/>
+<g fill="none" stroke="#3F8FA8" stroke-width="1">
+<use href="#lg-r4" y="0" stroke-opacity="0.72"/>
+<use href="#lg-r4" y="9" stroke-opacity="0.56"/>
+<use href="#lg-r4" y="18" stroke-opacity="0.44"/>
+<use href="#lg-r4" y="27" stroke-opacity="0.33"/>
+<use href="#lg-r4" y="36" stroke-opacity="0.24"/>
+<use href="#lg-r4" y="45" stroke-opacity="0.17"/>
+<use href="#lg-r4" y="54" stroke-opacity="0.11"/>
+</g>
+</svg>
+
+        <a class="lg-lockup" href="{% url 'login' %}" aria-label="NRZ Student Management">
+            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <path d="M3 22C8 22 8 12 14 12C20 12 19 21 29 21" stroke="#8AD4CE" stroke-width="1.7" stroke-linecap="round"/>
+                <path d="M3 26C10 26 11 17 17 17C22 17 23 25 29 25" stroke="#DDF4F1" stroke-width="1.4" stroke-linecap="round"/>
+                <path d="M4 17C8 17 9 7 15 7C21 7 22 16 28 16" stroke="#55B7BB" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span class="lg-lockup-name">NRZ</span>
+            <span class="lg-lockup-product">Student Management</span>
+        </a>
+
+        <div class="lg-copy">
+            <h2 class="lg-headline">Manage students, academics and finances in one place.</h2>
+            <ul class="lg-points">
+                <li><span class="lg-dot" aria-hidden="true"></span><div><strong>Student records</strong><span>Register, search and follow every student.</span></div></li>
+                <li><span class="lg-dot" aria-hidden="true"></span><div><strong>Fees and payments</strong><span>Set up fees, record payments, see who owes.</span></div></li>
+                <li><span class="lg-dot" aria-hidden="true"></span><div><strong>Reports</strong><span>Print or export what you need as PDF or CSV.</span></div></li>
+            </ul>
+        </div>
+
+        <p class="lg-brand-foot">NRZ Student Management System</p>
+    </aside>
+
+    <!-- ===== Sign-in form ===== -->
+    <main class="lg-main" id="login-main" tabindex="-1">
+        <div class="lg-wrap">
+            {% with role=form.data.role|default:"" %}
+            <div class="ui-card lg-card">
+
+                <header>
+                    <h1 class="lg-title">Welcome back</h1>
+                    <p class="lg-sub">Choose your role, then sign in to continue.</p>
+                </header>
+
+                {% if form.non_field_errors %}
+                <div class="ui-banner lg-alert" role="alert" id="login-error">
+                    <div>
+                        <strong>We couldn't sign you in.</strong>
+                        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% if not forloop.last %} {% endif %}{% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <form method="post" id="login-form" class="lg-form" novalidate data-posted="{% if role %}1{% endif %}">
+                    {% csrf_token %}
+                    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+                    <fieldset class="lg-roles">
+                        <legend>Sign in as</legend>
+                        <div class="lg-role-grid">
+
+                            <label class="lg-role">
+                                <input type="radio" name="role" value="admin" {% if role == 'admin' or not role %}checked{% endif %}>
+                                <span class="lg-role-card">
+                                    <svg class="lg-role-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 16 5v4.5c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V5l6-2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m7.3 10 2 2 3.5-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    <span class="lg-role-text"><strong>Administrator</strong><span>Users, backups and system settings</span></span>
+                                    <span class="lg-role-check" aria-hidden="true"></span>
+                                </span>
+                            </label>
+
+                            <label class="lg-role">
+                                <input type="radio" name="role" value="bursar" {% if role == 'bursar' %}checked{% endif %}>
+                                <span class="lg-role-card">
+                                    <svg class="lg-role-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5.5h14v9H3zM3 8h14M6 12h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    <span class="lg-role-text"><strong>Bursar</strong><span>Payments, fees and financial reports</span></span>
+                                    <span class="lg-role-check" aria-hidden="true"></span>
+                                </span>
+                            </label>
+
+                            <label class="lg-role">
+                                <input type="radio" name="role" value="registrar" {% if role == 'registrar' %}checked{% endif %}>
+                                <span class="lg-role-card">
+                                    <svg class="lg-role-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="6" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2.5 16c.4-3 2.2-4.5 5.5-4.5 1.2 0 2.2.2 3 .7M14 10v6M11 13h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                    <span class="lg-role-text"><strong>Registrar</strong><span>Student registration and records</span></span>
+                                    <span class="lg-role-check" aria-hidden="true"></span>
+                                </span>
+                            </label>
+
+                            <label class="lg-role">
+                                <input type="radio" name="role" value="viewer" {% if role == 'viewer' %}checked{% endif %}>
+                                <span class="lg-role-card">
+                                    <svg class="lg-role-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M1.8 10S5 4.5 10 4.5 18.2 10 18.2 10 15 15.5 10 15.5 1.8 10 1.8 10Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.3" stroke="currentColor" stroke-width="1.5"/></svg>
+                                    <span class="lg-role-text"><strong>Viewer</strong><span>Look up records and reports, read-only</span></span>
+                                    <span class="lg-role-check" aria-hidden="true"></span>
+                                </span>
+                            </label>
+
+                        </div>
+                    </fieldset>
+
+                    <div class="lg-field">
+                        <label for="id_username">Username</label>
+                        <input class="lg-input" type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" autocomplete="username" autocapitalize="none" spellcheck="false"{% if not form.username.value %} autofocus{% endif %}{% if form.username.errors %} aria-invalid="true" aria-describedby="username-error"{% endif %}>
+                        {% if form.username.errors %}<p class="lg-field-error" id="username-error">{{ form.username.errors.0 }}</p>{% endif %}
+                        <p class="lg-field-error" id="username-client-error" hidden>Enter your username.</p>
+                    </div>
+
+                    <div class="lg-field">
+                        <label for="id_password">Password</label>
+                        <div class="lg-pw">
+                            <input class="lg-input" type="password" name="password" id="id_password" autocomplete="current-password"{% if form.password.errors %} aria-invalid="true" aria-describedby="password-error"{% endif %}>
+                            <button type="button" class="lg-toggle" id="pw-toggle" aria-controls="id_password" aria-label="Show password">Show</button>
+                        </div>
+                        {% if form.password.errors %}<p class="lg-field-error" id="password-error">{{ form.password.errors.0 }}</p>{% endif %}
+                        <p class="lg-field-error" id="password-client-error" hidden>Enter your password.</p>
+                    </div>
+
+                    <p class="lg-caps" id="caps-note" role="status" hidden><span class="ui-lamp ui-lamp--amber" aria-hidden="true"></span>Caps Lock is on</p>
+
+                    <button type="submit" class="ui-btn ui-btn--solid lg-submit" id="login-submit"><span id="submit-label">Sign in</span></button>
+                </form>
+
+                <p class="lg-help">Forgot your password? Ask your administrator to reset it.</p>
+            </div>
+            {% endwith %}
+
+            <p class="lg-foot">NRZ Student Management System</p>
+        </div>
+    </main>
+</div>
+
+<script>
+(function () {
+    var form = document.getElementById('login-form');
+    if (!form) { return; }
+
+    var KEY = 'nrz.login.role';
+    var names = { admin: 'Administrator', bursar: 'Bursar', registrar: 'Registrar', viewer: 'Viewer' };
+    var roles = form.querySelectorAll('input[name="role"]');
+    var label = document.getElementById('submit-label');
+    var button = document.getElementById('login-submit');
+    var user = document.getElementById('id_username');
+    var pass = document.getElementById('id_password');
+    var toggle = document.getElementById('pw-toggle');
+    var caps = document.getElementById('caps-note');
+    var posted = form.getAttribute('data-posted') === '1';
+
+    function checkedRole() {
+        for (var i = 0; i < roles.length; i++) { if (roles[i].checked) { return roles[i]; } }
+        return null;
+    }
+    function paintRole() {
+        var r = checkedRole();
+        label.textContent = r ? 'Sign in as ' + names[r.value] : 'Sign in';
     }
 
-    .login-image {
-        max-width: 480px;
+    // Remember the last role on this computer (only when the page was not just re-shown after an error).
+    if (!posted) {
+        try {
+            var saved = window.localStorage.getItem(KEY);
+            for (var i = 0; i < roles.length; i++) {
+                if (roles[i].value === saved) { roles[i].checked = true; }
+            }
+        } catch (e) { /* storage unavailable: keep the default */ }
     }
-
-    .login-form {
-        max-width: 420px;
-        width: 100%;
+    for (var j = 0; j < roles.length; j++) {
+        roles[j].addEventListener('change', function () {
+            paintRole();
+            try { window.localStorage.setItem(KEY, this.value); } catch (e) { /* ignore */ }
+        });
     }
+    paintRole();
 
-    .form-control {
-        padding: 0.85rem 1rem;
-        font-size: 1rem;
-        border-radius: 0.35rem;
+    // After a failed sign-in keep the username and put the cursor in the password box.
+    if (user && pass && user.value) { pass.focus(); }
+
+    // Show / hide password.
+    toggle.addEventListener('click', function () {
+        var showing = pass.type === 'text';
+        pass.type = showing ? 'password' : 'text';
+        toggle.textContent = showing ? 'Show' : 'Hide';
+        toggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+        pass.focus();
+    });
+
+    // Caps Lock hint.
+    function capsState(e) {
+        if (e.getModifierState) { caps.hidden = !e.getModifierState('CapsLock'); }
     }
+    pass.addEventListener('keydown', capsState);
+    pass.addEventListener('keyup', capsState);
+    pass.addEventListener('blur', function () { caps.hidden = true; });
 
-    .form-control:focus {
-        box-shadow: none;
-        border-color: #0d6efd;
-    }
-
-    .login-btn {
-        padding: 0.8rem 2.5rem;
-    }
-
-    @media (max-width: 991px) {
-        .login-image-column {
-            display: none;
+    // Gentle client-side check; the server still validates everything.
+    function flag(input, messageId, on) {
+        var msg = document.getElementById(messageId);
+        if (msg) { msg.hidden = !on; }
+        if (on) {
+            input.setAttribute('aria-invalid', 'true');
+            input.setAttribute('aria-describedby', messageId);
+        } else {
+            input.removeAttribute('aria-invalid');
         }
     }
-</style>
+    user.addEventListener('input', function () { flag(user, 'username-client-error', false); });
+    pass.addEventListener('input', function () { flag(pass, 'password-client-error', false); });
 
-<section class="login-section">
-    <div class="container-fluid">
-        <div class="row min-vh-100 d-flex justify-content-center align-items-center">
+    form.addEventListener('submit', function (e) {
+        var missingUser = !user.value.trim();
+        var missingPass = !pass.value;
+        flag(user, 'username-client-error', missingUser);
+        flag(pass, 'password-client-error', missingPass);
+        if (missingUser || missingPass) {
+            e.preventDefault();
+            (missingUser ? user : pass).focus();
+            return;
+        }
+        button.disabled = true;
+        label.textContent = 'Signing in\u2026';
+    });
 
-            <!-- LEFT SIDE -->
-            <div class="col-lg-6 d-none d-lg-flex justify-content-center align-items-center login-image-column">
-                <div class="text-center">
-
-                    <img
-                        src="{% static 'img/login-illustration.svg' %}"
-                        class="img-fluid login-image"
-                        alt="Student management"
-                    >
-
-                    <h3 class="fw-bold mt-4">
-                        BSOFT Student Management
-                    </h3>
-
-                    <p class="text-muted">
-                        Manage students, academics and finances in one place.
-                    </p>
-
-                </div>
-            </div>
-
-
-            <!-- RIGHT SIDE -->
-            <div class="col-11 col-sm-9 col-md-7 col-lg-5 col-xl-4">
-
-                <div class="login-form mx-auto">
-
-                    <div class="mb-4">
-                        <h2 class="fw-bold mb-2">
-                            Welcome back
-                        </h2>
-
-                        <p class="text-muted mb-0">
-                            Sign in to continue to the management system.
-                        </p>
-                    </div>
-
-
-                    <!-- GENERAL FORM ERRORS -->
-                    {% if form.non_field_errors %}
-                    <div class="alert alert-danger">
-                        {% for error in form.non_field_errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-
-
-                    <form method="post" novalidate>
-                        {% csrf_token %}
-
-
-                        <!-- USERNAME -->
-                        <div class="mb-4">
-
-                            <label
-                                for="{{ form.username.id_for_label }}"
-                                class="form-label fw-semibold"
-                            >
-                                Username
-                            </label>
-
-                            {{ form.username }}
-
-                            {% if form.username.errors %}
-                            <div class="text-danger small mt-1">
-                                {{ form.username.errors.0 }}
-                            </div>
-                            {% endif %}
-
-                        </div>
-
-
-                        <!-- PASSWORD -->
-                        <div class="mb-4">
-
-                            <label
-                                for="{{ form.password.id_for_label }}"
-                                class="form-label fw-semibold"
-                            >
-                                Password
-                            </label>
-
-                            {{ form.password }}
-
-                            {% if form.password.errors %}
-                            <div class="text-danger small mt-1">
-                                {{ form.password.errors.0 }}
-                            </div>
-                            {% endif %}
-
-                        </div>
-
-
-                        <!-- LOGIN BUTTON -->
-                        <div class="d-grid">
-
-                            <button
-                                type="submit"
-                                class="btn btn-primary btn-lg login-btn"
-                            >
-                                Sign In
-                            </button>
-
-                        </div>
-
-                    </form>
-
-
-                    <!-- LOGIN ERROR MESSAGE -->
-                    {% if form.non_field_errors or form.username.errors or form.password.errors %}
-                    <div class="text-center mt-3">
-                        <small class="text-muted">
-                            Invalid credentials. Please try again.
-                        </small>
-                    </div>
-                    {% endif %}
-
-
-                    <!-- FOOTNOTE -->
-                    <div class="text-center mt-5">
-                        <small class="text-muted">
-                            Bsoft Student Management System
-                        </small>
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-    </div>
-</section>
-
-{% endblock %}
+    // Back button: make the form usable again.
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) { button.disabled = false; paintRole(); }
+    });
+}());
+</script>
+</body>
+</html>

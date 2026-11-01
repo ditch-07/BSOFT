@@ -74,7 +74,7 @@ class NavbarRenderingTests(NavbarTestCase):
 
         response = self.client.get(reverse("dashboard"))
 
-        self.assertContains(response, "Bsoft")
+        self.assertContains(response, "NRZ Student Management dashboard")
         self.assertContains(response, 'aria-label="Quick actions"')
         self.assertContains(response, 'role="combobox"')
         self.assertContains(response, "Record payment")

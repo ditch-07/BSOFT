@@ -48,7 +48,7 @@ INTERNAL_DIR = get_internal_dir()
 # Optional override.
 # Otherwise, packaged application uses:
 #
-# USB:\BSOFT Student Management\data\
+# USB:\NRZ Student Management\data\
 #
 DATA_DIR = Path(
     os.environ.get(

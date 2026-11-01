@@ -5,7 +5,7 @@ Date: 2026-10-28 · Django server-rendered app · no model or migration changes.
 ## What changed
 
 **Global bar** (`base.html`, `navbar.css`, `nav-waves.svg`)
-The 48px bar is now 60px, driven by one `--nav-h` variable. Six offset occurrences in `base.html` use it; no application template or stylesheet retains a hard-coded 48px offset. The original 2.6KB local SVG has six layered navy ridge/contour groups with teal/aqua strokes, a solid fallback, a quiet scrim, and no animation or remote assets. Brand casing is consistently **Bsoft**.
+The 48px bar is now 60px, driven by one `--nav-h` variable. Six offset occurrences in `base.html` use it; no application template or stylesheet retains a hard-coded 48px offset. The original 2.6KB local SVG has six layered navy ridge/contour groups with teal/aqua strokes, a solid fallback, a quiet scrim, and no animation or remote assets. Brand casing is consistently **NRZ Student Management**.
 
 **Semester and testing clock**
 The chip uses `get_current_date()` to select the active semester, falling back to the next upcoming semester with an **Upcoming** label. It links to Semesters. An active testing override changes the chip to an amber warning and shows `Testing clock: 12 Jan 2027`, linking to Time Override. At 1100px and below, this information moves into the user menu.
@@ -30,7 +30,7 @@ Screenshots: `docs/navbar-overhaul/` contains before/after captures at 1440, 128
 | 3. Working semester always visible | Passed | Current/upcoming chip; 1024px user-menu fallback; testing warning screenshot |
 | 4. Reach attention items exactly | Passed live | Badge 20 = 5 fee cells + 15 missing-detail students; rows link to Fees `?filter=needs` and Reminders |
 | 5. Existing destinations remain | Passed | Students sidebar, Academic years sidebar, POST Logout test |
-| 6. Recognisable calm Bsoft bar | Passed | Original contour artwork; no clipping/overflow; text contrast 6.80:1–18.13:1 |
+| 6. Recognisable calm NRZ bar | Passed | Original contour artwork; no clipping/overflow; text contrast 6.80:1–18.13:1 |
 
 Layout checks passed at 1440, 1280, 1024 and 768px. Focus is visible at every width (3px outline or search box-shadow). Dropdowns render above page/sidebar content and stay inside the viewport. Fees, Student list, Student detail, Register Student’s sticky action bar, and report print media were checked.
 
@@ -40,7 +40,7 @@ Layout checks passed at 1440, 1280, 1024 and 768px. Focus is visible at every wi
 2. **Fees sidebar:** repointed to the current/upcoming Fees grid when permitted; fallback is Semesters.
 3. **Moved/removed:** Academics → Academic years sidebar link; Logout → user menu; old Students button removed, sidebar Students retained.
 4. **Search extension:** `include_deferred=1` opts the global search into Active + Deferred. The existing payment-form request remains active-only. Results are capped at eight and now include course year, status, detail URL, and permission-aware payment URL.
-5. **Casing:** **Bsoft** in both the title and brand.
+5. **Casing:** **NRZ Student Management** in both the title and brand.
 
 ## Tests
 

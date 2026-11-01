@@ -2,9 +2,40 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
+
+
+def current_enrollment(enrollments, today=None):
+    """Pick the enrollment that represents a student right now.
+
+    Priority: a semester running today, then the next semester starting, then
+    the most recent one that has ended. Pass an iterable of *active*
+    enrollments with their semesters loaded to avoid extra queries.
+    """
+    from school.utils.time_utils import get_current_date
+
+    today = today or get_current_date()
+    enrollments = list(enrollments)
+
+    for enrollment in enrollments:
+        if enrollment.semester.start_date <= today <= enrollment.semester.end_date:
+            return enrollment
+
+    future = sorted(
+        (e for e in enrollments if e.semester.start_date > today),
+        key=lambda e: e.semester.start_date,
+    )
+    if future:
+        return future[0]
+
+    past = sorted(
+        (e for e in enrollments if e.semester.end_date < today),
+        key=lambda e: e.semester.end_date,
+        reverse=True,
+    )
+    return past[0] if past else None
 
 
 class TimeOverride(models.Model):
@@ -432,28 +463,11 @@ class Student(models.Model):
         3. Most recent past semester (latest end_date)
         Returns None if no active enrollments exist.
         """
-        from school.utils.time_utils import get_current_date
-        
-        today = today or get_current_date()
-        
-        # Get all active enrollments with semester data
         enrollments = self.enrollments.filter(
             status=Enrollment.ACTIVE
         ).select_related('semester')
-        
-        # 1. Currently active
-        for e in enrollments:
-            if e.semester.start_date <= today <= e.semester.end_date:
-                return e
-        
-        # 2. Future (next upcoming) - earliest start_date first
-        future = enrollments.filter(semester__start_date__gt=today).order_by('semester__start_date')
-        if future.exists():
-            return future.first()
-        
-        # 3. Past (most recent) - latest end_date first
-        past = enrollments.order_by('-semester__end_date')
-        return past.first() if past.exists() else None
+
+        return current_enrollment(enrollments, today)
 
 
 class StudentStatusLog(models.Model):
@@ -623,6 +637,8 @@ class Payment(models.Model):
     receipt_number = models.CharField(
         max_length=50,
         unique=True,
+        blank=True,
+        help_text="Leave blank to allocate the next receipt number for the payment date.",
     )
 
     student = models.ForeignKey(
@@ -671,6 +687,36 @@ class Payment(models.Model):
 
     def __str__(self):
         return self.receipt_number
+
+    def save(self, *args, **kwargs):
+        """Allocate a receipt number when one was not supplied.
+
+        Every payment needs a unique number, but operators should not have to
+        invent one. Numbers are allocated per payment date (see
+        ``school.utils.receipts``) and retried a few times so two tills saving
+        at the same moment cannot silently reuse a number.
+        """
+        if self.receipt_number:
+            return super().save(*args, **kwargs)
+
+        from school.utils.receipts import next_receipt_number
+        from school.utils.time_utils import get_current_date
+
+        payment_date = self.payment_date or get_current_date()
+
+        for _ in range(5):
+            self.receipt_number = next_receipt_number(payment_date)
+            try:
+                # A savepoint keeps the outer transaction usable when the
+                # unique constraint rejects a number that was just taken.
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.receipt_number = ""
+
+        raise ValidationError(
+            "A unique receipt number could not be allocated. Please try again."
+        )
 
 
 def student_balance(student, semester):
@@ -769,53 +815,62 @@ def outstanding_students(semester, limit=None):
     return students
 
 def payment_methods_breakdown(semester):
-    """Return payment totals grouped by method for a semester."""
+    """Return payment totals and actual transaction counts by method."""
+    from django.db.models import Count
+
     return Payment.objects.filter(semester=semester).values("method").annotate(
         total=Sum("amount"),
-        count=Sum("amount", default=0)
+        count=Count("pk"),
     ).order_by("-total")
 
 
 def program_revenue(semester):
-    """Return revenue grouped by program for a semester."""
-    from django.db.models import Subquery, OuterRef, Sum, Value, Q
-    from django.db.models.functions import Coalesce
-    
-    # Subquery for payments by program (aggregated at program level)
-    # We need to aggregate payments per program separately
-    # Since we can't easily do this with a single subquery per program,
-    # we'll use a different approach
-    
-    # Get all programs with charges for this semester
-    programs = Program.objects.filter(
-        fee_structures__semester=semester,
-        fee_structures__items__isnull=False
-    ).distinct()
-    
+    """Return charges by fee-structure trade and payments by student trade.
+
+    The two grouped queries preserve the historic attribution rule while
+    keeping query count independent of the number of trades.
+    """
+    charged_by_program = {
+        row["fee_item__fee_structure__program_id"]: row
+        for row in StudentCharge.objects.filter(
+            fee_item__fee_structure__semester=semester,
+        ).values(
+            "fee_item__fee_structure__program_id",
+            "fee_item__fee_structure__program__name",
+            "fee_item__fee_structure__program__code",
+        ).annotate(total=Sum("amount"))
+    }
+    paid_by_program = {
+        row["student__program_id"]: row["total"]
+        for row in Payment.objects.filter(semester=semester).values(
+            "student__program_id",
+        ).annotate(total=Sum("amount"))
+    }
+
     result = []
-    for program in programs:
-        # Calculate charges for this program
-        charged = StudentCharge.objects.filter(
-            fee_item__fee_structure__program=program,
-            fee_item__fee_structure__semester=semester
-        ).aggregate(total=Coalesce(Sum('amount'), Value(Decimal('0'))))['total']
-        
-        # Calculate payments for this program
-        paid = Payment.objects.filter(
-            semester=semester,
-            student__program=program
-        ).aggregate(total=Coalesce(Sum('amount'), Value(Decimal('0'))))['total']
-        
+    for program_id, row in charged_by_program.items():
         result.append({
-            "fee_item__fee_structure__program__id": program.id,
-            "fee_item__fee_structure__program__name": program.name,
-            "fee_item__fee_structure__program__code": program.code,
-            "charged": charged,
-            "paid": paid,
+            "fee_item__fee_structure__program__id": program_id,
+            "fee_item__fee_structure__program__name": row["fee_item__fee_structure__program__name"],
+            "fee_item__fee_structure__program__code": row["fee_item__fee_structure__program__code"],
+            "charged": row["total"] or Decimal("0"),
+            "paid": paid_by_program.pop(program_id, Decimal("0")),
         })
-    
-    # Sort by charged descending
-    result.sort(key=lambda x: x['charged'], reverse=True)
+    # Keep payments without charges visible in the aggregate, so collected
+    # totals still reconcile even when a trade has no billed fee structure.
+    if paid_by_program:
+        payment_trades = Program.objects.in_bulk(paid_by_program)
+        for program_id, amount in paid_by_program.items():
+            trade = payment_trades.get(program_id)
+            if trade:
+                result.append({
+                    "fee_item__fee_structure__program__id": program_id,
+                    "fee_item__fee_structure__program__name": trade.name,
+                    "fee_item__fee_structure__program__code": trade.code,
+                    "charged": Decimal("0"),
+                    "paid": amount or Decimal("0"),
+                })
+    result.sort(key=lambda item: item["charged"], reverse=True)
     return result
 def students_with_missing_details():
     """

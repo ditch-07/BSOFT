@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_date
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -22,6 +23,14 @@ from .forms import (
     StudentForm,
     StudentStatusChangeForm,
 )
+from school.utils.backups import (
+    BackupError,
+    create_backup,
+    restore_backup,
+    timestamped_name,
+    verify_backup,
+)
+
 from .models import (
     AcademicYear,
     AuditLog,
@@ -880,6 +889,12 @@ def api_payment_create(request):
         student = Student.objects.get(pk=student_id)
         semester = Semester.objects.get(pk=semester_id)
         amount = Decimal(str(amount))
+        parsed_date = parse_date(str(payment_date))
+        if parsed_date is None:
+            return JsonResponse(
+                {"errors": {"payment_date": ["Invalid payment date."]}}, status=400
+            )
+        payment_date = parsed_date
     except Student.DoesNotExist:
         return JsonResponse({"errors": {"student": ["Student not found."]}}, status=400)
     except Semester.DoesNotExist:
@@ -919,6 +934,8 @@ def api_payment_create(request):
             method=method,
             reference=payload.get("reference", ""),
             notes=payload.get("notes", ""),
+            # An empty value makes the model allocate the next receipt number.
+            receipt_number=(payload.get("receipt_number") or "").strip(),
         )
 
         # Audit log
@@ -2036,8 +2053,14 @@ def api_user_create(request):
         errors["username"] = ["Username is required."]
     if not password:
         errors["password"] = ["Password is required."]
-    elif len(password) < 8:
-        errors["password"] = ["Password must be at least 8 characters."]
+    else:
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+
+        try:
+            validate_password(password)
+        except ValidationError as exc:
+            errors["password"] = list(exc.messages)
 
     if errors:
         return JsonResponse({"errors": errors}, status=400)
@@ -2251,9 +2274,8 @@ def api_backup_list(request):
 @user_passes_test(lambda u: u.is_superuser)
 @require_POST
 def api_backup_create(request):
-    """Create a new backup of the current database."""
+    """Create a new, integrity-checked backup of the current database."""
     import os
-    import shutil
     from datetime import datetime
     from django.conf import settings
 
@@ -2261,33 +2283,24 @@ def api_backup_create(request):
     db_path = settings.DATABASES['default']['NAME']
     backup_dir = config.get_backup_path()
 
-    if not os.path.exists(db_path):
-        return JsonResponse({"errors": {"detail": ["Database file not found."]}}, status=400)
-
-    if not os.path.exists(backup_dir):
-        try:
-            os.makedirs(backup_dir, exist_ok=True)
-        except Exception as e:
-            return JsonResponse({"errors": {"detail": [f"Cannot create backup directory: {e}"]}}, status=400)
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f"backup_{timestamp}.sqlite3"
+    backup_name = timestamped_name("backup")
     backup_path = os.path.join(backup_dir, backup_name)
 
     try:
-        shutil.copy2(db_path, backup_path)
-        stat = os.stat(backup_path)
-        return JsonResponse({
-            "success": True,
-            "message": f"Backup created: {backup_name}",
-            "backup": {
-                "name": backup_name,
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            }
-        }, status=201)
-    except Exception as e:
-        return JsonResponse({"errors": {"detail": [f"Backup failed: {e}"]}}, status=500)
+        create_backup(db_path, backup_path)
+    except BackupError as exc:
+        return JsonResponse({"errors": {"detail": [f"Backup failed: {exc}"]}}, status=500)
+
+    stat = os.stat(backup_path)
+    return JsonResponse({
+        "success": True,
+        "message": f"Backup created and verified: {backup_name}",
+        "backup": {
+            "name": backup_name,
+            "size": stat.st_size,
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        }
+    }, status=201)
 
 
 @login_required
@@ -2313,10 +2326,8 @@ def api_backup_download(request, filename):
 @user_passes_test(lambda u: u.is_superuser)
 @require_POST
 def api_backup_restore(request, filename):
-    """Restore a backup, creating a safety backup first."""
+    """Restore a verified backup, creating a safety backup first."""
     import os
-    import shutil
-    from datetime import datetime
     from django.conf import settings
 
     config = BackupConfig.get_config()
@@ -2330,21 +2341,16 @@ def api_backup_restore(request, filename):
     if not os.path.exists(backup_path):
         return JsonResponse({"errors": {"detail": ["Backup file not found."]}}, status=404)
 
-    # Create safety backup first
-    safety_name = f"safety_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sqlite3"
-    safety_path = os.path.join(backup_dir, safety_name)
-
     try:
-        if os.path.exists(db_path):
-            shutil.copy2(db_path, safety_path)
-        shutil.copy2(backup_path, db_path)
-        return JsonResponse({
-            "success": True,
-            "message": f"Database restored from {filename}. Safety backup created: {safety_name}",
-            "safety_backup": safety_name,
-        })
-    except Exception as e:
-        return JsonResponse({"errors": {"detail": [f"Restore failed: {e}"]}}, status=500)
+        safety_path = restore_backup(backup_path, db_path)
+    except BackupError as exc:
+        return JsonResponse({"errors": {"detail": [f"Restore failed: {exc}"]}}, status=500)
+
+    return JsonResponse({
+        "success": True,
+        "message": f"Database restored from {filename} and verified.",
+        "safety_backup": os.path.basename(safety_path) if safety_path else None,
+    })
 
 
 @login_required
@@ -2397,10 +2403,19 @@ def api_backup_upload(request):
         with open(backup_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
+
+        ok, message = verify_backup(backup_path)
+        if not ok:
+            os.remove(backup_path)
+            return JsonResponse(
+                {"errors": {"backup_file": [f"Uploaded file rejected: {message}"]}},
+                status=400,
+            )
+
         stat = os.stat(backup_path)
         return JsonResponse({
             "success": True,
-            "message": f"Backup uploaded: {safe_name}",
+            "message": f"Backup uploaded and verified: {safe_name}",
             "backup": {
                 "name": safe_name,
                 "size": stat.st_size,

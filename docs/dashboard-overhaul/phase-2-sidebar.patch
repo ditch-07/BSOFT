@@ -192,7 +192,7 @@
 +        <button class="sidebar-menu-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#main-sidebar" aria-controls="main-sidebar" aria-expanded="false" aria-label="Open main navigation" title="Open main navigation">
 +            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
 +        </button>
-         <a class="navbar-brand nav-brand" href="{% url 'dashboard' %}" aria-label="Bsoft Student Management dashboard">
+         <a class="navbar-brand nav-brand" href="{% url 'dashboard' %}" aria-label="NRZ Student Management dashboard">
              <svg class="nav-brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                  <path d="M3 22C8 22 8 12 14 12C20 12 19 21 29 21" stroke="#8AD4CE" stroke-width="1.7" stroke-linecap="round"/>
 @@ -200,19 +57,19 @@

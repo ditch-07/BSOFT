@@ -452,8 +452,8 @@ Verified:
 
 The deployment notes explicitly describe a separation between installed application files and persistent data:
 
-- `Program Files\BSOFT Student Management` for read-only application files
-- `ProgramData\BSOFT Student Management` for writable database and backups
+- `Program Files\NRZ Student Management` for read-only application files
+- `ProgramData\NRZ Student Management` for writable database and backups
 
 ### Environment variables and safeguards
 Verified:

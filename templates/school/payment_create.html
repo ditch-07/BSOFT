@@ -1,647 +1,1501 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Record Payment{% endblock %}
+{% block title %}Record payment{% endblock %}
 
 {% block content %}
+<style>
+    @font-face {
+        font-family: "Archivo Payment";
+        src: url("{% static 'vendor/fonts/archivo/archivo-latin-var.woff2' %}") format("woff2");
+        font-weight: 100 900;
+        font-stretch: 62% 125%;
+        font-display: swap;
+    }
 
-<div class="row justify-content-center">
-    <div class="col-xl-8">
-    <div class="mb-4">
-        <h2 class="fw-bold mb-1">Record Payment</h2>
-        <p class="text-muted">
-            Search for a student, select semester, then record their payment.
+    .pc {
+        --ink: #1E2B33;
+        --ink-2: #4E5C66;
+        --grey: #7D878E;
+        --line: #D6DAD5;
+        --ballast: #E4E6E2;
+        --paper: #FFFFFF;
+        --wash: #F5F6F3;
+        --rail: #1F4F7A;
+        --rail-dark: #163B5C;
+        --rail-soft: #E5EDF4;
+        --red: #B8372B;
+        --red-soft: #FBEDEB;
+        --amber: #A86E06;
+        --amber-lamp: #D99A1E;
+        --green: #2F7D4F;
+        --blue: #2C6FB0;
+        --radius: 10px;
+
+        max-width: 1080px;
+        padding: 0.75rem 0 2.5rem;
+        color: var(--ink);
+        font-family: "Archivo Payment", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .pc :focus-visible {
+        outline: 3px solid var(--rail);
+        outline-offset: 2px;
+        border-radius: 6px;
+    }
+
+    /* ---------- header ---------- */
+
+    .pc-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.25rem 2rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .pc-eyebrow {
+        margin: 0 0 0.3rem;
+        color: var(--grey);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .pc-title {
+        margin: 0;
+        font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+        font-weight: 800;
+        font-stretch: 106%;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        text-transform: uppercase;
+    }
+
+    .pc-intro {
+        max-width: 640px;
+        margin: 0.6rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.9375rem;
+    }
+
+    /* ---------- buttons ---------- */
+
+    .pc-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 44px;
+        padding: 0.6rem 1rem;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 650;
+        line-height: 1.2;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease,
+            box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    .pc-btn:active { transform: translateY(1px) scale(0.99); }
+    .pc-btn:disabled,
+    .pc-btn[aria-disabled="true"] { cursor: wait; opacity: 0.7; }
+
+    .pc .pc-btn--solid {
+        background: var(--rail);
+        color: #fff;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 4px 12px -6px rgba(31, 79, 122, 0.7);
+    }
+    .pc .pc-btn--solid:hover { background: var(--rail-dark); color: #fff; }
+
+    .pc .pc-btn--quiet {
+        border-color: #BFCEDC;
+        background: var(--paper);
+        color: var(--rail);
+    }
+    .pc .pc-btn--quiet:hover { border-color: var(--rail); background: var(--rail-soft); }
+
+    .pc .pc-btn--ghost {
+        border-color: var(--line);
+        background: transparent;
+        color: var(--ink);
+    }
+    .pc .pc-btn--ghost:hover { border-color: var(--grey); background: var(--paper); }
+
+    .pc-link {
+        color: var(--rail);
+        font-size: 0.8125rem;
+        font-weight: 650;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    /* ---------- student picker ---------- */
+
+    .pc-picker {
+        position: relative;
+        margin-bottom: 1rem;
+        padding: 1rem 1.15rem 1.15rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+    }
+
+    .pc-label {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--ink);
+        font-size: 0.8125rem;
+        font-weight: 650;
+    }
+
+    .pc-control {
+        width: 100%;
+        min-height: 44px;
+        padding: 0.65rem 0.8rem;
+        border: 1px solid #AEB7BD;
+        border-radius: 7px;
+        background-color: var(--paper);
+        color: var(--ink);
+        font: inherit;
+        font-size: 0.9375rem;
+        box-shadow: none;
+    }
+    .pc-control::placeholder { color: var(--grey); opacity: 1; }
+    .pc-control:focus {
+        border-color: var(--rail);
+        outline: 0;
+        box-shadow: 0 0 0 3px rgba(31, 79, 122, 0.14);
+    }
+    .pc-control.is-invalid,
+    .pc [aria-invalid="true"] {
+        border-color: var(--red);
+        background-image: none;
+    }
+
+    .pc-hint {
+        margin: 0.4rem 0 0;
+        color: var(--grey);
+        font-size: 0.75rem;
+    }
+
+    .pc-results {
+        position: absolute;
+        z-index: 30;
+        right: 1.15rem;
+        left: 1.15rem;
+        margin-top: 0.25rem;
+        border-radius: 8px;
+        background: var(--paper);
+    }
+    .pc-results:empty { display: none; }
+
+    .pc-result {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid var(--line);
+        border-top: 0;
+        background: var(--paper);
+        color: var(--ink);
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .pc-result:first-child {
+        border-top: 1px solid var(--line);
+        border-radius: 8px 8px 0 0;
+    }
+    .pc-result:last-child { border-radius: 0 0 8px 8px; }
+    .pc-result:hover,
+    .pc-result:focus-visible { background: var(--rail-soft); }
+    .pc-result strong { font-size: 0.9375rem; font-weight: 700; }
+    .pc-result span { color: var(--ink-2); font-size: 0.75rem; }
+    .pc-result.is-note { color: var(--ink-2); font-size: 0.8125rem; cursor: default; }
+    .pc-result.is-note:hover { background: var(--paper); }
+
+    /* ---------- student strip ---------- */
+
+    .pc-student {
+        display: grid;
+        gap: 0.9rem 1.5rem;
+        margin-bottom: 1rem;
+        padding: 1rem 1.15rem;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--rail);
+        border-radius: var(--radius);
+        background: var(--paper);
+    }
+
+    .pc-student-name {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 750;
+        font-stretch: 104%;
+        line-height: 1.2;
+    }
+
+    .pc-student-meta {
+        margin: 0.15rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+    }
+
+    .pc-student-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        align-items: center;
+    }
+
+    .pc-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.75rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .pc-facts li { display: flex; flex-direction: column; gap: 0.05rem; }
+    .pc-fact-label { color: var(--grey); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 650; }
+    .pc-fact-value { font-size: 0.9375rem; font-weight: 650; }
+    .pc-fig { font-variant-numeric: tabular-nums; font-stretch: 88%; font-weight: 700; }
+
+    .pc-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .pc-lamp {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px rgba(30, 43, 51, 0.15);
+    }
+
+    .pc-money { font-weight: 700; }
+    .pc-money.is-owing { color: var(--red); }
+    .pc-money.is-clear { color: var(--green); }
+    .pc-money.is-credit { color: var(--blue); }
+
+    /* ---------- receipt confirmation ---------- */
+
+    .pc-receipt {
+        margin-bottom: 1.25rem;
+        border: 1px solid #B8D3C3;
+        border-radius: var(--radius);
+        background: #F2F8F4;
+        overflow: hidden;
+    }
+
+    .pc-receipt-head {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.9rem 1.15rem;
+        border-bottom: 1px solid #CFE2D6;
+        color: var(--green);
+    }
+    .pc-receipt-head h2 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 750;
+        color: var(--ink);
+    }
+    .pc-receipt-head .pc-lamp { --lamp: var(--green); background: var(--green); width: 10px; height: 10px; }
+    .pc-receipt-head p { margin: 0; color: var(--ink-2); font-size: 0.8125rem; }
+
+    .pc-receipt-body {
+        display: grid;
+        gap: 1rem 1.5rem;
+        padding: 1.15rem;
+    }
+
+    .pc-receipt-amount { display: flex; flex-direction: column; gap: 0.1rem; }
+    .pc-receipt-amount .pc-amount-figure {
+        font-size: clamp(1.9rem, 1.5rem + 1.6vw, 2.5rem);
+        font-weight: 800;
+        font-stretch: 92%;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.05;
+    }
+    .pc-receipt-amount span { color: var(--ink-2); font-size: 0.8125rem; }
+
+    .pc-receipt-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem 1.15rem;
+        margin: 0;
+    }
+    .pc-receipt-grid div { display: flex; flex-direction: column; }
+    .pc-receipt-grid dt {
+        color: var(--grey);
+        font-size: 0.6875rem;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .pc-receipt-grid dd {
+        margin: 0.05rem 0 0;
+        font-size: 0.9375rem;
+        font-weight: 650;
+    }
+
+    .pc-receipt-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        padding: 0 1.15rem 1.15rem;
+    }
+
+    /* ---------- form ---------- */
+
+    .pc-form { display: grid; gap: 1rem; }
+
+    .pc-card {
+        padding: 1.15rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+    }
+
+    .pc-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .pc-card-title {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 750;
+        font-stretch: 104%;
+        line-height: 1.25;
+    }
+
+    .pc-card-copy {
+        max-width: 560px;
+        margin: 0.15rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+    }
+
+    .pc-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        height: 1.5rem;
+        padding: 0 0.45rem;
+        border-radius: 999px;
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .pc-errors {
+        margin-bottom: 1rem;
+        padding: 0.9rem 1.15rem;
+        border: 1px solid #E6B8B2;
+        border-left: 4px solid var(--red);
+        border-radius: var(--radius);
+        background: var(--red-soft);
+    }
+    .pc-errors:focus { outline: 3px solid var(--red); outline-offset: 2px; }
+    .pc-errors h2 { margin: 0 0 0.25rem; font-size: 0.9375rem; font-weight: 750; }
+    .pc-errors ul { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; }
+    .pc-errors a { color: var(--red); font-weight: 650; }
+
+    /* term cards */
+
+    .pc-terms { display: grid; gap: 0.55rem; }
+    .pc-terms:focus-within { scroll-margin-top: 5rem; }
+
+    .pc-term {
+        position: relative;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.35rem 0.75rem;
+        align-items: start;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--paper);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .pc-term:hover { border-color: #9DB4C9; }
+    .pc-term.is-selected {
+        border-color: var(--rail);
+        background: var(--rail-soft);
+        box-shadow: inset 0 0 0 1px var(--rail);
+    }
+    .pc-term > input {
+        width: 18px;
+        height: 18px;
+        margin: 0.2rem 0 0;
+        accent-color: var(--rail);
+    }
+
+    .pc-term-body { display: grid; gap: 0.15rem; min-width: 0; }
+    .pc-term-name {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.9375rem;
+        font-weight: 700;
+    }
+    .pc-chip {
+        display: inline-block;
+        padding: 0 0.4rem;
+        border-radius: 4px;
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .pc-chip--upcoming { background: var(--amber); }
+    .pc-chip--past { background: var(--grey); }
+    .pc-term-meta { color: var(--ink-2); font-size: 0.75rem; }
+
+    .pc-term-figures {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.35rem 0.9rem;
+        grid-column: 1 / -1;
+        margin: 0.5rem 0 0;
+        padding-top: 0.55rem;
+        border-top: 1px dashed #C9D0D4;
+    }
+    .pc-term-figures div { display: flex; flex-direction: column; }
+    .pc-term-figures dt {
+        color: var(--grey);
+        font-size: 0.625rem;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .pc-term-figures dd {
+        margin: 0;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+    }
+    .pc-term-state {
+        grid-column: 1 / -1;
+        justify-self: start;
+        color: var(--ink-2);
+        font-size: 0.75rem;
+        font-weight: 650;
+    }
+    .pc-term-state.is-owing { color: var(--red); }
+    .pc-term-state.is-clear { color: var(--green); }
+    .pc-term-state.is-credit { color: var(--blue); }
+
+    .pc-note {
+        margin: 0.7rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.75rem;
+    }
+
+    /* amount */
+
+    .pc-amount-wrap { position: relative; }
+
+    .pc-currency {
+        position: absolute;
+        top: 50%;
+        left: 0.9rem;
+        transform: translateY(-50%);
+        color: var(--grey);
+        font-size: 1.25rem;
+        font-weight: 700;
+        pointer-events: none;
+    }
+
+    .pc #id_amount {
+        min-height: 60px;
+        padding: 0.5rem 0.8rem 0.5rem 2.1rem;
+        font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
+    }
+
+    .pc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+    }
+
+    .pc-chip-btn {
+        min-height: 36px;
+        padding: 0.35rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
+        color: var(--ink-2);
+        font: inherit;
+        font-size: 0.8125rem;
+        font-weight: 650;
+        cursor: pointer;
+        transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+    }
+    .pc-chip-btn:hover { border-color: var(--rail); color: var(--rail); background: var(--rail-soft); }
+
+    .pc-preview {
+        margin: 0.7rem 0 0;
+        padding: 0.6rem 0.75rem;
+        border-radius: 8px;
+        background: var(--wash);
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+    }
+    .pc-preview strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+    .pc-preview.is-credit { background: #EAF1F8; color: var(--rail-dark); }
+    .pc-preview.is-owing { background: var(--red-soft); color: #7C241B; }
+    .pc-preview.is-clear { background: #EEF6F0; color: var(--green); }
+
+    /* fields */
+
+    .pc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.9rem 1rem;
+    }
+    .pc-field { min-width: 0; }
+    .pc-field--full { grid-column: 1 / -1; }
+
+    .pc .form-control,
+    .pc .form-select {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #AEB7BD;
+        border-radius: 7px;
+        background-color: var(--paper);
+        color: var(--ink);
+        font: inherit;
+        font-size: 0.9375rem;
+        box-shadow: none;
+    }
+    .pc .form-control { padding: 0.6rem 0.8rem; }
+    .pc textarea.form-control { min-height: 76px; resize: vertical; }
+    .pc .form-control:focus,
+    .pc .form-select:focus {
+        border-color: var(--rail);
+        outline: 0;
+        box-shadow: 0 0 0 3px rgba(31, 79, 122, 0.14);
+    }
+
+    .pc-help {
+        margin: 0.3rem 0 0;
+        color: var(--grey);
+        font-size: 0.75rem;
+    }
+    .pc-field-error {
+        margin-top: 0.3rem;
+        color: var(--red);
+        font-size: 0.75rem;
+        font-weight: 650;
+    }
+
+    /* payment method segments */
+
+    .pc-methods {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+    .pc-methods legend {
+        padding: 0;
+        margin-bottom: 0.3rem;
+        color: var(--ink);
+        font-size: 0.8125rem;
+        font-weight: 650;
+    }
+    .pc-method {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 44px;
+        padding: 0.5rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--paper);
+        color: var(--ink-2);
+        font-size: 0.875rem;
+        font-weight: 650;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    }
+    .pc-method:hover { border-color: var(--rail); color: var(--rail); }
+    .pc-method input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--rail);
+    }
+    .pc-method:has(input:checked) {
+        border-color: var(--rail);
+        background: var(--rail);
+        color: #fff;
+    }
+    .pc-method:has(input:focus-visible) { outline: 3px solid var(--rail); outline-offset: 2px; }
+
+    /* action bar */
+
+    .pc-actionbar {
+        position: sticky;
+        z-index: 20;
+        bottom: -1px;
+        display: grid;
+        grid-template-columns: minmax(200px, 1fr) auto;
+        gap: 0.75rem 1rem;
+        align-items: center;
+        margin-top: 0.25rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 -8px 22px -20px rgba(30, 43, 51, 0.7);
+        backdrop-filter: blur(8px);
+    }
+    .pc-summary {
+        min-width: 0;
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 0.8125rem;
+        line-height: 1.35;
+    }
+    .pc-summary strong { color: var(--ink); font-weight: 700; }
+    .pc-key-hint { display: block; margin-top: 0.1rem; color: var(--grey); font-size: 0.6875rem; }
+    .pc-key-hint kbd {
+        padding: 0.05rem 0.3rem;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--wash);
+        color: var(--ink-2);
+        font: inherit;
+        font-size: 0.6875rem;
+    }
+    .pc-actions { display: flex; align-items: center; gap: 0.45rem; }
+
+    /* empty states */
+
+    .pc-empty {
+        padding: 1.5rem 1.25rem;
+        border: 1px dashed var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+    }
+    .pc-empty h2 { margin: 0 0 0.3rem; font-size: 1.0625rem; font-weight: 750; }
+    .pc-empty p { max-width: 620px; margin: 0; color: var(--ink-2); font-size: 0.875rem; }
+    .pc-empty ul { margin: 0.7rem 0 0; padding-left: 1.1rem; color: var(--ink-2); font-size: 0.8125rem; }
+    .pc-empty li { margin-bottom: 0.25rem; }
+    .pc-empty .pc-btn { margin-top: 0.9rem; }
+
+    @keyframes pc-reveal {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .pc[data-intro] .pc-head,
+    .pc[data-intro] .pc-picker,
+    .pc[data-intro] .pc-student,
+    .pc[data-intro] .pc-receipt,
+    .pc[data-intro] .pc-card,
+    .pc[data-intro] .pc-empty,
+    .pc[data-intro] .pc-actionbar {
+        animation: pc-reveal 0.4s cubic-bezier(.2, .7, .2, 1) both;
+    }
+    .pc[data-intro] .pc-picker { animation-delay: 60ms; }
+    .pc[data-intro] .pc-student { animation-delay: 100ms; }
+    .pc[data-intro] .pc-receipt { animation-delay: 120ms; }
+    .pc[data-intro] .pc-card:nth-of-type(1) { animation-delay: 140ms; }
+    .pc[data-intro] .pc-card:nth-of-type(2) { animation-delay: 180ms; }
+    .pc[data-intro] .pc-actionbar { animation-delay: 220ms; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .pc *, .pc *::before, .pc *::after {
+            animation: none !important;
+            transition: none !important;
+            scroll-behavior: auto !important;
+        }
+    }
+
+    @media (min-width: 900px) {
+        .pc-student {
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+        }
+        .pc-student-actions { justify-content: flex-end; }
+        .pc-receipt-body { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: center; }
+        .pc-form {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            align-items: start;
+        }
+        .pc-form > .pc-card--terms,
+        .pc-form > .pc-errors,
+        .pc-form > .pc-actionbar { grid-column: 1 / -1; }
+        .pc-term {
+            grid-template-columns: auto minmax(0, 1.2fr) minmax(0, 1.6fr);
+            align-items: center;
+        }
+        .pc-term > input { align-self: center; }
+        .pc-term-figures {
+            grid-column: auto;
+            margin: 0;
+            padding: 0;
+            border-top: 0;
+        }
+        .pc-term-state { grid-column: 3; justify-self: end; }
+    }
+
+    @media (max-width: 760px) {
+        .pc { padding-top: 0.35rem; }
+        .pc-head { flex-direction: column; }
+        .pc-head > .pc-btn { width: 100%; }
+        .pc-grid { grid-template-columns: minmax(0, 1fr); }
+        .pc-field--full { grid-column: auto; }
+        .pc-student-actions .pc-btn { flex: 1; }
+        .pc-actionbar { grid-template-columns: minmax(0, 1fr); }
+        .pc-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .pc-actions .pc-btn { width: 100%; }
+        .pc-actions .pc-btn--solid { grid-column: 1 / -1; grid-row: 1; }
+        .pc-receipt-grid { grid-template-columns: minmax(0, 1fr); }
+        .pc-receipt-actions .pc-btn { flex: 1; }
+    }
+
+    @media (max-width: 460px) {
+        .pc-card { padding: 0.95rem; }
+        .pc-picker { padding: 0.9rem; }
+        .pc-results { right: 0.9rem; left: 0.9rem; }
+        .pc-methods { grid-template-columns: minmax(0, 1fr); }
+        .pc-actions { grid-template-columns: minmax(0, 1fr); }
+        .pc-actions .pc-btn--solid { grid-column: auto; }
+        .pc-student-actions { flex-direction: column; }
+        .pc-student-actions .pc-btn { width: 100%; }
+    }
+
+    /* printing is for the receipt only */
+
+    @media print {
+        .pc.has-receipt .pc-head,
+        .pc.has-receipt .pc-picker,
+        .pc.has-receipt .pc-student,
+        .pc.has-receipt .pc-form,
+        .pc.has-receipt .pc-empty,
+        .pc.has-receipt .pc-receipt-actions { display: none !important; }
+        .pc.has-receipt .pc-receipt {
+            margin: 0;
+            border-color: #999;
+            background: #fff;
+        }
+        .pc.has-receipt .pc-receipt-head { border-bottom-color: #ccc; }
+        .pc.has-receipt .pc-receipt-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .pc.has-receipt .pc-receipt-amount .pc-amount-figure { font-size: 2rem; }
+        .pc.has-receipt .pc-actionbar { display: none; }
+        .pc.has-receipt { max-width: none; padding: 0; }
+        @page { margin: 16mm; }
+    }
+</style>
+
+<div class="pc{% if recorded_payment %} has-receipt{% endif %}" data-intro>
+    <header class="pc-head">
+        <div>
+            <p class="pc-eyebrow">Payments</p>
+            <h1 class="pc-title">Record payment</h1>
+            <p class="pc-intro">
+                Find the student, choose the semester the money is for, then enter what was received.
+                The receipt number is assigned automatically unless you type one from the book.
+            </p>
+        </div>
+        <a class="pc-btn pc-btn--ghost"
+           href="{% if student %}{% url 'student_detail' student.pk %}{% else %}{% url 'dashboard' %}{% endif %}">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M9.5 3.5L5 8l4.5 4.5M5 8h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% if student %}Back to {{ student.first_name }}{% else %}Back to dashboard{% endif %}
+        </a>
+    </header>
+
+    <section class="pc-picker" aria-labelledby="pc-picker-label">
+        <label class="pc-label" id="pc-picker-label" for="studentSearch">Find a student</label>
+        <input
+            type="text"
+            id="studentSearch"
+            class="pc-control"
+            placeholder="Student number, first name or surname"
+            autocomplete="off"
+            role="combobox"
+            aria-expanded="false"
+            aria-controls="searchResults"
+            aria-autocomplete="list"
+            value="{% if student %}{{ student.student_number }} · {{ student.first_name }} {{ student.last_name }}{% endif %}"
+        >
+        <div id="searchResults" class="pc-results" role="listbox" aria-label="Matching students"></div>
+        <p class="pc-hint">
+            {% if student %}
+                Type to search for someone else, or
+                <a class="pc-link" href="{% url 'payment_create' %}">clear this student</a>.
+            {% else %}
+                Only active students can receive payments.
+            {% endif %}
         </p>
-    </div>
-
-    <!-- =========================================================
-         STUDENT SEARCH
-         ========================================================= -->
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body p-4">
-
-            <label for="studentSearch" class="form-label fw-semibold">
-                Find Student
-            </label>
-
-            <input
-                type="text"
-                id="studentSearch"
-                class="form-control"
-                placeholder="Type student number or name..."
-                autocomplete="off"
-                value="{% if student %}{{ student.first_name }} {{ student.last_name }}{% endif %}"
-            >
-
-            <div
-                id="searchResults"
-                class="list-group mt-2 shadow-sm"
-                style="position: relative; z-index: 10;"
-            ></div>
-
-        </div>
-    </div>
-
-
-    {% if student %}
-
-        <!-- =====================================================
-             STUDENT INFORMATION
-             ===================================================== -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-
-                <!-- =================================================
-                     FORM VALIDATION SUMMARY
-                     Displayed at the top of student information
-                     ================================================= -->
-                {% if form.errors %}
-
-                    <div
-                        class="alert alert-danger mb-4"
-                        role="alert"
-                    >
-                        <div class="fw-semibold">
-                            Unable to record payment.
-                        </div>
-
-                        <div class="small mt-1">
-                            Please check the highlighted fields below
-                            and correct any errors.
-                        </div>
-                    </div>
-
-                {% endif %}
-
-
-                <div class="d-flex justify-content-between align-items-start">
-
-                    <div>
-                        <h5 class="mb-1">
-                            {{ student.first_name }} {{ student.last_name }}
-
-                            <span class="text-muted small">
-                                ({{ student.student_number }})
-                            </span>
-                        </h5>
-
-                        <div class="text-muted small">
-                            {{ student.program.name }}
-                        </div>
-                    </div>
-
-                    <a
-                        href="{% url 'student_detail' student.pk %}"
-                        class="btn btn-sm btn-outline-secondary"
-                    >
-                        Full Profile
-                    </a>
-
-                </div>
-
-
-                <hr>
-
-
-                {% if enrollment %}
-
-                    <div class="row mb-3">
-
-                        <div class="col-md-4">
-
-                            <label class="form-label fw-semibold">
-                                Payment For
-                            </label>
-
-                            <div class="form-control-plaintext fw-bold">
-                                {{ enrollment.semester }}
-                            </div>
-
-                        </div>
-
-
-                        <div class="col-md-4">
-
-                            <label class="form-label fw-semibold">
-                                Program / Year
-                            </label>
-
-                            <div class="form-control-plaintext">
-                                {{ enrollment.program.code }}
-                                — Year {{ enrollment.year_level }}
-                            </div>
-
-                        </div>
-
-
-                        <div class="col-md-4">
-
-                            <label class="form-label fw-semibold">
-                                Outstanding Balance
-                            </label>
-
-                            <div
-                                class="form-control-plaintext fw-bold fs-5
-                                {% if balance > 0 %}
-                                    text-danger
-                                {% elif balance == 0 %}
-                                    text-success
-                                {% else %}
-                                    text-primary
-                                {% endif %}"
-                            >
-
-                                {% if balance > 0 %}
-                                    ${{ balance|floatformat:2 }}
-
-                                {% elif balance == 0 %}
-                                    Paid in full
-
-                                {% else %}
-                                    Credit ${{ balance|floatformat:2|slice:"1:" }}
-
-                                {% endif %}
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    <div class="row mb-3">
-
-                        <div class="col-md-4">
-
-                            <label class="form-label fw-semibold">
-                                Charged
-                            </label>
-
-                            <div class="form-control-plaintext fw-bold">
-                                ${{ charged|floatformat:2 }}
-                            </div>
-
-                        </div>
-
-
-                        <div class="col-md-4">
-
-                            <label class="form-label fw-semibold">
-                                Paid
-                            </label>
-
-                            <div class="form-control-plaintext fw-bold text-success">
-                                ${{ paid|floatformat:2 }}
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                {% endif %}
-
-            </div>
-        </div>
-
-
-        <!-- =====================================================
-             SEMESTER SELECTION
-             ===================================================== -->
-        {% if enrollment_data %}
-
-            <div class="card border-0 shadow-sm mb-4">
-
-                <div class="card-body p-4">
-
-                    <form
-                        method="get"
-                        id="semesterForm"
-                    >
-
-                        <input
-                            type="hidden"
-                            name="student"
-                            value="{{ student.pk }}"
-                        >
-
-                        <label
-                            for="{{ form.semester.id_for_label }}"
-                            class="form-label fw-semibold"
-                        >
-                            Payment For
-                            <span class="text-danger">*</span>
-                        </label>
-
-
-                        <select
-                            name="semester"
-                            id="{{ form.semester.id_for_label }}"
-                            class="form-select"
-                            required
-                        >
-
-                            <option
-                                value=""
-                                disabled
-                                {% if not enrollment %}
-                                    selected
-                                {% endif %}
-                            >
-                                Select semester...
-                            </option>
-
-
-                            {% for semester in form.semester.field.queryset %}
-
-                                <option
-                                    value="{{ semester.pk }}"
-                                    {% if enrollment and semester.pk == enrollment.semester.pk %}
-                                        selected
-                                    {% endif %}
-                                >
-                                    {{ semester }}
-                                </option>
-
-                            {% endfor %}
-
-                        </select>
-
-
-                        <div class="form-text mt-1">
-                            Select the semester this payment belongs to.
-                            You can record payments for past, current,
-                            or upcoming terms.
-                        </div>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-        {% endif %}
-
-
-        <!-- =====================================================
-             PAYMENT FORM
-             ===================================================== -->
-        {% if enrollment %}
-
-            <form
-                method="post"
-                id="paymentForm"
-            >
-
-                {% csrf_token %}
-
-
-                <!-- Keep student associated with the POST -->
-                <input
-                    type="hidden"
-                    name="student_id"
-                    value="{{ student.pk }}"
-                >
-
-
-                <!-- Keep selected semester associated with the POST -->
-                <input
-                    type="hidden"
-                    name="semester"
-                    value="{{ enrollment.semester.pk }}"
-                >
-
-
-                <!-- =================================================
-                     NON-FIELD ERRORS
-                     ================================================= -->
-                {% if form.non_field_errors %}
-
-                    <div
-                        class="alert alert-danger"
-                        role="alert"
-                    >
-
-                        <div class="fw-semibold mb-1">
-                            Payment error
-                        </div>
-
-                        {% for error in form.non_field_errors %}
-
-                            <div>
-                                {{ error }}
-                            </div>
-
-                        {% endfor %}
-
-                    </div>
-
-                {% endif %}
-
-
-                <div class="card border-0 shadow-sm mb-4">
-
-                    <div class="card-body p-4">
-
-                        <h5 class="mb-3">
-                            Payment Details
-                        </h5>
-
-
-                        <div class="row">
-
-                            {% for field in form %}
-
-                                {% if field.name != "semester" %}
-
-                                    <div class="col-md-6 mb-3">
-
-                                        <label
-                                            for="{{ field.id_for_label }}"
-                                            class="form-label fw-semibold"
-                                        >
-
-                                            {{ field.label }}
-
-                                            {% if field.field.required %}
-                                                <span class="text-danger">*</span>
-                                            {% endif %}
-
-                                        </label>
-
-
-                                        {{ field }}
-
-
-                                        {% if field.help_text %}
-
-                                            <div class="form-text">
-                                                {{ field.help_text }}
-                                            </div>
-
-                                        {% endif %}
-
-
-                                        {% if field.errors %}
-
-                                            {% for error in field.errors %}
-
-                                                <div class="invalid-feedback d-block">
-                                                    {{ error }}
-                                                </div>
-
-                                            {% endfor %}
-
-                                        {% endif %}
-
-                                    </div>
-
-                                {% endif %}
-
-                            {% endfor %}
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <!-- =================================================
-                     ACTIONS
-                     ================================================= -->
-                <div class="d-flex justify-content-end gap-2">
-
-                    <a
-                        href="{% url 'student_detail' student.pk %}"
-                        class="btn btn-secondary"
-                    >
-                        Cancel
-                    </a>
-
-                    <button
-                        type="submit"
-                        class="btn btn-success px-4"
-                    >
-                        Record Payment
-                    </button>
-
-                </div>
-
-            </form>
-
-        {% endif %}
-
-
+    </section>
+
+    {% if not student %}
+        <section class="pc-empty" aria-labelledby="pc-empty-title">
+            <h2 id="pc-empty-title">Start with the student</h2>
+            <p>
+                A payment always belongs to one student and one of their semesters, so the balance
+                it reduces is unambiguous. Search above to open their semesters.
+            </p>
+            <ul>
+                <li>The student number is on their file and every receipt.</li>
+                <li>You can search part of a name — “tendai” finds Tendai Moyo.</li>
+                <li>Deferred and withdrawn students cannot be charged here.</li>
+            </ul>
+        </section>
     {% else %}
 
-        <div class="text-center text-muted py-5">
-            Search for a student above to record their payment.
-        </div>
+        <section class="pc-student" aria-labelledby="pc-student-name">
+            <div>
+                <h2 class="pc-student-name" id="pc-student-name">{{ student.first_name }} {{ student.last_name }}</h2>
+                <p class="pc-student-meta">
+                    {{ student.student_number }} · {{ student.program.name }}
+                    {% if selected_term %}· Course year {{ selected_term.enrollment.year_level }}{% endif %}
+                </p>
+                <ul class="pc-facts">
+                    <li>
+                        <span class="pc-fact-label">Status</span>
+                        <span class="pc-fact-value"><span class="pc-status"><span class="pc-lamp" aria-hidden="true"></span>{{ student.get_status_display }}</span></span>
+                    </li>
+                    <li>
+                        <span class="pc-fact-label">Account charged</span>
+                        <span class="pc-fact-value pc-fig">${{ account_charged|floatformat:2 }}</span>
+                    </li>
+                    <li>
+                        <span class="pc-fact-label">Paid to date</span>
+                        <span class="pc-fact-value pc-fig">${{ account_paid|floatformat:2 }}</span>
+                    </li>
+                    <li>
+                        <span class="pc-fact-label">Account balance</span>
+                        <span class="pc-fact-value pc-fig pc-money {% if account_balance > 0 %}is-owing{% elif account_balance < 0 %}is-credit{% else %}is-clear{% endif %}">
+                            {% if account_balance < 0 %}Credit ${{ account_balance|floatformat:2|slice:"1:" }}{% else %}${{ account_balance|floatformat:2 }}{% endif %}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+            <div class="pc-student-actions">
+                <a class="pc-btn pc-btn--ghost" href="{% url 'student_detail' student.pk %}">Open account</a>
+                <a class="pc-btn pc-btn--ghost" href="{% url 'payment_create' %}">Change student</a>
+            </div>
+        </section>
 
+        {% if recorded_payment %}
+            <section class="pc-receipt" id="pc-receipt" aria-labelledby="pc-receipt-title">
+                <div class="pc-receipt-head">
+                    <span class="pc-lamp" aria-hidden="true"></span>
+                    <div>
+                        <h2 id="pc-receipt-title">Payment recorded</h2>
+                        <p>Receipt {{ recorded_payment.receipt_number }} · {{ recorded_payment.payment_date|date:"j M Y" }}</p>
+                    </div>
+                </div>
+
+                <div class="pc-receipt-body">
+                    <div class="pc-receipt-amount">
+                        <span class="pc-fact-label">Amount received</span>
+                        <span class="pc-amount-figure">${{ recorded_payment.amount|floatformat:2 }}</span>
+                        <span>
+                            {% if selected_term and selected_term.balance > 0 %}
+                                ${{ selected_term.balance|floatformat:2 }} still owed for this semester.
+                            {% elif selected_term and selected_term.balance < 0 %}
+                                ${{ selected_term.balance|floatformat:2|slice:"1:" }} in credit on this semester.
+                            {% else %}
+                                This semester is paid in full.
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <dl class="pc-receipt-grid">
+                        <div>
+                            <dt>Student</dt>
+                            <dd>{{ student.first_name }} {{ student.last_name }} ({{ student.student_number }})</dd>
+                        </div>
+                        <div>
+                            <dt>Semester</dt>
+                            <dd>{{ recorded_payment.semester.academic_year.name }} · Semester {{ recorded_payment.semester.number }}</dd>
+                        </div>
+                        <div>
+                            <dt>Method</dt>
+                            <dd>{{ recorded_payment.get_method_display }}</dd>
+                        </div>
+                        <div>
+                            <dt>Reference</dt>
+                            <dd>{{ recorded_payment.reference|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt>Recorded by</dt>
+                            <dd>{{ request.user.get_full_name|default:request.user.username }}</dd>
+                        </div>
+                        <div>
+                            <dt>Semester balance</dt>
+                            <dd>{% if selected_term %}${{ selected_term.balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div class="pc-receipt-actions">
+                    <button type="button" class="pc-btn pc-btn--solid" data-print-receipt>
+                        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4.5 6V2.5h7V6M4 11.5H2.5V7a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v4.5H12M4.5 10h7v3.5h-7z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Print receipt
+                    </button>
+                    <a class="pc-btn pc-btn--quiet"
+                       href="{% url 'student_detail' student.pk %}">Open student account</a>
+                </div>
+            </section>
+        {% endif %}
+
+        {% if not term_rows %}
+            <section class="pc-empty" aria-labelledby="pc-noterms-title">
+                <h2 id="pc-noterms-title">Nothing to pay towards yet</h2>
+                <p>
+                    {{ student.first_name }} has no semester with fees set up, charges or payments{% if skipped_terms %},
+                    and the {{ skipped_terms }} enrolled semester{{ skipped_terms|pluralize }} without fees {{ skipped_terms|pluralize:"is,are" }} not shown{% endif %}.
+                    Record a payment once fees exist for at least one semester.
+                </p>
+                {% if perms.school.add_feestructure %}
+                    <a class="pc-btn pc-btn--quiet" href="{% url 'semester_list' %}?filter=needs">Set up fees</a>
+                {% endif %}
+            </section>
+        {% else %}
+            <form method="post" id="paymentForm" class="pc-form" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="student_id" value="{{ student.pk }}">
+
+                {% if form.errors %}
+                    <section class="pc-errors" id="pc-error-summary" role="alert" tabindex="-1" aria-labelledby="pc-errors-title">
+                        <h2 id="pc-errors-title">The payment was not recorded</h2>
+                        <ul>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>
+                                        {% if field.name == "semester" %}
+                                            <a href="#pc-terms">{{ error }}</a>
+                                        {% else %}
+                                            <a href="#{{ field.id_for_label }}">{{ field.label }}: {{ error }}</a>
+                                        {% endif %}
+                                    </li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% endif %}
+
+                <section class="pc-card pc-card--terms" id="pc-terms" aria-labelledby="pc-terms-title">
+                    <div class="pc-card-head">
+                        <div>
+                            <h2 class="pc-card-title" id="pc-terms-title">Payment for</h2>
+                            <p class="pc-card-copy">
+                                Pick the semester the money is meant to settle. The balance after the payment is
+                                calculated from the fees charged that semester.
+                            </p>
+                        </div>
+                        <span class="pc-count" aria-label="Step 1">1</span>
+                    </div>
+
+                    <fieldset class="pc-terms" style="border:0;margin:0;padding:0;">
+                        <legend class="visually-hidden">Semester</legend>
+                        {% for row in term_rows %}
+                            <label class="pc-term {% if row.is_selected %}is-selected{% endif %}"
+                                   data-balance="{{ row.balance }}"
+                                   data-label="{{ row.semester.academic_year.name }} · Semester {{ row.semester.number }}">
+                                <input type="radio"
+                                       name="semester"
+                                       value="{{ row.semester.pk }}"
+                                       id="id_semester_{{ row.semester.pk }}"
+                                       data-term-radio
+                                       {% if row.is_selected %}checked{% endif %}>
+                                <span class="pc-term-body">
+                                    <span class="pc-term-name">
+                                        {{ row.semester.academic_year.name }} · Semester {{ row.semester.number }}
+                                        {% if row.is_current %}
+                                            <span class="pc-chip">Current</span>
+                                        {% elif row.is_upcoming %}
+                                            <span class="pc-chip pc-chip--upcoming">Upcoming</span>
+                                        {% else %}
+                                            <span class="pc-chip pc-chip--past">Past</span>
+                                        {% endif %}
+                                    </span>
+                                    <span class="pc-term-meta">
+                                        Course year {{ row.enrollment.year_level }} ·
+                                        {{ row.semester.start_date|date:"j M Y" }} to {{ row.semester.end_date|date:"j M Y" }}
+                                    </span>
+                                </span>
+                                <dl class="pc-term-figures">
+                                    <div>
+                                        <dt>Charged</dt>
+                                        <dd>${{ row.charged|floatformat:2 }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Paid</dt>
+                                        <dd>${{ row.paid|floatformat:2 }}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Balance</dt>
+                                        <dd>{% if row.balance < 0 %}-${{ row.balance|floatformat:2|slice:"1:" }}{% else %}${{ row.balance|floatformat:2 }}{% endif %}</dd>
+                                    </div>
+                                </dl>
+                                <span class="pc-term-state {% if row.balance > 0 %}is-owing{% elif row.balance < 0 %}is-credit{% else %}is-clear{% endif %}">
+                                    {% if row.balance > 0 %}Owes ${{ row.balance|floatformat:2 }}
+                                    {% elif row.balance < 0 %}In credit
+                                    {% else %}Paid in full{% endif %}
+                                </span>
+                            </label>
+                        {% endfor %}
+                    </fieldset>
+
+                    {% if skipped_terms %}
+                        <p class="pc-note">
+                            {{ skipped_terms }} enrolled semester{{ skipped_terms|pluralize }} without fees set up
+                            {{ skipped_terms|pluralize:"is,are" }} hidden, because there is nothing to pay towards.
+                        </p>
+                    {% endif %}
+                </section>
+
+                <section class="pc-card pc-card--amount" aria-labelledby="pc-amount-title">
+                    <div class="pc-card-head">
+                        <div>
+                            <h2 class="pc-card-title" id="pc-amount-title">Amount received</h2>
+                            <p class="pc-card-copy">Enter the money actually handed over or banked.</p>
+                        </div>
+                        <span class="pc-count" aria-label="Step 2">2</span>
+                    </div>
+
+                    <label class="pc-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+                    <div class="pc-amount-wrap">
+                        <span class="pc-currency" aria-hidden="true">$</span>
+                        {{ form.amount }}
+                    </div>
+                    <div class="pc-chips">
+                        <button type="button" class="pc-chip-btn" data-fill-amount="full">Full balance</button>
+                        <button type="button" class="pc-chip-btn" data-fill-amount="half">Half balance</button>
+                        <button type="button" class="pc-chip-btn" data-fill-amount="clear">Clear</button>
+                    </div>
+                    {% if form.amount.errors %}
+                        <div class="pc-field-error" id="{{ form.amount.id_for_label }}_errors">
+                            {% for error in form.amount.errors %}<div>{{ error }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="pc-preview" data-preview aria-live="polite">
+                        Enter an amount to see the balance that will remain.
+                    </p>
+                </section>
+
+                <section class="pc-card pc-card--details" aria-labelledby="pc-details-title">
+                    <div class="pc-card-head">
+                        <div>
+                            <h2 class="pc-card-title" id="pc-details-title">Payment details</h2>
+                            <p class="pc-card-copy">These appear on the receipt and in the audit trail.</p>
+                        </div>
+                        <span class="pc-count" aria-label="Step 3">3</span>
+                    </div>
+
+                    <div class="pc-grid">
+                        <div class="pc-field pc-field--full">
+                            <fieldset class="pc-methods">
+                                <legend>{{ form.method.label }}</legend>
+                                {% for radio in form.method %}
+                                    <label class="pc-method" for="{{ radio.id_for_label }}">
+                                        {{ radio.tag }}
+                                        <span>{{ radio.choice_label }}</span>
+                                    </label>
+                                {% endfor %}
+                            </fieldset>
+                            {% if form.method.errors %}
+                                <div class="pc-field-error">{% for error in form.method.errors %}<div>{{ error }}</div>{% endfor %}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="pc-field">
+                            <label class="pc-label" for="{{ form.payment_date.id_for_label }}">{{ form.payment_date.label }}</label>
+                            {{ form.payment_date }}
+                            {% if form.payment_date.errors %}
+                                <div class="pc-field-error">{% for error in form.payment_date.errors %}<div>{{ error }}</div>{% endfor %}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="pc-field">
+                            <label class="pc-label" for="{{ form.receipt_number.id_for_label }}">{{ form.receipt_number.label }} (optional)</label>
+                            {{ form.receipt_number }}
+                            {% if form.receipt_number.errors %}
+                                <div class="pc-field-error">{% for error in form.receipt_number.errors %}<div>{{ error }}</div>{% endfor %}</div>
+                            {% else %}
+                                <p class="pc-help">Next automatic number: <strong>{{ next_receipt }}</strong></p>
+                            {% endif %}
+                        </div>
+
+                        <div class="pc-field">
+                            <label class="pc-label" for="{{ form.reference.id_for_label }}">{{ form.reference.label }}</label>
+                            {{ form.reference }}
+                            {% if form.reference.errors %}
+                                <div class="pc-field-error">{% for error in form.reference.errors %}<div>{{ error }}</div>{% endfor %}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="pc-field">
+                            <label class="pc-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                                <div class="pc-field-error">{% for error in form.notes.errors %}<div>{{ error }}</div>{% endfor %}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </section>
+
+                <div class="pc-actionbar">
+                    <p class="pc-summary" data-summary>
+                        <span>Choose a semester and enter the amount received.</span>
+                        <span class="pc-key-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> records the payment</span>
+                    </p>
+                    <div class="pc-actions">
+                        <a class="pc-btn pc-btn--ghost" href="{% url 'student_detail' student.pk %}">Cancel</a>
+                        <button type="submit" class="pc-btn pc-btn--solid" id="pc-submit">
+                            {% if recorded_payment %}Record another payment{% else %}Record payment{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        {% endif %}
     {% endif %}
-
 </div>
+{% endblock %}
 
-</div>
-
+{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+(function () {
+    "use strict";
+
+    var root = document.querySelector(".pc");
+    if (!root) return;
+
+    var form = document.getElementById("paymentForm");
+    var input = document.getElementById("studentSearch");
+    var results = document.getElementById("searchResults");
+    var debounceTimer;
 
     /*
-     * =========================================================
+     * ---------------------------------------------------------
      * STUDENT SEARCH
-     * =========================================================
+     * ---------------------------------------------------------
      */
 
-    const input = document.getElementById('studentSearch');
-    const results = document.getElementById('searchResults');
+    function clearResults() {
+        if (!results) return;
+        results.innerHTML = "";
+        if (input) input.setAttribute("aria-expanded", "false");
+    }
 
-    let debounceTimer;
+    function addResult(text, href, meta) {
+        var node;
 
+        if (href) {
+            node = document.createElement("a");
+            node.href = href;
+            node.className = "pc-result";
+            node.setAttribute("role", "option");
+        } else {
+            node = document.createElement("div");
+            node.className = "pc-result is-note";
+        }
+
+        var name = document.createElement("strong");
+        name.textContent = text;
+        node.appendChild(name);
+
+        if (meta) {
+            var detail = document.createElement("span");
+            detail.textContent = meta;
+            node.appendChild(detail);
+        }
+
+        results.appendChild(node);
+    }
 
     if (input && results) {
-
-        input.addEventListener('input', function () {
-
+        input.addEventListener("input", function () {
             clearTimeout(debounceTimer);
 
-            const query = this.value.trim();
-
-
+            var query = this.value.trim();
             if (query.length < 2) {
-                results.innerHTML = '';
+                clearResults();
                 return;
             }
 
-
             debounceTimer = setTimeout(function () {
-
-                fetch(
-                    `{% url 'student_search' %}?q=${encodeURIComponent(query)}`
-                )
-                .then(function (response) {
-
-                    if (!response.ok) {
-                        throw new Error('Search request failed.');
-                    }
-
-                    return response.json();
-
+                fetch("{% url 'student_search' %}?q=" + encodeURIComponent(query), {
+                    headers: { "Accept": "application/json" },
+                    credentials: "same-origin"
                 })
-                .then(function (data) {
+                    .then(function (response) {
+                        if (!response.ok) throw new Error("Search failed");
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        results.innerHTML = "";
+                        input.setAttribute("aria-expanded", "true");
 
-                    results.innerHTML = '';
+                        if (!data.students || data.students.length === 0) {
+                            addResult("No matching active student.", null, "Check the spelling or the student number.");
+                            return;
+                        }
 
-
-                    if (!data.students || data.students.length === 0) {
-
-                        results.innerHTML =
-                            '<div class="list-group-item text-muted">' +
-                            'No matches found.' +
-                            '</div>';
-
-                        return;
-                    }
-
-
-                    data.students.forEach(function (s) {
-
-                        const link = document.createElement('a');
-
-                        link.href =
-                            `{% url 'payment_create' %}?student=${s.id}`;
-
-                        link.className =
-                            'list-group-item list-group-item-action';
-
-
-                        const name = document.createElement('strong');
-                        name.textContent = s.name;
-
-
-                        const number = document.createTextNode(
-                            ` — ${s.student_number}`
-                        );
-
-
-                        const details = document.createElement('span');
-
-                        details.className =
-                            'text-muted small d-block';
-
-                        details.textContent =
-                            `${s.program || ''}${s.semester ? ' · ' + s.semester : ''}`;
-
-
-                        link.appendChild(name);
-                        link.appendChild(number);
-                        link.appendChild(details);
-
-
-                        results.appendChild(link);
-
+                        data.students.forEach(function (student) {
+                            addResult(
+                                student.name,
+                                "{% url 'payment_create' %}?student=" + encodeURIComponent(student.id),
+                                student.student_number + " · " + (student.program || "") +
+                                    (student.semester ? " · " + student.semester : "")
+                            );
+                        });
+                    })
+                    .catch(function () {
+                        results.innerHTML = "";
+                        addResult("Search is unavailable right now.", null, "Reload the page and try again.");
                     });
-
-                })
-                .catch(function (error) {
-
-                    console.error(
-                        'Student search error:',
-                        error
-                    );
-
-                    results.innerHTML =
-                        '<div class="list-group-item text-danger">' +
-                        'Unable to search students.' +
-                        '</div>';
-
-                });
-
             }, 250);
-
         });
 
-
-        /*
-         * Close search results when clicking elsewhere
-         */
-
-        document.addEventListener('click', function (event) {
-
-            if (
-                !results.contains(event.target) &&
-                event.target !== input
-            ) {
-                results.innerHTML = '';
+        input.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+                clearResults();
+                return;
             }
-
-        });
-
-    }
-
-
-    /*
-     * =========================================================
-     * SEMESTER SELECTION
-     * =========================================================
-     *
-     * Submit ONLY the separate GET form.
-     * This never submits the payment form.
-     */
-
-    const semesterSelect = document.getElementById(
-        '{{ form.semester.id_for_label }}'
-    );
-
-    const semesterForm = document.getElementById(
-        'semesterForm'
-    );
-
-
-    if (semesterSelect && semesterForm) {
-
-        semesterSelect.addEventListener(
-            'change',
-            function () {
-
-                if (!this.value) {
-                    return;
+            if (event.key === "ArrowDown") {
+                var first = results.querySelector("a");
+                if (first) {
+                    event.preventDefault();
+                    first.focus();
                 }
-
-                semesterForm.submit();
-
             }
-        );
+        });
 
+        document.addEventListener("click", function (event) {
+            if (!results.contains(event.target) && event.target !== input) {
+                clearResults();
+            }
+        });
     }
 
+    if (!form) return;
 
     /*
-     * =========================================================
-     * PAYMENT FIELD PLACEHOLDERS
-     * =========================================================
+     * ---------------------------------------------------------
+     * TERM SELECTION, AMOUNT PREVIEW AND SUBMIT SUMMARY
+     * ---------------------------------------------------------
      */
 
-    const placeholders = {
-        'id_amount': '0.00',
-        'id_reference': 'Optional reference',
-        'id_notes': 'Optional notes'
-    };
+    var amount = document.getElementById("{{ form.amount.id_for_label }}");
+    var preview = root.querySelector("[data-preview]");
+    var summary = root.querySelector("[data-summary] > span");
+    var submit = document.getElementById("pc-submit");
+    var submitted = false;
 
+    function money(value) {
+        return "$" + value.toFixed(2);
+    }
 
-    Object.entries(placeholders).forEach(
-        function ([id, placeholder]) {
+    function terms() {
+        return Array.prototype.slice.call(form.querySelectorAll("[data-term-radio]"));
+    }
 
-            const element =
-                document.getElementById(id);
+    function selectedTerm() {
+        var checked = form.querySelector("[data-term-radio]:checked");
+        return checked ? checked.closest(".pc-term") : null;
+    }
 
-            if (element) {
-                element.placeholder = placeholder;
+    function currentBalance() {
+        var term = selectedTerm();
+        if (!term) return null;
+        var value = parseFloat(term.dataset.balance);
+        return isNaN(value) ? null : value;
+    }
+
+    function syncTermStyles() {
+        terms().forEach(function (radio) {
+            var term = radio.closest(".pc-term");
+            if (!term) return;
+            term.classList.toggle("is-selected", radio.checked);
+        });
+    }
+
+    function readAmount() {
+        if (!amount) return 0;
+        var value = parseFloat(String(amount.value).replace(/[^0-9.\-]/g, ""));
+        return isNaN(value) ? 0 : value;
+    }
+
+    function describeBalance() {
+        var term = selectedTerm();
+        var balance = currentBalance();
+        var value = readAmount();
+        var label = term ? term.dataset.label : "this semester";
+
+        if (!term) {
+            return { text: "Choose the semester this payment is for.", state: "" };
+        }
+
+        if (value <= 0) {
+            if (balance === null) {
+                return { text: "Enter an amount to see the balance after this payment.", state: "" };
+            }
+            if (balance < 0) {
+                return {
+                    text: label + " is already in credit by " + money(Math.abs(balance)) + ".",
+                    state: "is-credit"
+                };
+            }
+            if (balance === 0) {
+                return { text: label + " is paid in full.", state: "is-clear" };
+            }
+            return {
+                text: "Balance owed for " + label + " is " + money(balance) + ".",
+                state: "is-owing"
+            };
+        }
+
+        if (balance === null) {
+            return { text: "Recording " + money(value) + " for " + label + ".", state: "" };
+        }
+
+        var after = balance - value;
+
+        if (after > 0) {
+            return {
+                text: "Balance after this payment: " + money(after) + " still owed.",
+                state: "is-owing"
+            };
+        }
+        if (after === 0) {
+            return {
+                text: "This pays " + label + " in full.",
+                state: "is-clear"
+            };
+        }
+        return {
+            text: money(Math.abs(after)) + " extra will be held as credit on " + label + ".",
+            state: "is-credit"
+        };
+    }
+
+    function update() {
+        syncTermStyles();
+
+        var state = describeBalance();
+        var value = readAmount();
+
+        if (preview) {
+            preview.textContent = state.text;
+            preview.className = "pc-preview" + (state.state ? " " + state.state : "");
+        }
+
+        if (summary) {
+            var term = selectedTerm();
+            if (term && value > 0) {
+                summary.textContent = "Recording " + money(value) + " for " +
+                    (term.dataset.label || "this semester") + ".";
+            } else if (term) {
+                summary.textContent = "Enter the amount received for " +
+                    (term.dataset.label || "this semester") + ".";
+            } else {
+                summary.textContent = "Choose the semester this payment is for.";
+            }
+        }
+    }
+
+    terms().forEach(function (radio) {
+        radio.addEventListener("change", update);
+    });
+
+    root.querySelectorAll("[data-fill-amount]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            if (!amount) return;
+            var balance = currentBalance();
+            var mode = button.dataset.fillAmount;
+
+            if (mode === "clear") {
+                amount.value = "";
+            } else if (balance === null) {
+                amount.focus();
+                return;
+            } else if (balance <= 0) {
+                amount.value = "";
+            } else if (mode === "full") {
+                amount.value = balance.toFixed(2);
+            } else {
+                amount.value = (Math.round(balance * 50) / 100).toFixed(2);
             }
 
+            amount.focus();
+            update();
+        });
+    });
+
+    if (amount) {
+        amount.addEventListener("input", update);
+        amount.addEventListener("change", update);
+    }
+
+    form.addEventListener("keydown", function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            if (!submitted) form.requestSubmit(submit);
         }
-    );
+    });
 
-});
+    form.addEventListener("submit", function (event) {
+        if (submitted) {
+            event.preventDefault();
+            return;
+        }
+        update();
+        submitted = true;
+        if (submit) {
+            submit.disabled = true;
+            submit.setAttribute("aria-disabled", "true");
+            submit.textContent = "Recording…";
+        }
+    });
+
+    root.querySelectorAll("[data-print-receipt]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            window.print();
+        });
+    });
+
+    update();
+})();
 </script>
-
 {% endblock %}

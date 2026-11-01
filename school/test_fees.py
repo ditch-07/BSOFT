@@ -3,7 +3,7 @@ from datetime import date, datetime
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -22,6 +22,7 @@ from .models import (
 from .views import copy_fee_structures, fee_progress
 
 
+@override_settings(ENABLE_TIME_OVERRIDE=True)
 class FeeTestBase(TestCase):
     @classmethod
     def setUpTestData(cls):

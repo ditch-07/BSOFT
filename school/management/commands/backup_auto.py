@@ -1,9 +1,9 @@
 import os
-import shutil
 from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from school.models import BackupConfig
+from school.utils.backups import BackupError, create_backup, timestamped_name
 
 
 class Command(BaseCommand):
@@ -23,17 +23,18 @@ class Command(BaseCommand):
         # Ensure backup directory exists
         os.makedirs(backup_dir, exist_ok=True)
 
-        # 1. Create new backup
+        # 1. Create new backup (consistent copy + SQLite integrity check)
         db_path = settings.DATABASES['default']['NAME']
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_name = f"auto_backup_{timestamp}.sqlite3"
+        backup_name = timestamped_name("auto_backup")
         backup_path = os.path.join(backup_dir, backup_name)
 
         try:
-            shutil.copy2(db_path, backup_path)
-            self.stdout.write(self.style.SUCCESS(f"Backup created: {backup_name}"))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Backup failed: {e}"))
+            create_backup(db_path, backup_path)
+            self.stdout.write(
+                self.style.SUCCESS(f"Backup created and verified: {backup_name}")
+            )
+        except BackupError as exc:
+            self.stdout.write(self.style.ERROR(f"Backup failed: {exc}"))
             return
 
         # 2. Clean old backups

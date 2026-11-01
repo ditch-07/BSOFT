@@ -1,28 +1,45 @@
-{% extends "school/reports/_base.html" %}
-
+{% extends "base.html" %}
+{% load static %}
 {% block title %}Reports{% endblock %}
-
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/reports.css' %}">{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h2 class="fw-bold mb-1">Reports</h2>
-        <p class="text-muted mb-0">Select a report to view or export data</p>
-    </div>
-</div>
-
-<!-- Reports Index Page -->
-<div class="row g-3">
-    {% for r in reports %}
-    <div class="col-12 col-md-6 col-lg-4">
-        <a href="{% url r.view %}" class="text-decoration-none">
-            <div class="card border-0 shadow-sm report-card h-100">
-                <div class="card-body">
-                    <h5 class="fw-bold mb-2">{{ r.name }}</h5>
-                    <p class="text-muted small mb-3">{{ r.desc }}</p>
-                    <span class="btn btn-sm btn-outline-primary">View Report →</span>
-                </div>
-            </div>
+<div class="ui rp">
+    <header class="rp-hub-head">
+        <h1 class="rp-title">Reports</h1>
+        <p class="rp-subtitle">Live answers for the questions your school asks every day.</p>
+    </header>
+    {% if quick_answers %}
+    <section class="rp-kpis" aria-label="Quick answers">
+        {% for answer in quick_answers %}
+        <a class="ui-card rp-kpi" href="{{ answer.url }}">
+            <div class="rp-kpi-label">{{ answer.label }}</div>
+            <div class="rp-kpi-value ui-fig">{{ answer.value }}</div>
+            <span class="rp-subtitle">Open report →</span>
         </a>
+        {% endfor %}
+    </section>
+    {% endif %}
+    {% for group in groups %}
+    <section class="rp-group" aria-labelledby="group-{{ forloop.counter }}">
+        <h2 id="group-{{ forloop.counter }}">{{ group.name }}</h2>
+        <div class="rp-cards">
+            {% for report in group.reports %}
+            <article class="ui-card rp-card">
+                <h3>{{ report.question }}</h3>
+                <p class="rp-card-tech">{{ report.title }}</p>
+                <p>{{ report.description }}</p>
+                <div class="rp-card-actions">
+                    <a class="ui-btn ui-btn--solid" href="{% url report.view %}">Open</a>
+                    {% if pdf_available %}<a class="ui-btn ui-btn--quiet" href="{% url report.view %}?format=pdf">PDF</a>{% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% empty %}
+    <div class="ui-card rp-empty">
+        <strong>No reports are available for your account.</strong>
+        <p>Ask an administrator for the report access you need.</p>
     </div>
     {% endfor %}
 </div>

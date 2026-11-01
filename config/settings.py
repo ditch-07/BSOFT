@@ -1,13 +1,23 @@
 from pathlib import Path
 import os
+import secrets
 
 from config.paths import APP_DIR, DATA_DIR, STATIC_DIR, TEMPLATES_DIR
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def env_bool(name, default=False):
+    """Read a boolean environment variable (1/true/yes/on)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # Use separate data directory that works both in development and packaged
 # In development: project/data
-# In packaged: ProgramData/BSOFT Student Management (or env var)
+# In packaged: ProgramData/NRZ Student Management (or env var)
 APP_DATA_DIR = Path(
     os.environ.get(
         "NRZ_DATA_DIR",
@@ -19,12 +29,51 @@ APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 BACKUP_DIR = APP_DATA_DIR / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-SECRET_KEY = "nrz-local-development-key"
-DEBUG =True
+
+def _load_secret_key():
+    """Return a secret key that is never hard-coded in the repository.
+
+    Priority:
+    1. DJANGO_SECRET_KEY environment variable.
+    2. A key generated once and stored beside the database, so sessions and
+       password-reset tokens survive restarts.
+    3. An ephemeral key if the data directory cannot be written (sessions end
+       when the process restarts).
+    """
+    configured = os.environ.get("DJANGO_SECRET_KEY", "").strip()
+    if configured:
+        return configured
+
+    key_file = APP_DATA_DIR / ".secret_key"
+    try:
+        if key_file.exists():
+            stored = key_file.read_text(encoding="utf-8").strip()
+            if stored:
+                return stored
+
+        generated = secrets.token_urlsafe(50)
+        key_file.write_text(generated, encoding="utf-8")
+        try:
+            key_file.chmod(0o600)
+        except OSError:
+            pass
+        return generated
+    except OSError:
+        return secrets.token_urlsafe(50)
+
+
+SECRET_KEY = _load_secret_key()
+
+# DEBUG stays off unless a developer opts in with DJANGO_DEBUG=1. The packaged
+# desktop app and any shared deployment must not expose Django debug pages.
+DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
+    host.strip()
+    for host in os.environ.get(
+        "DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost"
+    ).split(",")
+    if host.strip()
 ]
 
 INSTALLED_APPS = [
@@ -83,7 +132,20 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
 
 LANGUAGE_CODE = "en-us"
 
@@ -100,13 +162,20 @@ STATICFILES_DIRS = [
     BASE_DIR / "frontend" / "static",
 ]
 
+# Serve static files straight from the static directories. This keeps the
+# packaged app styled with DEBUG off and without running collectstatic against
+# a read-only install directory.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Time Override for Testing
 # When True, the application will use a frozen datetime stored in the database
 # instead of real time. This is useful for testing semester logic, payment due dates, etc.
-# The frozen time is set via the Time Override UI at /time-override/
-ENABLE_TIME_OVERRIDE = True  # Set to False in production
+# The frozen time is set via the Time Override UI at /time-override/.
+# Off by default; opt in with NRZ_ENABLE_TIME_OVERRIDE=1.
+ENABLE_TIME_OVERRIDE = env_bool("NRZ_ENABLE_TIME_OVERRIDE", default=False)
 
 # Session / authentication timeout settings
 # Auto-logout after 2 hours of inactivity and reset the idle timer on each request.

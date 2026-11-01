@@ -1,163 +1,674 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Archive – {{ student.first_name }} {{ student.last_name }}{% endblock %}
+{% block title %}{{ student.first_name }} {{ student.last_name }} · Archive{% endblock %}
 
 {% block content %}
+<style>
+    @font-face {
+        font-family: "Archivo File";
+        src: url("{% static 'vendor/fonts/archivo/archivo-latin-var.woff2' %}") format("woff2");
+        font-weight: 100 900;
+        font-stretch: 62% 125%;
+        font-display: swap;
+    }
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-    <div>
-        <h2 class="fw-bold">{{ student.first_name }} {{ student.last_name }}</h2>
-        <div class="text-muted">
-            {{ student.student_number }} · {{ student.program.name }}
-            {% if student.status == "ACTIVE" %}
-                <span class="badge text-bg-success ms-1">Active</span>
-            {% elif student.status == "DEFERRED" %}
-                <span class="badge text-bg-warning ms-1">Deferred</span>
-            {% elif student.status == "WITHDRAWN" %}
-                <span class="badge text-bg-secondary ms-1">Withdrawn</span>
-            {% elif student.status == "COMPLETED" %}
-                <span class="badge text-bg-primary ms-1">Completed</span>
+    .ad {
+        --ink: #1E2B33;
+        --ink-2: #4E5C66;
+        --grey: #7D878E;
+        --line: #D6DAD5;
+        --paper: #FFFFFF;
+        --wash: #F5F6F3;
+        --rail: #1F4F7A;
+        --rail-dark: #163B5C;
+        --rail-soft: #E5EDF4;
+        --red: #B8372B;
+        --red-soft: #FBEDEB;
+        --amber: #A86E06;
+        --green: #2F7D4F;
+        --blue: #2C6FB0;
+        --radius: 10px;
+
+        max-width: 1180px;
+        padding: 0.75rem 0 2.5rem;
+        color: var(--ink);
+        font-family: "Archivo File", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    .ad :focus-visible { outline: 3px solid var(--rail); outline-offset: 2px; border-radius: 6px; }
+
+    .ad-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.25rem 2rem;
+        margin-bottom: 1.15rem;
+    }
+
+    .ad-title {
+        margin: 0;
+        font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.5rem);
+        font-weight: 800;
+        font-stretch: 108%;
+        letter-spacing: -0.02em;
+        line-height: 1.08;
+    }
+
+    .ad-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 0.75rem;
+        margin: 0.45rem 0 0;
+        color: var(--ink-2);
+        font-size: 0.875rem;
+    }
+
+    .ad-meta .ad-fig { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+
+    .ad-status { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 650; }
+    .ad-lamp {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--grey);
+        box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px rgba(30, 43, 51, 0.12);
+    }
+    .ad-status--ACTIVE .ad-lamp { background: var(--green); }
+    .ad-status--DEFERRED .ad-lamp { background: var(--amber); }
+    .ad-status--WITHDRAWN .ad-lamp { background: var(--grey); }
+    .ad-status--COMPLETED .ad-lamp { background: var(--blue); }
+
+    .ad-head-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+
+    .ad-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        min-height: 40px;
+        padding: 0.55rem 0.9rem;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.8125rem;
+        font-weight: 650;
+        line-height: 1.2;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    }
+    .ad-btn:active { transform: translateY(1px) scale(0.99); }
+
+    .ad .ad-btn--solid {
+        background: var(--rail);
+        color: #fff;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1), 0 4px 12px -6px rgba(31, 79, 122, 0.7);
+    }
+    .ad .ad-btn--solid:hover { background: var(--rail-dark); color: #fff; }
+    .ad .ad-btn--quiet { border-color: #BFCEDC; background: var(--paper); color: var(--rail); }
+    .ad .ad-btn--quiet:hover { border-color: var(--rail); background: var(--rail-soft); }
+    .ad .ad-btn--ghost { border-color: var(--line); background: transparent; color: var(--ink); }
+    .ad .ad-btn--ghost:hover { border-color: var(--grey); background: var(--wash); }
+
+    .ad-kpis {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        margin-bottom: 1rem;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--line);
+    }
+
+    .ad-kpi { padding: 0.9rem 1.15rem; background: var(--paper); }
+    .ad-kpi-label {
+        display: block;
+        color: var(--grey);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .ad-kpi-value {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: clamp(1.35rem, 1.1rem + 0.9vw, 1.75rem);
+        font-weight: 800;
+        font-stretch: 92%;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.15;
+    }
+    .ad-kpi-value.is-owing { color: var(--red); }
+    .ad-kpi-value.is-clear { color: var(--green); }
+    .ad-kpi-value.is-credit { color: var(--blue); }
+    .ad-kpi-note { display: block; margin-top: 0.15rem; color: var(--ink-2); font-size: 0.75rem; }
+
+    .ad-notice {
+        display: flex;
+        gap: 0.6rem;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+        padding: 0.8rem 1rem;
+        border: 1px solid #E3D3AE;
+        border-left: 4px solid var(--amber);
+        border-radius: var(--radius);
+        background: #FDF7EA;
+        color: #6B4A06;
+        font-size: 0.8125rem;
+    }
+
+    .ad-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .ad-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--paper);
+        overflow: hidden;
+    }
+
+    .ad-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 1rem;
+        padding: 0.9rem 1.15rem;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .ad-h2 { margin: 0; font-size: 1rem; font-weight: 750; font-stretch: 104%; }
+    .ad-count { color: var(--grey); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+    .ad-card-body { padding: 1rem 1.15rem; }
+
+    .ad-facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.85rem 1.25rem;
+        margin: 0;
+    }
+    .ad-facts div { min-width: 0; }
+    .ad-facts dt {
+        color: var(--grey);
+        font-size: 0.6875rem;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+    .ad-facts dd {
+        margin: 0.1rem 0 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+    .ad-facts dd a { color: var(--rail); text-decoration: none; font-weight: 650; }
+    .ad-facts dd a:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .ad-facts .ad-full { grid-column: 1 / -1; }
+    .ad-muted { color: var(--grey); font-weight: 500; }
+
+    .ad-table { width: 100%; border-collapse: collapse; }
+    .ad-table th {
+        padding: 0.55rem 1.15rem;
+        color: var(--grey);
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.055em;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .ad-table th.ad-num, .ad-table td.ad-num { text-align: right; }
+    .ad-table td {
+        padding: 0.65rem 1.15rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.8125rem;
+        vertical-align: middle;
+    }
+    .ad-table tbody tr:first-child td { border-top: 0; }
+    .ad-table tbody tr:hover { background: #F8FAFB; }
+    .ad-table tr.is-current td { background: var(--rail-soft); }
+    .ad-table .ad-fig { font-variant-numeric: tabular-nums; font-weight: 650; }
+    .ad-table .ad-bal-owing { color: var(--red); }
+    .ad-table .ad-bal-clear { color: var(--green); }
+    .ad-table .ad-bal-credit { color: var(--blue); }
+
+    .ad-term-name { display: flex; flex-direction: column; gap: 0.05rem; }
+    .ad-term-name strong { font-size: 0.8125rem; font-weight: 700; }
+    .ad-term-name span { color: var(--grey); font-size: 0.6875rem; }
+
+    .ad-chip {
+        display: inline-block;
+        padding: 0 0.4rem;
+        border-radius: 4px;
+        background: var(--rail);
+        color: #fff;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .ad-sub {
+        margin: 1rem 1.15rem 0;
+        padding: 0.7rem 0.9rem;
+        border-radius: 8px;
+        background: var(--wash);
+        color: var(--ink-2);
+        font-size: 0.75rem;
+    }
+    .ad-sub strong { color: var(--ink); }
+
+    .ad-empty { padding: 1.15rem; color: var(--ink-2); font-size: 0.8125rem; }
+
+    .ad-timeline { list-style: none; margin: 0; padding: 0.35rem 0; }
+    .ad-timeline li {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.2rem 0.75rem;
+        padding: 0.65rem 1.15rem;
+        border-top: 1px solid var(--line);
+    }
+    .ad-timeline li:first-child { border-top: 0; }
+    .ad-timeline .ad-lamp { margin-top: 0.4rem; }
+    .ad-timeline strong { font-size: 0.8125rem; font-weight: 700; }
+    .ad-timeline span { display: block; color: var(--ink-2); font-size: 0.75rem; }
+    .ad-timeline em { display: block; margin-top: 0.15rem; color: var(--ink); font-size: 0.75rem; font-style: normal; }
+
+    .ad-note { margin: 0.75rem 0 0; color: var(--grey); font-size: 0.75rem; }
+
+    .ad-footnote {
+        margin-top: 1rem;
+        color: var(--grey);
+        font-size: 0.75rem;
+    }
+
+    @keyframes ad-reveal {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    .ad[data-intro] .ad-head,
+    .ad[data-intro] .ad-kpis,
+    .ad[data-intro] .ad-grid > .ad-card { animation: ad-reveal 0.4s cubic-bezier(.2, .7, .2, 1) both; }
+    .ad[data-intro] .ad-kpis { animation-delay: 60ms; }
+    .ad[data-intro] .ad-grid > .ad-card:nth-child(1) { animation-delay: 100ms; }
+    .ad[data-intro] .ad-grid > .ad-card:nth-child(2) { animation-delay: 140ms; }
+    .ad[data-intro] .ad-grid > .ad-card:nth-child(3) { animation-delay: 180ms; }
+    .ad[data-intro] .ad-grid > .ad-card:nth-child(4) { animation-delay: 220ms; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .ad *, .ad *::before, .ad *::after {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
+
+    @media (min-width: 900px) {
+        .ad-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); }
+        .ad-card--wide { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 760px) {
+        .ad { padding-top: 0.35rem; }
+        .ad-head { flex-direction: column; }
+        .ad-head-actions { width: 100%; }
+        .ad-head-actions .ad-btn { flex: 1; }
+        .ad-kpis { grid-template-columns: minmax(0, 1fr); }
+        .ad-facts { grid-template-columns: minmax(0, 1fr); }
+        .ad-facts .ad-full { grid-column: auto; }
+
+        .ad-table thead { display: none; }
+        .ad-table, .ad-table tbody { display: block; }
+        .ad-table tr {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.55rem 1rem;
+            padding: 0.85rem 1.15rem;
+            border-top: 1px solid var(--line);
+        }
+        .ad-table tbody tr:first-child { border-top: 0; }
+        .ad-table td {
+            display: block;
+            padding: 0;
+            border: 0;
+        }
+        .ad-table td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 0.1rem;
+            color: var(--grey);
+            font-size: 0.625rem;
+            font-weight: 650;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .ad-table td.ad-num { text-align: left; }
+        .ad-table td:first-child { grid-column: 1 / -1; }
+        .ad-table td:first-child::before { display: none; }
+    }
+
+    @media (max-width: 460px) {
+        .ad-head-actions { flex-direction: column; }
+        .ad-head-actions .ad-btn { width: 100%; }
+    }
+
+    @media print {
+        .ad-head-actions { display: none; }
+        .ad { max-width: none; padding: 0; }
+        .ad-card, .ad-kpis { break-inside: avoid; }
+        .ad-grid { grid-template-columns: minmax(0, 1fr); }
+        @page { margin: 16mm; }
+    }
+</style>
+
+<div class="ad" data-intro>
+    <header class="ad-head">
+        <div>
+            <h1 class="ad-title">{{ student.first_name }} {{ student.last_name }}</h1>
+            <p class="ad-meta">
+                <span class="ad-fig">{{ student.student_number }}</span>
+                <span aria-hidden="true">·</span>
+                <span>{{ student.program.name }}</span>
+                <span aria-hidden="true">·</span>
+                <span class="ad-status ad-status--{{ student.status }}">
+                    <span class="ad-lamp" aria-hidden="true"></span>{{ student.get_status_display }}
+                </span>
+                {% if current_enrollment %}
+                    <span aria-hidden="true">·</span>
+                    <span>Course year {{ current_enrollment.year_level }}</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="ad-head-actions">
+            <a class="ad-btn ad-btn--ghost" href="{% url 'archive_list' %}">Back to archive</a>
+            {% if perms.school.view_student %}
+                <a class="ad-btn ad-btn--quiet" href="{% url 'student_detail' student.pk %}">Open live account</a>
+            {% endif %}
+            {% if perms.school.can_record_payments and student.status == "ACTIVE" %}
+                <a class="ad-btn ad-btn--solid" href="{% url 'payment_create' %}?student={{ student.pk }}">Record payment</a>
             {% endif %}
         </div>
-    </div>
-    <a href="{% url 'archive_list' %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Back to Archive
-    </a>
-</div>
+    </header>
 
-<div class="row g-4">
-
-    <!-- Personal Information -->
-    <div class="col-md-5">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h5>Personal Information</h5>
-                <hr>
-                <div class="row">
-                    <div class="col-6">
-                        <div class="mb-2"><strong>Student #</strong><br>{{ student.student_number }}</div>
-                        <div class="mb-2"><strong>Program</strong><br>{{ student.program.name }}</div>
-                        <div class="mb-2"><strong>Intake Year</strong><br>{{ student.intake_year.name }}</div>
-                        <div class="mb-2"><strong>Gender</strong><br>{{ student.gender|default:"—" }}</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="mb-2"><strong>Date of Birth</strong><br>{{ student.date_of_birth|default:"—" }}</div>
-                        <div class="mb-2"><strong>Student Phone</strong><br>{{ student.student_phone|default:"—" }}</div>
-                        <div class="mb-2"><strong>Guardian</strong><br>{{ student.guardian_name|default:"—" }}</div>
-                        <div class="mb-2"><strong>Guardian Phone</strong><br>{{ student.guardian_phone|default:"—" }}</div>
-                        <div class="mb-2"><strong>National ID</strong><br>{{ student.national_id|default:"—" }}</div>
-                    </div>
-                </div>
+    {% if show_financials %}
+        <section class="ad-kpis" aria-label="Money to date">
+            <div class="ad-kpi">
+                <span class="ad-kpi-label">Total charged</span>
+                <span class="ad-kpi-value">${{ total_charged|floatformat:2 }}</span>
+                <span class="ad-kpi-note">Across {{ semester_rows|length }} enrolled semester{{ semester_rows|length|pluralize }}</span>
             </div>
+            <div class="ad-kpi">
+                <span class="ad-kpi-label">Total paid</span>
+                <span class="ad-kpi-value">${{ total_paid|floatformat:2 }}</span>
+                <span class="ad-kpi-note">{{ payment_count }} payment{{ payment_count|pluralize }} on record</span>
+            </div>
+            <div class="ad-kpi">
+                <span class="ad-kpi-label">Balance</span>
+                <span class="ad-kpi-value {% if balance > 0 %}is-owing{% elif balance < 0 %}is-credit{% else %}is-clear{% endif %}">
+                    {% if balance < 0 %}-${{ balance|floatformat:2|slice:"1:" }}{% else %}${{ balance|floatformat:2 }}{% endif %}
+                </span>
+                <span class="ad-kpi-note">
+                    {% if balance > 0 %}Still owed
+                    {% elif balance < 0 %}Student is in credit
+                    {% else %}Nothing outstanding{% endif %}
+                </span>
+            </div>
+        </section>
+    {% else %}
+        <div class="ad-notice" role="note">
+            <span>
+                Money on this file is hidden because your role does not include financial report access.
+                Ask an administrator if you need it.
+            </span>
         </div>
-    </div>
+    {% endif %}
 
-    <!-- Academic Summary -->
-    <div class="col-md-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h5>Academic Summary</h5>
-                <hr>
-                <div class="row">
-                    <div class="col-md-4 mb-2">
-                        <div class="text-muted small">Joined</div>
-                        <div class="fw-bold">{{ join_year }}</div>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <div class="text-muted small">
-                            {% if student.status == "COMPLETED" %}Completed{% else %}Expected Completion{% endif %}
-                        </div>
-                        <div class="fw-bold">
-                            {% if completion_year %}
-                                {{ completion_year }}
-                            {% elif expected_completion_year %}
-                                {{ expected_completion_year }} <span class="text-muted small">(projected)</span>
-                            {% else %}
-                                —
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-2">
-                        <div class="text-muted small">Years Attended</div>
-                        <div class="fw-bold">
-                            {% if years_attended %}
-                                {{ years_attended|join:", " }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </div>
-                    </div>
+    <div class="ad-grid">
+        <section class="ad-card" aria-labelledby="ad-identity-title">
+            <div class="ad-card-head">
+                <h2 class="ad-h2" id="ad-identity-title">Identity and contact</h2>
+            </div>
+            <dl class="ad-card-body ad-facts">
+                <div>
+                    <dt>Trade</dt>
+                    <dd>{{ student.program.name }}</dd>
                 </div>
+                <div>
+                    <dt>Intake</dt>
+                    <dd>{{ student.intake_year.name }}</dd>
+                </div>
+                <div>
+                    <dt>Date of birth</dt>
+                    <dd>{% if student.date_of_birth %}{{ student.date_of_birth|date:"j M Y" }}{% else %}<span class="ad-muted">Not recorded</span>{% endif %}</dd>
+                </div>
+                <div>
+                    <dt>Gender</dt>
+                    <dd>{{ student.gender|default:"—"|capfirst }}</dd>
+                </div>
+                <div>
+                    <dt>National ID</dt>
+                    <dd>{{ student.national_id|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt>Student phone</dt>
+                    <dd>
+                        {% if student.student_phone %}
+                            <a href="tel:{{ student.student_phone }}">{{ student.student_phone }}</a>
+                        {% else %}
+                            <span class="ad-muted">Not recorded</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Guardian</dt>
+                    <dd>{{ student.guardian_name|default:"—" }}</dd>
+                </div>
+                <div>
+                    <dt>Guardian phone</dt>
+                    <dd>
+                        {% if student.guardian_phone %}
+                            <a href="tel:{{ student.guardian_phone }}">{{ student.guardian_phone }}</a>
+                        {% else %}
+                            <span class="ad-muted">Not recorded</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="ad-full">
+                    <dt>Address</dt>
+                    <dd>{{ student.address|default:"—"|linebreaksbr }}</dd>
+                </div>
+            </dl>
+        </section>
 
-                <!-- Semester breakdown -->
-                <div class="mt-3">
-                    <h6 class="text-muted">Semester History</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless">
-                            <thead>
-                                <tr>
-                                    <th>Semester</th>
-                                    <th>Year Level</th>
-                                    <th>Enrollment Status</th>
-                                    <th class="text-end">Charged</th>
-                                    <th class="text-end">Paid</th>
-                                    <th class="text-end">Balance</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in semester_breakdown %}
-                                <tr>
-                                    <td>{{ item.semester }}</td>
-                                    <td>{{ item.year_level }}</td>
-                                    <td>{{ item.enrollment_status }}</td>
-                                    <td class="text-end">${{ item.charged|floatformat:2 }}</td>
-                                    <td class="text-end text-success">${{ item.paid|floatformat:2 }}</td>
-                                    <td class="text-end {% if item.balance > 0 %}text-danger{% elif item.balance < 0 %}text-primary{% endif %}">
-                                        ${{ item.balance|floatformat:2 }}
+        <section class="ad-card" aria-labelledby="ad-academic-title">
+            <div class="ad-card-head">
+                <h2 class="ad-h2" id="ad-academic-title">Academic record</h2>
+            </div>
+            <dl class="ad-card-body ad-facts">
+                <div>
+                    <dt>Joined</dt>
+                    <dd>{{ join_year }}</dd>
+                </div>
+                <div>
+                    <dt>{% if student.status == "COMPLETED" %}Completed{% else %}Expected completion{% endif %}</dt>
+                    <dd>
+                        {% if completion_year %}
+                            {{ completion_year }}
+                        {% elif expected_completion_year %}
+                            {{ expected_completion_year }} <span class="ad-muted">(projected)</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Years attended</dt>
+                    <dd>
+                        {% if years_attended %}
+                            {{ years_attended|join:", " }}
+                        {% else %}
+                            <span class="ad-muted">No semester on record</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Semesters enrolled</dt>
+                    <dd>{{ semester_rows|length }}</dd>
+                </div>
+                {% if current_enrollment %}
+                    <div class="ad-full">
+                        <dt>Current enrolment</dt>
+                        <dd>
+                            {{ current_enrollment.semester.academic_year.name }} · Semester {{ current_enrollment.semester.number }}
+                            · Course year {{ current_enrollment.year_level }}
+                        </dd>
+                    </div>
+                {% endif %}
+            </dl>
+        </section>
+
+        <section class="ad-card ad-card--wide" aria-labelledby="ad-ledger-title">
+            <div class="ad-card-head">
+                <h2 class="ad-h2" id="ad-ledger-title">Semester ledger</h2>
+                <span class="ad-count">{{ semester_rows|length }} semester{{ semester_rows|length|pluralize }}</span>
+            </div>
+
+            {% if semester_rows %}
+                <table class="ad-table">
+                    <thead>
+                        <tr>
+                            <th>Semester</th>
+                            <th>Enrolment</th>
+                            {% if show_financials %}
+                                <th class="ad-num">Charged</th>
+                                <th class="ad-num">Paid</th>
+                                <th class="ad-num">Balance</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in semester_rows %}
+                            <tr class="{% if row.is_current %}is-current{% endif %}">
+                                <td>
+                                    <span class="ad-term-name">
+                                        <strong>
+                                            {{ row.semester.academic_year.name }} · Semester {{ row.semester.number }}
+                                            {% if row.is_current %}<span class="ad-chip">Current</span>{% endif %}
+                                        </strong>
+                                        <span>Course year {{ row.year_level }} · {{ row.semester.start_date|date:"j M Y" }} to {{ row.semester.end_date|date:"j M Y" }}</span>
+                                    </span>
+                                </td>
+                                <td data-label="Enrolment">{{ row.status }}</td>
+                                {% if show_financials %}
+                                    <td class="ad-num ad-fig" data-label="Charged">${{ row.charged|floatformat:2 }}</td>
+                                    <td class="ad-num ad-fig" data-label="Paid">${{ row.paid|floatformat:2 }}</td>
+                                    <td class="ad-num ad-fig {% if row.balance > 0 %}ad-bal-owing{% elif row.balance < 0 %}ad-bal-credit{% else %}ad-bal-clear{% endif %}" data-label="Balance">
+                                        {% if row.balance < 0 %}-${{ row.balance|floatformat:2|slice:"1:" }}{% else %}${{ row.balance|floatformat:2 }}{% endif %}
                                     </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if show_financials %}
+                    {% if balance > 0 %}
+                        <p class="ad-sub">This file still shows <strong>${{ balance|floatformat:2 }}</strong> outstanding across all semesters.</p>
+                    {% elif balance < 0 %}
+                        <p class="ad-sub">Payments exceed charges by <strong>${{ balance|floatformat:2|slice:"1:" }}</strong>. That amount sits on the account as credit.</p>
+                    {% endif %}
+                {% endif %}
+            {% else %}
+                <p class="ad-empty">No semesters are recorded for this student.</p>
+            {% endif %}
+        </section>
+
+        {% if show_financials %}
+            <section class="ad-card ad-card--wide" aria-labelledby="ad-payments-title">
+                <div class="ad-card-head">
+                    <h2 class="ad-h2" id="ad-payments-title">Payments received</h2>
+                    <span class="ad-count">
+                        {% if payment_count > payments|length %}Latest {{ payments|length }} of {{ payment_count }}{% else %}{{ payment_count }} payment{{ payment_count|pluralize }}{% endif %}
+                    </span>
+                </div>
+
+                {% if payments %}
+                    <table class="ad-table">
+                        <thead>
+                            <tr>
+                                <th>Receipt</th>
+                                <th>Date</th>
+                                <th>Semester</th>
+                                <th>Method</th>
+                                <th class="ad-num">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in payments %}
+                                <tr>
+                                    <td>
+                                        <span class="ad-term-name">
+                                            <strong class="ad-fig">{{ payment.receipt_number }}</strong>
+                                            {% if payment.reference %}<span>Ref {{ payment.reference }}</span>{% endif %}
+                                        </span>
+                                    </td>
+                                    <td data-label="Date">{{ payment.payment_date|date:"j M Y" }}</td>
+                                    <td data-label="Semester">{{ payment.semester.academic_year.name }} · Semester {{ payment.semester.number }}</td>
+                                    <td data-label="Method">{{ payment.get_method_display }}</td>
+                                    <td class="ad-num ad-fig" data-label="Amount">${{ payment.amount|floatformat:2 }}</td>
                                 </tr>
-                                {% empty %}
-                                <tr><td colspan="6" class="text-center text-muted">No enrollments found.</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if payment_count > payments|length %}
+                        <p class="ad-note">Showing the {{ payments|length }} most recent receipts. The full statement is on the live account.</p>
+                    {% endif %}
+                {% else %}
+                    <p class="ad-empty">No payments have been recorded for this student.</p>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        <section class="ad-card ad-card--wide" aria-labelledby="ad-history-title">
+            <div class="ad-card-head">
+                <h2 class="ad-h2" id="ad-history-title">Status history</h2>
+                <span class="ad-count">{{ status_logs|length }} entr{{ status_logs|length|pluralize:"y,ies" }}</span>
             </div>
-        </div>
+
+            {% if status_logs %}
+                <ul class="ad-timeline">
+                    {% for log in status_logs %}
+                        <li>
+                            <span class="ad-lamp" aria-hidden="true"></span>
+                            <div>
+                                <strong>{{ log.get_status_display }}</strong>
+                                <span>{{ log.date_changed|date:"j M Y, H:i" }}</span>
+                                {% if log.note %}<em>{{ log.note }}</em>{% endif %}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="ad-empty">No status changes have been logged for this student.</p>
+            {% endif %}
+        </section>
     </div>
 
+    <p class="ad-footnote">
+        This archive file is a read-only record of what the school holds for {{ student.first_name }}.
+        Balance figures are calculated from the same charges and payments as the student statement.
+    </p>
 </div>
-
-<!-- Financial Summary (full card) -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <h5>Lifetime Financial Summary</h5>
-                <hr>
-                <div class="row text-center">
-                    <div class="col-md-4">
-                        <div class="text-muted small">Total Charged</div>
-                        <div class="fw-bold fs-4">${{ total_charged|floatformat:2 }}</div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="text-muted small">Total Paid</div>
-                        <div class="fw-bold fs-4 text-success">${{ total_paid|floatformat:2 }}</div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="text-muted small">Overall Balance</div>
-                        <div class="fw-bold fs-4 
-                            {% if balance > 0 %}text-danger
-                            {% elif balance < 0 %}text-primary
-                            {% else %}text-success{% endif %}">
-                            ${{ balance|floatformat:2 }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}

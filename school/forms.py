@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Max
@@ -503,15 +505,59 @@ class EnrollmentForm(BootstrapFormMixin, forms.ModelForm):
 # ============================================================
 
 class PaymentForm(BootstrapFormMixin, forms.ModelForm):
+    """Record one payment against one of the student's semesters.
+
+    The semester queryset must be limited to the student's enrollments by the
+    view. Receipt numbers are optional here: leaving the field blank makes the
+    model allocate the next number for the payment date. Operators who use a
+    pre-printed receipt book can still type their own number.
     """
-    Semester field allows selecting which semester to pay for.
-    The queryset should be filtered to the student's enrollments in the view.
-    """
+
     semester = forms.ModelChoiceField(
         queryset=Semester.objects.none(),
         required=True,
-        empty_label="Select semester...",
-        widget=forms.Select(attrs={"class": "form-select"}),
+        error_messages={"required": "Choose the semester this payment is for."},
+    )
+
+    amount = forms.DecimalField(
+        label="Amount received",
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        error_messages={
+            "required": "Enter the amount received.",
+            "invalid": "Enter an amount like 150.00.",
+            "min_value": "The amount must be more than zero.",
+        },
+    )
+
+    method = forms.ChoiceField(
+        label="Payment method",
+        choices=Payment.PAYMENT_METHODS,
+        initial=Payment.CASH,
+        widget=forms.RadioSelect(),
+    )
+
+    payment_date = forms.DateField(
+        label="Date received",
+        error_messages={
+            "required": "Enter the date the money was received.",
+            "invalid": "Enter a valid date, for example 2026-10-30.",
+        },
+    )
+
+    receipt_number = forms.CharField(
+        label="Receipt number",
+        required=False,
+        max_length=50,
+        help_text="Leave blank to use the next number in the receipt book.",
+        widget=forms.TextInput(
+            attrs={
+                "autocomplete": "off",
+                "spellcheck": "false",
+                "placeholder": "Automatic",
+            }
+        ),
     )
 
     class Meta:
@@ -521,19 +567,55 @@ class PaymentForm(BootstrapFormMixin, forms.ModelForm):
             "receipt_number",
             "amount",
             "payment_date",
+            "method",
             "reference",
             "notes",
         ]
         widgets = {
             "payment_date": forms.DateInput(
-                attrs={"class": "form-control datepicker", "type": "text", "autocomplete": "off", "placeholder": "YYYY-MM-DD"},
+                attrs={
+                    "class": "datepicker",
+                    "type": "text",
+                    "autocomplete": "off",
+                    "placeholder": "YYYY-MM-DD",
+                },
                 format="%Y-%m-%d",
             ),
-            "notes": forms.Textarea(attrs={"rows": 3}),
+            "reference": forms.TextInput(
+                attrs={"autocomplete": "off", "placeholder": "Bank slip or slip number"}
+            ),
+            "notes": forms.Textarea(
+                attrs={"rows": 2, "placeholder": "Anything the next person should know"}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
         semester_queryset = kwargs.pop("semester_queryset", None)
         super().__init__(*args, **kwargs)
+
         if semester_queryset is not None:
             self.fields["semester"].queryset = semester_queryset
+
+        # The radio inputs are styled as segments; drop the shared control class.
+        self.fields["method"].widget.attrs.pop("class", None)
+
+        if not self.is_bound:
+            from school.utils.time_utils import get_current_date
+
+            self.fields["payment_date"].initial = get_current_date()
+            self.fields["method"].initial = Payment.CASH
+
+    def clean_receipt_number(self):
+        receipt = (self.cleaned_data.get("receipt_number") or "").strip()
+        if not receipt:
+            return ""
+
+        clash = Payment.objects.filter(
+            receipt_number__iexact=receipt
+        ).exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise ValidationError(
+                "This receipt number has already been used. Leave it blank to "
+                "use the next number in the book."
+            )
+        return receipt

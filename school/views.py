@@ -12,10 +12,12 @@ from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import urlencode
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from .utils.time_utils import get_current_datetime, get_current_date
+from .utils.receipts import next_receipt_number
+from .utils.time_utils import get_current_datetime, get_current_date, get_working_semester
 
 from .forms import (
     AcademicYearForm,
@@ -42,6 +44,7 @@ from .models import (
     Enrollment,
     StudentCharge,
     Payment,
+    current_enrollment,
     student_balance,
     semester_financials,
     unconfigured_fee_structures,
@@ -56,9 +59,17 @@ from .models import (
 )
 
 from school.reports import REPORTS
+from school.reporting.registry import REPORTS as REPORT_SPECS, permitted_reports
+from school.reporting.views import render_report
+from school.utils.backups import (
+    BackupError,
+    create_backup,
+    restore_backup,
+    timestamped_name,
+    verify_backup,
+)
 
 import os
-import shutil
 from datetime import datetime
 
 def create_charges_for_fee_structure(fee_structure):
@@ -643,6 +654,8 @@ def financial_records(request):
     Institution-wide financial records showing aggregate charged/paid/outstanding
     per semester, grouped by academic year.
     """
+    return render_report(request, "financial_records", "financial")
+
     from itertools import groupby
 
     year_filter = request.GET.get("academic_year", "")
@@ -804,8 +817,32 @@ def student_search(request):
 
 @login_required
 def reports_index(request):
-    """Reports landing page - lists all available reports."""
-    return render(request, "school/reports/index.html", {"reports": REPORTS})
+    """Permission-aware reports hub with gated quick answers."""
+    visible = permitted_reports(request.user)
+    today = get_current_date()
+    quick_answers = []
+    working_semester = get_working_semester(today)
+    if request.user.has_perm("school.can_view_financial_reports"):
+        today_total = Payment.objects.filter(payment_date=today).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+        quick_answers.append({"label": "Collected today", "value": f"${today_total:.2f}", "url": reverse("daily_collections_report") + "?date=" + today.isoformat()})
+    if request.user.has_perm("school.can_view_outstanding_reports"):
+        owing = outstanding_students(working_semester) if working_semester else Student.objects.none()
+        totals = owing.aggregate(total=Sum("balance"))
+        quick_answers.append({"label": "Owed this semester", "value": f"${totals['total'] or Decimal('0'):.2f}", "url": reverse("outstanding_report") + (f"?semester={working_semester.pk}" if working_semester else "")})
+    if request.user.has_perm("school.view_feestructure"):
+        missing = unconfigured_fee_structures(working_semester) if working_semester else []
+        quick_answers.append({"label": "Fees still missing", "value": str(len(missing)), "url": reverse("fee_audit_report") + (f"?semester={working_semester.pk}" if working_semester else "")})
+    if request.user.has_perm("school.view_student"):
+        enrolled = Student.objects.filter(status=Student.ACTIVE).count()
+        quick_answers.append({"label": "Enrolled students", "value": str(enrolled), "url": reverse("enrollment_report")})
+    groups = []
+    for group in ("Money", "People", "Setup"):
+        group_reports = [spec for spec in visible if spec.group == group]
+        if group_reports:
+            groups.append({"name": group, "reports": group_reports})
+    return render(request, "school/reports/index.html", {
+        "reports": visible, "groups": groups, "quick_answers": quick_answers,
+    })
 
 
 def _get_filtered_semester(request, default_semester=None):
@@ -822,14 +859,7 @@ def _get_filtered_semester(request, default_semester=None):
     if default_semester:
         return default_semester
     
-    # Default to current or upcoming semester
-    current = Semester.objects.filter(
-        start_date__lte=today, end_date__gte=today
-    ).first()
-    if current:
-        return current
-    
-    return Semester.objects.filter(start_date__gt=today).order_by("start_date").first()
+    return get_working_semester(today)
 
 
 def _get_filtered_year(request, default_year=None):
@@ -879,6 +909,7 @@ def _export_csv_response(filename, headers, rows):
 
 @permission_required("school.view_student", raise_exception=True)
 def enrollment_report(request):
+    return render_report(request, "enrollment_report", "enrollment")
     """Student enrollment summary by program, intake year, and status."""
     program_filter = _get_filtered_program(request)
     intake_year_filter = request.GET.get("intake_year")
@@ -943,6 +974,7 @@ def enrollment_report(request):
 
 @permission_required("school.can_view_outstanding_reports", raise_exception=True)
 def outstanding_report(request):
+    return render_report(request, "outstanding_report", "outstanding")
     """Students with outstanding balances for a semester."""
     today = get_current_date()
     current_semester = Semester.objects.filter(
@@ -1018,6 +1050,7 @@ def outstanding_report(request):
 
 @permission_required("school.view_feestructure", raise_exception=True)
 def fee_audit_report(request):
+    return render_report(request, "fee_audit_report", "fee-audit")
     """Programs/year-levels missing fee structure configurations."""
     today = get_current_date()
     current_semester = Semester.objects.filter(
@@ -1058,6 +1091,7 @@ def fee_audit_report(request):
 
 @permission_required("school.can_view_financial_reports", raise_exception=True)
 def payment_methods_report(request):
+    return render_report(request, "payment_methods_report", "methods")
     """Payment breakdown by method for a semester."""
     today = get_current_date()
     current_semester = Semester.objects.filter(
@@ -1109,6 +1143,7 @@ def payment_methods_report(request):
 
 @permission_required("school.can_view_financial_reports", raise_exception=True)
 def program_revenue_report(request):
+    return render_report(request, "program_revenue_report", "revenue")
     """Revenue comparison across programs for a semester."""
     today = get_current_date()
     current_semester = Semester.objects.filter(
@@ -1172,6 +1207,7 @@ def program_revenue_report(request):
 
 @permission_required("school.can_view_financial_reports", raise_exception=True)
 def daily_collections_report(request):
+    return render_report(request, "daily_collections_report", "daily")
     """Daily collections / cashbook report."""
     from datetime import datetime
     
@@ -1254,6 +1290,7 @@ def daily_collections_report(request):
 
 @permission_required("school.view_studentstatuslog", raise_exception=True)
 def status_history_report(request):
+    return render_report(request, "status_history_report", "status-history")
     """Student status change history."""
     today = get_current_date()
     student_filter = request.GET.get("student")
@@ -3063,27 +3100,83 @@ def student_status_change(request, pk):
 
 @permission_required("school.view_student", raise_exception=True)
 def archive_list(request):
-    """Searchable list of all students (all statuses) for archive access."""
+    """Every student file, including the ones no longer active."""
     query = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip().upper()
+    program_filter = request.GET.get("program", "").strip()
+    intake_filter = request.GET.get("intake", "").strip()
+
+    valid_statuses = {value for value, _ in Student.STATUS_CHOICES}
+    if status_filter not in valid_statuses:
+        status_filter = ""
+
+    today = get_current_date()
     students = Student.objects.select_related("program", "intake_year")
 
     if query:
         students = students.filter(
-            Q(student_number__icontains=query) |
-            Q(first_name__icontains=query) |
-            Q(last_name__icontains=query)
+            Q(student_number__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
         )
+    if status_filter:
+        students = students.filter(status=status_filter)
+    if program_filter:
+        students = students.filter(program_id=program_filter)
+    if intake_filter:
+        students = students.filter(intake_year__name=intake_filter)
 
     students = students.order_by("last_name", "first_name")
 
-    # Paginate 10 per page
-    paginator = Paginator(students, 10)
-    page_obj = paginator.get_page(request.GET.get("page"))
+    status_counts = {
+        row["status"]: row["count"]
+        for row in Student.objects.values("status").annotate(count=Count("id"))
+    }
+    program_counts = (
+        Student.objects.values("program__id", "program__name")
+        .annotate(count=Count("id"))
+        .order_by("program__name")
+    )
+    intake_years = (
+        AcademicYear.objects.filter(students__isnull=False)
+        .distinct()
+        .order_by("-name")
+    )
+
+    filtered_count = students.count()
+    page_obj = Paginator(students, 20).get_page(request.GET.get("page"))
+
+    # One query for the whole page instead of get_current_enrollment() per row.
+    page_students = list(page_obj)
+    enrollments_by_student = defaultdict(list)
+    for enrollment in (
+        Enrollment.objects.filter(
+            student__in=page_students,
+            status=Enrollment.ACTIVE,
+        )
+        .select_related("semester")
+        .order_by("-semester__academic_year__name", "-semester__number")
+    ):
+        enrollments_by_student[enrollment.student_id].append(enrollment)
+
+    for student in page_students:
+        student.current_enrollment = current_enrollment(
+            enrollments_by_student.get(student.pk, []), today
+        )
 
     return render(request, "school/student_archive_list.html", {
         "page_obj": page_obj,
         "query": query,
-        "total": students.count(),
+        "status_filter": status_filter,
+        "program_filter": program_filter,
+        "intake_filter": intake_filter,
+        "status_choices": Student.STATUS_CHOICES,
+        "status_counts": status_counts,
+        "program_counts": program_counts,
+        "intake_years": intake_years,
+        "total_students": sum(status_counts.values()),
+        "filtered_count": filtered_count,
+        "today": today,
     })
 
 
@@ -3145,204 +3238,257 @@ def student_list_search(request):
 
 @permission_required("school.view_student", raise_exception=True)
 def archive_detail(request, pk):
-    """Read-only detail of a student's complete record."""
-    student = get_object_or_404(Student.objects.select_related("program", "intake_year"), pk=pk)
+    """Read-only student file: identity, academic history and money to date."""
+    student = get_object_or_404(
+        Student.objects.select_related("program", "intake_year"), pk=pk
+    )
+    today = get_current_date()
 
-    # --- Academic timeline ---
-    enrollments = student.enrollments.select_related(
-        "semester", "semester__academic_year", "program"
-    ).order_by("semester__academic_year__name", "semester__number")
+    enrollments = list(
+        student.enrollments.select_related(
+            "program", "semester", "semester__academic_year"
+        ).order_by("semester__academic_year__name", "semester__number")
+    )
+    semester_ids = [enrollment.semester_id for enrollment in enrollments]
 
-    # Years attended (distinct academic years)
-    years_attended = sorted(set(e.semester.academic_year.name for e in enrollments))
-
-    # Join year
+    years_attended = sorted({e.semester.academic_year.name for e in enrollments})
     join_year = student.intake_year.name
 
-    # Completion / expected completion
     completion_year = None
     expected_completion_year = None
+
     if student.status == Student.COMPLETED:
-        last_enrollment = enrollments.last()
-        if last_enrollment:
-            completion_year = last_enrollment.semester.academic_year.name
+        if enrollments:
+            completion_year = enrollments[-1].semester.academic_year.name
     else:
         try:
             start_year = int(student.intake_year.name)
-            expected_completion_year = str(start_year + student.program.duration_years - 1)
-        except ValueError:
-            expected_completion_year = "—"
+            expected_completion_year = str(
+                start_year + student.program.duration_years - 1
+            )
+        except (TypeError, ValueError):
+            expected_completion_year = None
 
-    # --- Financial summary (all time) ---
-    total_charged = student.charges.aggregate(total=Sum("amount"))["total"] or Decimal("0")
-    total_paid = student.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
-    balance = total_charged - total_paid
+    # ---------------------------------------------------------
+    # MONEY (batched: two aggregates for the whole page)
+    # ---------------------------------------------------------
 
-    # --- Semester-by-semester breakdown for display ---
-    semester_breakdown = []
+    charged_by_semester = {
+        row["enrollment__semester_id"]: row["total"]
+        for row in student.charges.filter(
+            enrollment__semester_id__in=semester_ids
+        )
+        .values("enrollment__semester_id")
+        .annotate(total=Sum("amount"))
+    }
+    paid_by_semester = {
+        row["semester_id"]: row["total"]
+        for row in student.payments.filter(semester_id__in=semester_ids)
+        .values("semester_id")
+        .annotate(total=Sum("amount"))
+    }
+
+    total_charged = (
+        student.charges.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    )
+    total_paid = (
+        student.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    )
+
+    semester_rows = []
     for enrollment in enrollments:
-        sem = enrollment.semester
-        charged = student.charges.filter(enrollment=enrollment).aggregate(
-            total=Sum("amount")
-        )["total"] or Decimal("0")
-        paid = student.payments.filter(semester=sem).aggregate(
-            total=Sum("amount")
-        )["total"] or Decimal("0")
-        semester_breakdown.append({
-            "semester": sem,
+        semester = enrollment.semester
+        charged = charged_by_semester.get(semester.pk) or Decimal("0")
+        paid = paid_by_semester.get(semester.pk) or Decimal("0")
+        semester_rows.append({
+            "semester": semester,
             "year_level": enrollment.year_level,
-            "enrollment_status": enrollment.get_status_display(),
+            "enrollment": enrollment,
+            "status": enrollment.get_status_display(),
+            "status_raw": enrollment.status,
             "charged": charged,
             "paid": paid,
             "balance": charged - paid,
+            "is_current": semester.start_date <= today <= semester.end_date,
         })
 
-    context = {
+    payments = list(
+        student.payments.select_related(
+            "semester", "semester__academic_year"
+        ).order_by("-payment_date", "-id")[:20]
+    )
+    payment_count = student.payments.count()
+    status_logs = list(student.status_logs.all()[:10])
+
+    current = current_enrollment(
+        [e for e in enrollments if e.status == Enrollment.ACTIVE], today
+    )
+
+    # Money is only shown to people who may already see it elsewhere.
+    show_financials = (
+        request.user.has_perm("school.can_view_financial_reports")
+        or request.user.has_perm("school.can_record_payments")
+    )
+
+    return render(request, "school/student_archive_detail.html", {
         "student": student,
-        "enrollments": enrollments,
+        "semester_rows": semester_rows,
+        "payments": payments,
+        "payment_count": payment_count,
+        "status_logs": status_logs,
         "years_attended": years_attended,
         "join_year": join_year,
         "completion_year": completion_year,
         "expected_completion_year": expected_completion_year,
         "total_charged": total_charged,
         "total_paid": total_paid,
-        "balance": balance,
-        "semester_breakdown": semester_breakdown,
-    }
-    return render(request, "school/student_archive_detail.html", context)
+        "balance": total_charged - total_paid,
+        "current_enrollment": current,
+        "show_financials": show_financials,
+        "today": today,
+    })
 
 
 # ============================================================
 # PAYMENTS
 # ============================================================
 
+def _payment_terms(student, today):
+    """Return the student's semesters with charged/paid/balance, newest first.
+
+    Four queries in total regardless of how many semesters the student has:
+    enrollments, charges, payments, and the fee structures that decide whether
+    a semester is billable. A semester with no fees, no charges and no payments
+    is left out because there is nothing to pay towards yet.
+    """
+    enrollments = list(
+        student.enrollments.select_related(
+            "program", "semester", "semester__academic_year"
+        ).order_by("-semester__academic_year__name", "-semester__number")
+    )
+    if not enrollments:
+        return []
+
+    semester_ids = [enrollment.semester_id for enrollment in enrollments]
+
+    charged_by_semester = {
+        row["enrollment__semester_id"]: row["total"]
+        for row in StudentCharge.objects.filter(
+            student=student,
+            enrollment__semester_id__in=semester_ids,
+        )
+        .values("enrollment__semester_id")
+        .annotate(total=Sum("amount"))
+    }
+    paid_by_semester = {
+        row["semester_id"]: row["total"]
+        for row in Payment.objects.filter(
+            student=student,
+            semester_id__in=semester_ids,
+        )
+        .values("semester_id")
+        .annotate(total=Sum("amount"))
+    }
+    billed_terms = {
+        (row["semester"], row["year_level"])
+        for row in FeeStructure.objects.filter(
+            semester_id__in=semester_ids,
+            program=student.program,
+            items__isnull=False,
+        ).values("semester", "year_level").distinct()
+    }
+
+    rows = []
+    for enrollment in enrollments:
+        semester = enrollment.semester
+        charged = charged_by_semester.get(semester.pk) or Decimal("0")
+        paid = paid_by_semester.get(semester.pk) or Decimal("0")
+
+        rows.append({
+            "enrollment": enrollment,
+            "semester": semester,
+            "charged": charged,
+            "paid": paid,
+            "balance": charged - paid,
+            "is_current": semester.start_date <= today <= semester.end_date,
+            "is_upcoming": semester.start_date > today,
+            "billable": bool(charged) or bool(paid) or (
+                (semester.pk, enrollment.year_level) in billed_terms
+            ),
+        })
+
+    return rows
+
+
 @transaction.atomic
 @permission_required("school.can_record_payments", raise_exception=True)
 def payment_create(request):
+    """Take one payment against one semester of one student.
+
+    The page answers three questions in order: who is paying, which semester the
+    money belongs to, and how much was handed over. Every figure comes from the
+    same charge and payment aggregates the student statement uses, so the
+    balance shown here matches the account it is paid into.
+    """
     student_id = request.GET.get("student") or request.POST.get("student_id")
     selected_semester_id = (
         request.GET.get("semester")
         or request.POST.get("semester")
     )
+    recorded_id = request.GET.get("recorded")
+    today = get_current_date()
 
     student = None
-    enrollments = []
-    selected_enrollment = None
-    today = get_current_date()
+    term_rows = []
+    skipped_terms = 0
+    selected_term = None
 
     if student_id:
         student = get_object_or_404(
-            Student,
+            Student.objects.select_related("program", "intake_year"),
             pk=student_id,
             status=Student.ACTIVE,
         )
 
-        enrollments_qs = (
-            student.enrollments
-            .select_related(
-                "program",
-                "semester",
-                "semester__academic_year",
-            )
-            .order_by(
-                "-semester__academic_year__name",
-                "-semester__number",
-            )
-        )
+        all_terms = _payment_terms(student, today)
+        term_rows = [row for row in all_terms if row["billable"]]
+        skipped_terms = len(all_terms) - len(term_rows)
 
-        for enrollment in enrollments_qs:
-
-            has_charges = StudentCharge.objects.filter(
-                enrollment=enrollment
-            ).exists()
-
-            has_payments = Payment.objects.filter(
-                student=student,
-                semester=enrollment.semester,
-            ).exists()
-
-            has_fee_structure = FeeStructure.objects.filter(
-                program=enrollment.program,
-                year_level=enrollment.year_level,
-                semester=enrollment.semester,
-            ).exists()
-
-            if has_charges or has_payments or has_fee_structure:
-                enrollments.append(enrollment)
-
-        # Default enrollment
-        default_enrollment = student.get_current_enrollment(today)
-
-        if default_enrollment not in enrollments:
-            default_enrollment = None
-
-        if not default_enrollment and enrollments:
-            default_enrollment = enrollments[0]
-
-        # Explicitly selected semester
         if selected_semester_id:
-            selected_enrollment = next(
+            selected_term = next(
                 (
-                    e for e in enrollments
-                    if str(e.semester.pk) == str(selected_semester_id)
+                    row for row in term_rows
+                    if str(row["semester"].pk) == str(selected_semester_id)
                 ),
                 None,
             )
 
-        # Fall back to default
-        if not selected_enrollment:
-            selected_enrollment = default_enrollment
+        # A rejected POST keeps the operator's own choice; a fresh page opens
+        # on the semester the student is actually in.
+        if selected_term is None and request.method != "POST":
+            selected_term = next(
+                (row for row in term_rows if row["is_current"]), None
+            ) or (term_rows[0] if term_rows else None)
 
     semester_queryset = (
-        Semester.objects.filter(
-            pk__in=[e.semester.pk for e in enrollments]
-        )
-        if enrollments
+        Semester.objects.filter(pk__in=[row["semester"].pk for row in term_rows])
+        if term_rows
         else Semester.objects.none()
     )
 
-    # ---------------------------------------------------------
-    # PAYMENT FORM
-    # ---------------------------------------------------------
+    form = PaymentForm(request.POST or None, semester_queryset=semester_queryset)
 
     if request.method == "POST":
-        form = PaymentForm(
-            request.POST,
-            semester_queryset=semester_queryset,
-        )
-    else:
-        form = PaymentForm(
-            semester_queryset=semester_queryset,
-        )
-
-        if selected_enrollment:
-            form.fields["semester"].initial = selected_enrollment.semester.pk
-
-    # ---------------------------------------------------------
-    # PROCESS PAYMENT
-    # ---------------------------------------------------------
-
-    if request.method == "POST":
-
         if not student:
+            messages.error(request, "Choose a student before recording a payment.")
+        elif not form.is_valid():
             messages.error(
                 request,
-                "Please select a student first.",
+                "This payment was not recorded. Check the highlighted fields.",
             )
-
-        elif not selected_enrollment:
-            messages.error(
-                request,
-                "Please select a semester to record payment for.",
-            )
-
-        elif form.is_valid():
-
+        else:
             payment = form.save(commit=False)
-
             payment.student = student
-            payment.semester = form.cleaned_data["semester"]
-
             payment.save()
 
             from school.utils.audit import log_action
@@ -3352,8 +3498,8 @@ def payment_create(request):
                 action="PAYMENT",
                 student=student,
                 summary=(
-                    f"Payment of {payment.amount} "
-                    f"recorded for {payment.semester}"
+                    f"Payment of {payment.amount} recorded for "
+                    f"{payment.semester} (receipt {payment.receipt_number})"
                 ),
                 details={
                     "receipt": payment.receipt_number,
@@ -3367,86 +3513,61 @@ def payment_create(request):
 
             messages.success(
                 request,
-                "Payment recorded successfully.",
+                f"Receipt {payment.receipt_number} recorded for "
+                f"{student.first_name} {student.last_name}.",
             )
 
-            return redirect(
-                "student_detail",
-                pk=student.pk,
-            )
+            # Redirect after POST so a refresh cannot record the same money twice.
+            query = urlencode({
+                "student": student.pk,
+                "semester": payment.semester_id,
+                "recorded": payment.pk,
+            })
+            return redirect(f"{reverse('payment_create')}?{query}")
 
     # ---------------------------------------------------------
-    # FINANCIAL SUMMARY
+    # CONFIRMATION
     # ---------------------------------------------------------
 
-    charged = 0
-    paid = 0
-    balance = 0
-
-    if selected_enrollment:
-
-        charged = (
-            student.charges
-            .filter(
-                fee_item__fee_structure__semester=
-                    selected_enrollment.semester
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
+    recorded_payment = None
+    if recorded_id and student:
+        recorded_payment = (
+            Payment.objects
+            .filter(pk=recorded_id, student=student)
+            .select_related("semester", "semester__academic_year")
+            .first()
         )
 
-        paid = (
-            student.payments
-            .filter(
-                semester=selected_enrollment.semester
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        balance = charged - paid
-
-    # ---------------------------------------------------------
-    # ENROLLMENT DATA
-    # ---------------------------------------------------------
-
-    enrollment_data = []
-
-    for enrollment in enrollments:
-
-        e_charged = (
-            student.charges
-            .filter(
-                fee_item__fee_structure__semester=enrollment.semester
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        e_paid = (
-            student.payments
-            .filter(
-                semester=enrollment.semester
-            )
-            .aggregate(total=Sum("amount"))["total"]
-            or 0
-        )
-
-        enrollment_data.append({
-            "enrollment": enrollment,
-            "charged": e_charged,
-            "paid": e_paid,
-            "balance": e_charged - e_paid,
-            "is_selected": (
-                selected_enrollment
-                and enrollment.semester.pk
-                == selected_enrollment.semester.pk
+    if recorded_payment and selected_term is None:
+        selected_term = next(
+            (
+                row for row in term_rows
+                if row["semester"].pk == recorded_payment.semester_id
             ),
-            "is_current": (
-                enrollment.status == Enrollment.ACTIVE
-                and enrollment.semester.end_date >= today
-            ),
-        })
+            None,
+        )
+
+    for row in term_rows:
+        row["is_selected"] = bool(
+            selected_term and row["semester"].pk == selected_term["semester"].pk
+        )
+
+    # ---------------------------------------------------------
+    # ACCOUNT FIGURES
+    # ---------------------------------------------------------
+
+    account_charged = Decimal("0")
+    account_paid = Decimal("0")
+
+    if student:
+        account_charged = (
+            student.charges.aggregate(total=Sum("amount"))["total"]
+            or Decimal("0")
+        )
+        account_paid = (
+            student.payments.aggregate(total=Sum("amount"))["total"]
+            or Decimal("0")
+        )
 
     return render(
         request,
@@ -3454,13 +3575,20 @@ def payment_create(request):
         {
             "form": form,
             "student": student,
-            "enrollment": selected_enrollment,
-            "enrollment_data": enrollment_data,
-            "charged": charged,
-            "paid": paid,
-            "balance": balance,
+            "term_rows": term_rows,
+            "selected_term": selected_term,
+            "skipped_terms": skipped_terms,
+            "recorded_payment": recorded_payment,
+            "account_charged": account_charged,
+            "account_paid": account_paid,
+            "account_balance": account_charged - account_paid,
+            "today": today,
+            "next_receipt": next_receipt_number(today),
         },
     )
+
+
+@permission_required("school.change_student", raise_exception=True)
 @transaction.atomic
 @require_POST
 def bulk_progress_students(request, semester_id):
@@ -3622,6 +3750,13 @@ def user_create(request):
         password = forms.CharField(widget=forms.PasswordInput, help_text="Temporary password - user should change on first login")
         group = forms.ModelChoiceField(queryset=Group.objects.all(), required=False, help_text="Assign to a role group")
         is_staff = forms.BooleanField(required=False, help_text="Can access Django admin")
+
+        def clean_password(self):
+            from django.contrib.auth.password_validation import validate_password
+
+            password = self.cleaned_data["password"]
+            validate_password(password)
+            return password
     
     if request.method == "POST":
         form = UserCreateForm(request.POST)
@@ -3703,28 +3838,18 @@ def backup_create(request):
     config = BackupConfig.get_config()
     db_path = settings.DATABASES['default']['NAME']
     backup_dir = config.get_backup_path()
-    
-    if not os.path.exists(db_path):
-        messages.error(request, "Database file not found.")
-        return redirect('backup_index')
-    
-    if not os.path.exists(backup_dir):
-        try:
-            os.makedirs(backup_dir, exist_ok=True)
-        except Exception as e:
-            messages.error(request, f"Cannot create backup directory: {e}")
-            return redirect('backup_index')
-    
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f"backup_{timestamp}.sqlite3"
-    backup_path = os.path.join(backup_dir, backup_name)
-    
+
+    backup_name = timestamped_name("backup")
+
     try:
-        shutil.copy2(db_path, backup_path)
-        messages.success(request, f"Backup created: {backup_name}")
-    except Exception as e:
-        messages.error(request, f"Backup failed: {e}")
-    
+        create_backup(db_path, os.path.join(backup_dir, backup_name))
+    except BackupError as exc:
+        messages.error(request, f"Backup failed: {exc}")
+    else:
+        messages.success(
+            request, f"Backup created and verified: {backup_name}"
+        )
+
     return redirect('backup_index')
 
 
@@ -3752,27 +3877,27 @@ def backup_restore(request, filename):
     config = BackupConfig.get_config()
     db_path = settings.DATABASES['default']['NAME']
     backup_dir = config.get_backup_path()
-    
+
     # Sanitize filename
     filename = os.path.basename(filename)
     backup_path = os.path.join(backup_dir, filename)
-    
+
     if not os.path.exists(backup_path):
         messages.error(request, "Backup file not found.")
         return redirect('backup_index')
-    
-    # Create safety backup first
-    safety_name = f"safety_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.sqlite3"
-    safety_path = os.path.join(backup_dir, safety_name)
-    
+
     try:
-        if os.path.exists(db_path):
-            shutil.copy2(db_path, safety_path)
-        shutil.copy2(backup_path, db_path)
-        messages.success(request, f"Database restored from {filename}. Safety backup created: {safety_name}")
-    except Exception as e:
-        messages.error(request, f"Restore failed: {e}")
-    
+        safety_path = restore_backup(backup_path, db_path)
+    except BackupError as exc:
+        messages.error(request, f"Restore failed: {exc}")
+    else:
+        safety_name = os.path.basename(safety_path) if safety_path else "none"
+        messages.success(
+            request,
+            f"Database restored from {filename} and verified. "
+            f"Safety backup: {safety_name}.",
+        )
+
     return redirect('backup_index')
 
 
@@ -3828,7 +3953,14 @@ def backup_upload(request):
         with open(backup_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
-        messages.success(request, f"Backup uploaded: {safe_name}")
+
+        ok, message = verify_backup(backup_path)
+        if not ok:
+            os.remove(backup_path)
+            messages.error(request, f"Uploaded file rejected: {message}")
+            return redirect('backup_index')
+
+        messages.success(request, f"Backup uploaded and verified: {safe_name}")
     except Exception as e:
         messages.error(request, f"Upload failed: {e}")
     
