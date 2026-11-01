@@ -23,6 +23,10 @@ npm run dev
 
 Open `http://localhost:3000`. Nuxt proxies `/api` requests to Django on port 8000
 and uses the same browser session for API requests.
+If you change `nuxt.config.ts`, restart `npm run dev` so the proxy settings take
+effect. Django should receive API requests under `/api/`, such as
+`/api/auth/login/`; do not open the Django login route on port 8000 when testing
+the Vue sign-in flow.
 
 ## Serve Vue through Django
 

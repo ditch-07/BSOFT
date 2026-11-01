@@ -24,9 +24,9 @@ export default defineNuxtConfig({
       routes: ['/'],
     },
     devProxy: {
-      '/api': { target: 'http://localhost:8000', changeOrigin: true },
-      '/admin': { target: 'http://localhost:8000', changeOrigin: true },
-      '/static': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api': { target: 'http://localhost:8000/api', changeOrigin: true },
+      '/admin': { target: 'http://localhost:8000/admin', changeOrigin: true },
+      '/static': { target: 'http://localhost:8000/static', changeOrigin: true },
     },
   },
 })
