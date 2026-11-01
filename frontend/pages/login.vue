@@ -1,23 +1,32 @@
 <script setup lang="ts">
-const api = useApi();
 const router = useRouter();
 const route = useRoute();
+const auth = useAuth();
 
 const username = ref('');
 const password = ref('');
 const error = ref('');
 const loading = ref(false);
 
-const redirect = route.query.redirect || '/';
+const requestedRedirect = route.query.redirect;
+const redirect = typeof requestedRedirect === 'string'
+  && requestedRedirect.startsWith('/')
+  && !requestedRedirect.startsWith('//')
+  ? requestedRedirect
+  : '/';
 
 async function handleLogin() {
   error.value = '';
   loading.value = true;
   try {
-    await api.post('/api/auth/login/', { username: username.value, password: password.value });
+    await auth.login(username.value, password.value);
     await router.push(redirect);
   } catch (e: any) {
-    error.value = e.data?.detail || e.data?.message || 'Login failed';
+    const detail = e.data?.errors?.detail;
+    error.value = (Array.isArray(detail) ? detail[0] : detail)
+      || e.data?.detail
+      || e.data?.message
+      || 'Login failed';
   } finally {
     loading.value = false;
   }

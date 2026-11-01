@@ -1,14 +1,40 @@
 <script setup lang="ts">
+interface Semester {
+  id: number;
+  name: string;
+  academic_year: string;
+  number: number;
+}
+
+interface FeeStructureItem {
+  name: string;
+  amount: number;
+  description: string | null;
+}
+
+interface FeeStructure {
+  id: number;
+  program: { id: number; name: string; code: string };
+  year_level: number;
+  total: number;
+  items: FeeStructureItem[];
+}
+
+interface ListResponse<T> {
+  count: number;
+  results: T[];
+}
+
 const api = useApi();
 const { data, pending, error } = await useAsyncData('fee-setup', async () => {
-  const semesters = await api.get<{ count: number; results: Array<{ id: number; name: string; academic_year: string; number: number }> }>('/api/semesters/');
+  const semesters = await api.get<ListResponse<Semester>>('/api/semesters/');
   const selectedSemester = semesters.results[0];
 
   if (!selectedSemester) {
     return { semesters: semesters.results, selectedSemester: null, feeStructures: [] };
   }
 
-  const feeStructures = await api.get<{ count: number; results: Array<{ id: number; program: { id: number; name: string; code: string }; year_level: number; total: number; items: Array<{ name: string; amount: number; description: string | null }> }> }(`/api/semesters/${selectedSemester.id}/fee-structures/`);
+  const feeStructures = await api.get<ListResponse<FeeStructure>>(`/api/semesters/${selectedSemester.id}/fee-structures/`);
 
   return {
     semesters: semesters.results,
@@ -28,12 +54,14 @@ const selectedSemester = computed({
 });
 
 const refresh = async () => {
-  const next = await api.get<{ count: number; results: Array<{ id: number; name: string; academic_year: string; number: number }> }>('/api/semesters/');
+  const next = await api.get<ListResponse<Semester>>('/api/semesters/');
   const chosen = next.results[0] ?? null;
   data.value = {
     semesters: next.results,
     selectedSemester: chosen,
-    feeStructures: chosen ? ((await api.get<{ count: number; results: Array<{ id: number; program: { id: number; name: string; code: string }; year_level: number; total: number; items: Array<{ name: string; amount: number; description: string | null }> }> }(`/api/semesters/${chosen.id}/fee-structures/`)).results) : [],
+    feeStructures: chosen
+      ? (await api.get<ListResponse<FeeStructure>>(`/api/semesters/${chosen.id}/fee-structures/`)).results
+      : [],
   };
 };
 
@@ -41,7 +69,7 @@ const loadSemester = async (semesterId: number) => {
   const chosen = semesters.value.find((semester) => semester.id === semesterId) ?? null;
   if (!chosen) return;
 
-  const feeStructuresForSemester = await api.get<{ count: number; results: Array<{ id: number; program: { id: number; name: string; code: string }; year_level: number; total: number; items: Array<{ name: string; amount: number; description: string | null }> }> }(`/api/semesters/${chosen.id}/fee-structures/`);
+  const feeStructuresForSemester = await api.get<ListResponse<FeeStructure>>(`/api/semesters/${chosen.id}/fee-structures/`);
   data.value = {
     semesters: semesters.value,
     selectedSemester: chosen,

@@ -1,8 +1,16 @@
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
+from django.http import JsonResponse
 
 
-EXEMPT_PATHS = ("/login/", "/logout/", "/static/", "/admin/", "/api/auth/check/", "/api/auth/login/", "/api/auth/logout/")
+EXEMPT_PATHS = (
+    "/login",
+    "/logout/",
+    "/static/",
+    "/admin/",
+    "/api/auth/check/",
+    "/api/auth/login/",
+)
 
 
 class LoginRequiredMiddleware:
@@ -14,8 +22,18 @@ class LoginRequiredMiddleware:
     def __call__(self, request):
         if not request.user.is_authenticated:
             path = request.path
-            if not any(path.startswith(p) for p in EXEMPT_PATHS):
-                return redirect_to_login(
-                    request.get_full_path(), login_url=settings.LOGIN_URL
+            if any(path.startswith(p) for p in EXEMPT_PATHS):
+                return self.get_response(request)
+            if path.startswith("/api/"):
+                return JsonResponse(
+                    {"detail": "Authentication credentials were not provided."},
+                    status=401,
                 )
+            if settings.FRONTEND_MODE == "vue" and not path.startswith(
+                ("/admin/", "/static/", "/media/")
+            ):
+                return self.get_response(request)
+            return redirect_to_login(
+                request.get_full_path(), login_url=settings.LOGIN_URL
+            )
         return self.get_response(request)

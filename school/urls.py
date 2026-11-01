@@ -31,6 +31,7 @@ urlpatterns = [
     path("api/fee-structures/<int:pk>/edit/", api.api_fee_structure_update, name="api_fee_structure_update"),
     path("api/semesters/<int:semester_id>/fee-structures/bulk/", api.api_bulk_fee_configuration, name="api_bulk_fee_configuration"),
     path("api/students/", api.api_student_list, name="api_student_list"),
+    path("api/students/search/", api.api_student_search, name="api_student_search"),
     path("api/students/create/", api.api_student_create, name="api_student_create"),
     path("api/students/<int:pk>/", api.api_student_detail, name="api_student_detail"),
     path("api/students/<int:pk>/patch/", api.api_student_patch, name="api_student_patch"),

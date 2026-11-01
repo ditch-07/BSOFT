@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   ssr: false,
   runtimeConfig: {
     public: {
-      apiBaseUrl: 'http://localhost:8000',
+      apiBaseUrl: '',
     },
   },
   app: {
@@ -12,13 +12,17 @@ export default defineNuxtConfig({
       title: 'NRZ Student Management',
       meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/x-icon', href: '/static/favicon.ico' },
       ],
     },
     baseURL: '/',
-    buildAssetsDir: '_nuxt/',
+    buildAssetsDir: '/static/nuxt/_nuxt/',
   },
   nitro: {
+    prerender: {
+      crawlLinks: false,
+      routes: ['/'],
+    },
     devProxy: {
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
       '/admin': { target: 'http://localhost:8000', changeOrigin: true },

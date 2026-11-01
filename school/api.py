@@ -9,7 +9,7 @@ from django.db.models import Q, Sum
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from .forms import (
@@ -430,6 +430,35 @@ def api_student_list(request):
         "page": page_obj.number,
         "pages": paginator.num_pages,
         "results": items,
+    })
+
+
+@login_required
+@permission_required("school.view_student", raise_exception=True)
+def api_student_search(request):
+    query = (request.GET.get("q") or "").strip()
+    if len(query) < 2:
+        return JsonResponse({"students": []})
+
+    students = (
+        Student.objects.filter(status=Student.ACTIVE)
+        .filter(
+            Q(student_number__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+        )
+        .order_by("last_name", "first_name")[:8]
+    )
+    return JsonResponse({
+        "students": [
+            {
+                "id": student.id,
+                "student_number": student.student_number,
+                "first_name": student.first_name,
+                "last_name": student.last_name,
+            }
+            for student in students
+        ],
     })
 
 
@@ -2530,6 +2559,7 @@ def api_auth_check(request):
     })
 
 
+@ensure_csrf_cookie
 def api_auth_check_public(request):
     """Public auth check - returns auth status without requiring login."""
     if request.user.is_authenticated:
@@ -2549,11 +2579,9 @@ def api_auth_check_public(request):
     return JsonResponse({"authenticated": False, "user": None})
 
 
-@csrf_exempt
 def api_auth_login(request):
     """Login via API - returns session cookie."""
     from django.contrib.auth import authenticate, login
-    from django.views.decorators.csrf import csrf_exempt
 
     if request.method != "POST":
         return JsonResponse({"errors": {"detail": ["Only POST method is allowed."]}}, status=405)

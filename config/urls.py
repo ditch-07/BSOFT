@@ -1,20 +1,16 @@
 from django.contrib import admin
+from django.conf import settings
 from django.urls import include, path, re_path
-from django.views.generic import TemplateView
+from config.views import nuxt_app
 
+handler403 = "config.views.api_permission_denied"
 
-urlpatterns = [
+urlpatterns = [path("admin/", admin.site.urls)]
 
-    path(
-        "admin/",
-        admin.site.urls,
-    ),
+if settings.FRONTEND_MODE == "vue":
+    urlpatterns.extend([
+        path("", nuxt_app, name="vue_home"),
+        re_path(r"^(?!api/|admin/|static/|media/).+$", nuxt_app, name="vue_page"),
+    ])
 
-    path(
-        "",
-        include("school.urls"),
-    ),
-
-    # Catch-all for Nuxt SPA - must be last
-    re_path(r'^(?!api/|admin/|static/|media/).*/?$', TemplateView.as_view(template_name='spa.html')),
-]
+urlpatterns.append(path("", include("school.urls")))

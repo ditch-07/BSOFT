@@ -1,75 +1,53 @@
-# Nuxt Minimal Starter
+# NRZ Student Management frontend
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+The Nuxt/Vue application is the default web interface. It reads and changes
+application data through Django's session-authenticated JSON API; the generated
+Nuxt files contain the app shell and assets, not a copy of school data.
 
-## Setup
+## Development
 
-Make sure to install dependencies:
+Start Django from the repository root:
 
-```bash
-# npm
+```powershell
+python manage.py migrate
+python manage.py runserver
+```
+
+In another terminal:
+
+```powershell
+Set-Location frontend
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+Open `http://localhost:3000`. Nuxt proxies `/api` requests to Django on port 8000
+and uses the same browser session for API requests.
 
-Build the application for production:
+## Serve Vue through Django
 
-```bash
-# npm
-npm run build
+Generate the client app before starting Django:
 
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+```powershell
+Set-Location frontend
+npm run generate
+Set-Location ..
+python manage.py collectstatic --noinput
+python manage.py runserver
 ```
 
-Locally preview production build:
+The generated entry document is served by Django and its assets are exposed
+through Django static files. All student, payment, report, and administration
+data continues to load from `/api/` at runtime.
 
-```bash
-# npm
-npm run preview
+## Switch back to Django templates
 
-# pnpm
-pnpm preview
+Set `NRZ_FRONTEND_MODE` before starting Django:
 
-# yarn
-yarn preview
-
-# bun
-bun run preview
+```powershell
+$env:NRZ_FRONTEND_MODE = "django"
+python manage.py runserver
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+Unset it or set it to `vue` to use the Vue app again. Restart Django after
+changing the setting.

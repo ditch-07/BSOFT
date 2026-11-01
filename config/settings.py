@@ -2,9 +2,17 @@ from pathlib import Path
 import os
 import secrets
 
+from django.core.exceptions import ImproperlyConfigured
+
 from config.paths import APP_DIR, DATA_DIR, STATIC_DIR, TEMPLATES_DIR
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+FRONTEND_MODE = os.environ.get("NRZ_FRONTEND_MODE", "vue").strip().lower()
+if FRONTEND_MODE not in {"vue", "django"}:
+    raise ImproperlyConfigured(
+        "NRZ_FRONTEND_MODE must be either 'vue' or 'django'."
+    )
 
 
 def env_bool(name, default=False):
@@ -161,6 +169,11 @@ STATICFILES_DIRS = [
     STATIC_DIR,
     BASE_DIR / "frontend" / "static",
 ]
+NUXT_ASSETS_DIR = (
+    BASE_DIR / "frontend" / ".output" / "public" / "static"
+)
+if NUXT_ASSETS_DIR.is_dir():
+    STATICFILES_DIRS.append(NUXT_ASSETS_DIR)
 
 # Serve static files straight from the static directories. This keeps the
 # packaged app styled with DEBUG off and without running collectstatic against

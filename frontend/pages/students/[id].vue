@@ -213,7 +213,8 @@ function getStatusBadgeClass(status: string): string {
                       <td colspan="5" class="text-center text-muted">No payments recorded.</td>
                     </tr>
                   </tbody>
-                </table              </div>
+                </table>
+              </div>
             </div>
           </div>
         </div>
