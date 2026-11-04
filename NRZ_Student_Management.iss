@@ -1,12 +1,12 @@
-; BSOFT Student Management - Inno Setup Script
+; NRZ Student Management - Inno Setup Script
 ; Build: iscc NRZ_Student_Management.iss
 
-#define AppName "BSOFT Student Management"
+#define AppName "NRZ Student Management"
 #define AppVersion "1.0.0"
 #define AppPublisher "NRZ"
-#define AppExeName "BSOFT Student Management.exe"
-#define SourceDir "dist\BSOFT Student Management"
-#define DataDir "{commonappdata}\BSOFT Student Management"
+#define AppExeName "NRZ Student Management.exe"
+#define SourceDir "dist\NRZ Student Management"
+#define DataDir "{commonappdata}\NRZ Student Management"
 
 [Setup]
 AppName={#AppName}
@@ -16,7 +16,7 @@ DefaultDirName={pf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=installer
 OutputBaseFilename=NRZ_Student_Management_Setup_{#AppVersion}
-; SetupIconFile={#SourceDir}\BSOFT Student Management.exe
+; SetupIconFile={#SourceDir}\NRZ Student Management.exe
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -87,9 +87,9 @@ begin
   end;
   
   // Verify main executable exists
-  if not FileExists(SourcePath + '\BSOFT Student Management.exe') then
+  if not FileExists(SourcePath + '\NRZ Student Management.exe') then
   begin
-    MsgBox('ERROR: Main executable not found: ' + SourcePath + '\BSOFT Student Management.exe' + #13#10 +
+    MsgBox('ERROR: Main executable not found: ' + SourcePath + '\NRZ Student Management.exe' + #13#10 +
            'Please run: pyinstaller nrz_student_management.spec --noconfirm', 
            mbCriticalError, MB_OK);
     Result := False;

@@ -6,6 +6,7 @@ interface User {
   email: string;
   is_staff: boolean;
   is_superuser: boolean;
+  permissions: Record<string, boolean>;
 }
 
 export function useAuth() {

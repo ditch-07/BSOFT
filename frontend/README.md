@@ -1,4 +1,4 @@
-# NRZ Student Management frontend
+# BSoft Student Management frontend
 
 The Nuxt/Vue application is the default web interface. It reads and changes
 application data through Django's session-authenticated JSON API; the generated
@@ -43,6 +43,12 @@ python manage.py runserver
 The generated entry document is served by Django and its assets are exposed
 through Django static files. All student, payment, report, and administration
 data continues to load from `/api/` at runtime.
+
+The Nuxt student area supports student registration and editing, status
+changes, filtered archive browsing, and spreadsheet imports with a validated
+preview before confirmation. Spreadsheet preview and confirmation use
+session-authenticated APIs; confirmation tokens are signed and expire after
+one hour.
 
 ## Switch back to Django templates
 

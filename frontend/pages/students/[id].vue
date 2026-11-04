@@ -1,9 +1,36 @@
 <script setup lang="ts">
 const route = useRoute();
 const api = useApi();
+const { user } = useAuth();
 
 const { data, pending, error } = await useAsyncData(`student-${route.params.id}`, () => api.get<any>(`/api/students/${route.params.id}/payment-history/`));
 const router = useRouter();
+const statusDialogOpen = ref(false);
+const statusSaving = ref(false);
+const statusError = ref('');
+const nextStatus = ref('');
+const statusNote = ref('');
+
+async function saveStatus() {
+  statusSaving.value = true;
+  statusError.value = '';
+  try {
+    const result = await api.post<{ status: string; status_display: string }>(
+      `/api/students/${route.params.id}/status/`,
+      { status: nextStatus.value, note: statusNote.value },
+    );
+    if (data.value?.student) {
+      data.value.student.status = result.status;
+      data.value.student.status_display = result.status_display;
+    }
+    statusDialogOpen.value = false;
+    statusNote.value = '';
+  } catch (requestError: unknown) {
+    statusError.value = requestError instanceof Error ? requestError.message : 'Unable to update student status.';
+  } finally {
+    statusSaving.value = false;
+  }
+}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
@@ -37,12 +64,48 @@ function getStatusBadgeClass(status: string): string {
         <p class="eyebrow">Profile</p>
         <h1>{{ data?.student?.name ?? 'Student' }}</h1>
       </div>
-      <div class="d-flex gap-2">
-        <NuxtLink :to="`/payments/new?student=${data?.student?.id}`" class="btn btn-success">
+      <div class="d-flex gap-2 flex-wrap">
+        <NuxtLink v-if="user?.permissions.change_student" :to="`/students/${route.params.id}/edit`" class="btn btn-outline-primary">
+          Edit student
+        </NuxtLink>
+        <button
+          v-if="user?.permissions.change_student && data?.student"
+          type="button"
+          class="btn btn-outline-secondary"
+          @click="nextStatus = data.student.status; statusDialogOpen = true"
+        >
+          Change status
+        </button>
+        <NuxtLink v-if="user?.permissions.can_record_payments" :to="`/payments/new?student=${data?.student?.id}`" class="btn btn-success">
           + Record Payment
         </NuxtLink>
         <NuxtLink to="/students" class="secondary-link">Back to students</NuxtLink>
       </div>
+    </div>
+
+    <div v-if="statusDialogOpen" class="status-backdrop" @click.self="statusDialogOpen = false">
+      <section class="status-dialog" role="dialog" aria-modal="true" aria-labelledby="status-dialog-title">
+        <h2 id="status-dialog-title">Change student status</h2>
+        <p>Withdrawing a student also cancels their unpaid future charges.</p>
+        <div v-if="statusError" class="alert alert-danger" role="alert">{{ statusError }}</div>
+        <label class="status-field">
+          <span>Status</span>
+          <select v-model="nextStatus" class="form-select">
+            <option value="ACTIVE">Active</option>
+            <option value="DEFERRED">Deferred</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
+        </label>
+        <label class="status-field">
+          <span>Note (optional)</span>
+          <textarea v-model="statusNote" class="form-control" rows="3" placeholder="Reason for this status change" />
+        </label>
+        <div class="status-actions">
+          <button type="button" class="btn btn-outline-secondary" :disabled="statusSaving" @click="statusDialogOpen = false">Cancel</button>
+          <button type="button" class="btn btn-primary" :disabled="statusSaving" @click="saveStatus">{{ statusSaving ? 'Saving…' : 'Save status' }}</button>
+        </div>
+      </section>
     </div>
 
     <div v-if="pending" class="card">Loading student details…</div>
@@ -117,7 +180,7 @@ function getStatusBadgeClass(status: string): string {
                 <div><dt>Student Number</dt><dd>{{ data?.student?.student_number }}</dd></div>
                 <div><dt>Status</dt><dd>
                   <span class="badge" :class="getStatusBadgeClass(data?.student?.status)">
-                    {{ data?.student?.status }}
+                    {{ data?.student?.status_display ?? data?.student?.status }}
                   </span>
                 </dd></div>
                 <div><dt>Program</dt><dd>{{ data?.student?.program?.name ?? 'Not assigned' }}</dd></div>
@@ -357,4 +420,10 @@ th { background: #f9fafb; font-weight: 600; font-size: 0.75rem; text-transform: 
 .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
 .btn-success { background: #16a34a; color: white; }
 .btn-outline-primary { background: transparent; border: 1px solid #2563eb; color: #2563eb; }
+.status-backdrop { position:fixed; z-index:1080; inset:0; display:grid; place-items:center; padding:1rem; background:rgb(18 31 40 / 58%); }
+.status-dialog { width:min(100%,520px); padding:1.35rem; border:1px solid #d6dad5; border-radius:12px; background:#fff; box-shadow:0 20px 60px rgb(0 0 0 / 22%); }
+.status-dialog h2 { margin:0; font-size:1.25rem; }
+.status-dialog > p { margin:.5rem 0 1rem; color:#4e5c66; }
+.status-field { display:grid; gap:.35rem; margin:.9rem 0; font-weight:650; }
+.status-actions { display:flex; justify-content:flex-end; gap:.6rem; margin-top:1.2rem; }
 </style>

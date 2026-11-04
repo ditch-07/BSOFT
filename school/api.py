@@ -3,9 +3,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
+from django.core import signing
+from django.core.signing import BadSignature
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse, FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
@@ -20,6 +22,7 @@ from .forms import (
     PaymentForm,
     ProgramForm,
     SemesterForm,
+    StudentImportForm,
     StudentForm,
     StudentStatusChangeForm,
 )
@@ -56,7 +59,7 @@ from .models import (
     students_with_missing_details,
     unconfigured_fee_structures,
 )
-from .utils.time_utils import get_current_date
+from .utils.time_utils import get_current_date, get_working_semester
 from .views import cancel_unpaid_future_charges, create_academic_year_enrollments
 from .reports import REPORTS
 
@@ -69,6 +72,36 @@ def _parse_json_body(request):
         except (TypeError, ValueError):
             return {}
     return request.POST.copy() if hasattr(request, "POST") else {}
+
+
+def _auth_user_payload(user):
+    permission_codes = (
+        "view_student",
+        "add_student",
+        "change_student",
+        "view_studentstatuslog",
+        "can_view_financial_reports",
+        "can_view_outstanding_reports",
+        "can_record_payments",
+        "view_academicyear",
+        "view_semester",
+        "view_feestructure",
+        "add_feestructure",
+        "view_program",
+        "view_auditlog",
+    )
+    return {
+        "id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "permissions": {
+            code: user.has_perm(f"school.{code}") for code in permission_codes
+        },
+    }
 
 
 def _student_payload(student):
@@ -94,6 +127,7 @@ def _student_payload(student):
             "code": student.program.code,
         } if student.program else None,
         "intake_year": student.intake_year.name if student.intake_year else None,
+        "intake_year_id": student.intake_year_id,
         "current_semester": str(current_enrollment.semester) if current_enrollment else None,
         "current_year_level": current_enrollment.year_level if current_enrollment else None,
         "enrollments": [
@@ -112,39 +146,127 @@ def _student_payload(student):
 @login_required
 @permission_required("school.view_student", raise_exception=True)
 def api_dashboard(request):
-    """Minimal dashboard summary for the Nuxt frontend."""
+    """Return the permission-aware dashboard summary used by Nuxt."""
     today = get_current_date()
-    current_semester = (
-        Semester.objects.filter(start_date__lte=today, end_date__gte=today)
-        .select_related("academic_year")
-        .first()
+    current_year = AcademicYear.objects.filter(
+        start_date__lte=today,
+        end_date__gte=today,
+    ).first()
+    financial_semester = get_working_semester(today)
+    financial_year = (
+        financial_semester.academic_year if financial_semester else current_year
     )
-
     total_students = Student.objects.filter(status=Student.ACTIVE).count()
-    today_payments = Payment.objects.filter(payment_date=today).aggregate(total=Sum("amount"))["total"] or 0
+    can_view_financials = (
+        request.user.has_perm("school.can_view_financial_reports")
+        or request.user.has_perm("school.can_record_payments")
+    )
+    can_view_outstanding = request.user.has_perm(
+        "school.can_view_outstanding_reports"
+    )
+    today_payments = {"total": 0, "count": 0}
+    recent_payments = []
+    financials = None
 
-    if current_semester:
-        financials = semester_financials(current_semester)
-        total_charged = float(financials["charged"])
-        total_paid = float(financials["paid"])
-        outstanding = float(financials["outstanding"])
-        collection_rate = float(financials["collection_rate"])
-    else:
-        total_charged = 0.0
-        total_paid = 0.0
-        outstanding = 0.0
-        collection_rate = 0.0
+    if can_view_financials:
+        today_payments = Payment.objects.filter(payment_date=today).aggregate(
+            total=Sum("amount"),
+            count=Count("pk"),
+        )
+        today_payments["total"] = today_payments["total"] or 0
+        if financial_semester:
+            semester_totals = semester_financials(financial_semester)
+            expected_revenue = StudentCharge.objects.filter(
+                enrollment__semester__academic_year=financial_year,
+                enrollment__status=Enrollment.ACTIVE,
+            ).aggregate(total=Sum("amount"))["total"] or 0
+            financials = {
+                "charged": float(semester_totals["charged"]),
+                "paid": float(semester_totals["paid"]),
+                "outstanding": float(semester_totals["outstanding"]),
+                "collection_rate": float(semester_totals["collection_rate"]),
+                "expected_revenue_year": float(expected_revenue),
+            }
+
+        recent_payments = [
+            {
+                "id": payment.id,
+                "student_id": payment.student_id,
+                "student_name": (
+                    f"{payment.student.first_name} {payment.student.last_name}".strip()
+                ),
+                "student_number": payment.student.student_number,
+                "program": payment.student.program.name if payment.student.program else "",
+                "method": payment.get_method_display(),
+                "payment_date": payment.payment_date.isoformat(),
+                "amount": float(payment.amount),
+                "student_active": payment.student.status == Student.ACTIVE,
+            }
+            for payment in Payment.objects.select_related(
+                "student__program"
+            ).order_by("-payment_date", "-id")[:8]
+        ]
+
+    outstanding_summary = None
+    if can_view_outstanding and financial_semester:
+        balances = outstanding_students(financial_semester)
+        balance_totals = balances.aggregate(
+            total=Sum("balance"),
+            count=Count("pk"),
+        )
+        top_balances = list(balances.select_related("program")[:5])
+        max_balance = top_balances[0].balance if top_balances else 0
+        outstanding_summary = {
+            "total": float(balance_totals["total"] or 0),
+            "students_count": balance_totals["count"],
+            "has_charges": bool(balance_totals["count"]) or StudentCharge.objects.filter(
+                enrollment__semester=financial_semester,
+            ).exists(),
+            "students": [
+                {
+                    "id": student.id,
+                    "name": f"{student.first_name} {student.last_name}".strip(),
+                    "student_number": student.student_number,
+                    "program": student.program.name if student.program else "",
+                    "balance": float(student.balance),
+                    "balance_percent": (
+                        float(student.balance * 100 / max_balance) if max_balance else 0
+                    ),
+                }
+                for student in top_balances
+            ],
+        }
+
+    semester_payload = None
+    if financial_semester:
+        elapsed = (today - financial_semester.start_date).days
+        duration = (financial_semester.end_date - financial_semester.start_date).days
+        semester_payload = {
+            "name": str(financial_semester),
+            "academic_year": financial_semester.academic_year.name,
+            "number": financial_semester.number,
+            "start_date": financial_semester.start_date.isoformat(),
+            "end_date": financial_semester.end_date.isoformat(),
+            "is_upcoming": financial_semester.start_date > today,
+            "days_until": max(0, -elapsed),
+            "week": min((duration + 7) // 7, elapsed // 7 + 1) if elapsed >= 0 else 0,
+            "weeks": (duration + 7) // 7,
+            "progress_percent": max(0, min(100, elapsed * 100 / max(1, duration))),
+        }
 
     payload = {
         "total_students": total_students,
-        "today_total": float(today_payments),
-        "current_semester": str(current_semester) if current_semester else None,
-        "financials": {
-            "charged": total_charged,
-            "paid": total_paid,
-            "outstanding": outstanding,
-            "collection_rate": collection_rate,
-        },
+        "today": today.isoformat(),
+        "current_year": current_year.name if current_year else None,
+        "current_semester": semester_payload["name"] if semester_payload else None,
+        "semester": semester_payload,
+        "can_view_financials": can_view_financials,
+        "can_view_outstanding": can_view_outstanding,
+        "today_total": float(today_payments["total"]),
+        "today_count": today_payments["count"],
+        "financials": financials,
+        "recent_payments": recent_payments,
+        "outstanding": outstanding_summary,
     }
     return JsonResponse(payload)
 
@@ -387,7 +509,10 @@ def api_student_list(request):
         )
 
     if program_filter:
-        students = students.filter(program_id=program_filter)
+        if program_filter.isdecimal():
+            students = students.filter(program_id=program_filter)
+        else:
+            students = students.none()
 
     if year_level_filter:
         students = students.filter(
@@ -702,6 +827,190 @@ def api_student_create(request):
 
 
 @login_required
+@permission_required("school.add_student", raise_exception=True)
+@require_POST
+def api_student_import_preview(request):
+    from school.utils.student_import import parse_student_spreadsheet, validate_rows
+
+    form = StudentImportForm(request.POST, request.FILES)
+    if not form.is_valid():
+        return JsonResponse({
+            "errors": form.errors.get_json_data(),
+        }, status=400)
+
+    try:
+        parsed_rows = parse_student_spreadsheet(form.cleaned_data["file"])
+    except ValueError as exc:
+        return JsonResponse({"detail": str(exc)}, status=400)
+
+    if not parsed_rows:
+        return JsonResponse({"detail": "No student rows were found in that file."}, status=400)
+
+    validated_rows = validate_rows(parsed_rows)
+    intake_year = form.cleaned_data["intake_year"]
+    semester = form.cleaned_data["semester"]
+    year_level = int(form.cleaned_data["year_level"])
+    default_status = form.cleaned_data["default_status"]
+    for row in validated_rows:
+        if row["program"] and year_level > row["program"].duration_years:
+            row["errors"].append(
+                f"{row['program']} only runs for {row['program'].duration_years} year(s)."
+            )
+
+    valid_rows = [
+        {
+            "row_number": row["row_number"],
+            "student_number": row["student_number"],
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "program_id": row["program"].id,
+            "program_code": row["program_code"],
+            "program_name": row["program"].name,
+        }
+        for row in validated_rows
+        if not row["errors"]
+    ]
+    invalid_rows = [
+        {
+            "row_number": row["row_number"],
+            "student_number": row["student_number"],
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "program_code": row["program_code"],
+            "errors": row["errors"],
+        }
+        for row in validated_rows
+        if row["errors"]
+    ]
+    token = signing.dumps({
+        "rows": valid_rows,
+        "intake_year_id": intake_year.id,
+        "semester_id": semester.id,
+        "year_level": year_level,
+        "default_status": default_status,
+    }, compress=True)
+
+    return JsonResponse({
+        "preview_id": token,
+        "valid_rows": valid_rows,
+        "invalid_rows": invalid_rows,
+        "valid_count": len(valid_rows),
+        "invalid_count": len(invalid_rows),
+        "intake_year": intake_year.name,
+        "semester": str(semester),
+        "year_level": year_level,
+        "default_status": default_status,
+    })
+
+
+@login_required
+@permission_required("school.add_student", raise_exception=True)
+@require_POST
+def api_student_import_confirm(request):
+    payload = _parse_json_body(request)
+    preview_id = payload.get("preview_id")
+    if not isinstance(preview_id, str) or not preview_id:
+        return JsonResponse({"detail": "Import preview is missing. Upload the spreadsheet again."}, status=400)
+
+    try:
+        preview = signing.loads(preview_id, max_age=3600)
+    except BadSignature:
+        return JsonResponse({"detail": "Import preview expired or is invalid. Upload the spreadsheet again."}, status=400)
+
+    if not isinstance(preview, dict) or not isinstance(preview.get("rows"), list):
+        return JsonResponse({"detail": "Import preview is invalid. Upload the spreadsheet again."}, status=400)
+
+    intake_year = AcademicYear.objects.filter(pk=preview.get("intake_year_id")).first()
+    semester = Semester.objects.filter(
+        pk=preview.get("semester_id"),
+        academic_year_id=preview.get("intake_year_id"),
+    ).first()
+    try:
+        year_level = int(preview.get("year_level"))
+    except (TypeError, ValueError):
+        year_level = 0
+    status = preview.get("default_status")
+    if (
+        not intake_year
+        or not semester
+        or year_level < 1
+        or status not in dict(Student.STATUS_CHOICES)
+    ):
+        return JsonResponse({"detail": "Import settings are no longer valid. Upload the spreadsheet again."}, status=400)
+
+    from school.utils.student_import import validate_rows
+
+    validated_rows = validate_rows(preview["rows"])
+    invalid_rows = [
+        row for row in validated_rows
+        if any(
+            not error.startswith(f"Student number '{row.get('student_number', '')}' already exists.")
+            for error in row["errors"]
+        )
+        or not row.get("program")
+        or year_level > row["program"].duration_years
+    ]
+    if invalid_rows:
+        return JsonResponse({
+            "detail": "Some preview rows are no longer valid. Upload the spreadsheet again.",
+        }, status=400)
+
+    created_count = 0
+    skipped = []
+
+    with transaction.atomic():
+        for row in validated_rows:
+            student_number = row.get("student_number", "")
+            if Student.objects.filter(student_number=student_number).exists():
+                skipped.append(student_number or "?")
+                continue
+            program = row.get("program")
+
+            student = Student.objects.create(
+                student_number=student_number,
+                first_name=row["first_name"],
+                last_name=row["last_name"],
+                national_id="",
+                program=program,
+                intake_year=intake_year,
+                status=status,
+            )
+            create_academic_year_enrollments(
+                student=student,
+                start_semester=semester,
+                start_year_level=year_level,
+                program=program,
+            )
+            StudentStatusLog.objects.create(
+                student=student,
+                status=status,
+                note="Imported from spreadsheet.",
+            )
+            created_count += 1
+
+        from school.utils.audit import log_action
+
+        log_action(
+            user=request.user,
+            action="OTHER",
+            summary=f"Bulk-imported {created_count} student(s) from spreadsheet",
+            details={
+                "count": created_count,
+                "intake_year": intake_year.name,
+                "semester": str(semester),
+                "skipped": skipped,
+            },
+            category="STUDENT",
+        )
+
+    return JsonResponse({
+        "created_count": created_count,
+        "skipped": skipped,
+        "skipped_count": len(skipped),
+    })
+
+
+@login_required
 @permission_required("school.view_student", raise_exception=True)
 def api_student_detail(request, pk):
     student = get_object_or_404(Student.objects.select_related("program", "intake_year"), pk=pk)
@@ -779,23 +1088,56 @@ def api_student_status_change(request, pk):
 @permission_required("school.view_student", raise_exception=True)
 def api_archive_list(request):
     query = (request.GET.get("q") or "").strip()
+    status_filter = (request.GET.get("status") or "").strip().upper()
+    program_filter = (request.GET.get("program") or "").strip()
+    intake_filter = (request.GET.get("intake") or "").strip()
     students = Student.objects.select_related("program", "intake_year")
 
+    if status_filter in {value for value, _ in Student.STATUS_CHOICES}:
+        students = students.filter(status=status_filter)
     if query:
         students = students.filter(
             Q(student_number__icontains=query)
             | Q(first_name__icontains=query)
             | Q(last_name__icontains=query)
         )
+    if program_filter:
+        if program_filter.isdecimal():
+            students = students.filter(program_id=program_filter)
+        else:
+            students = students.none()
+    if intake_filter:
+        students = students.filter(intake_year__name=intake_filter)
 
     students = students.order_by("last_name", "first_name")
+    status_counts = {
+        row["status"]: row["count"]
+        for row in Student.objects.values("status").annotate(count=Count("id"))
+    }
     paginator = Paginator(students, 20)
     page_obj = paginator.get_page(request.GET.get("page", "1"))
 
     return JsonResponse({
         "count": paginator.count,
+        "total": sum(status_counts.values()),
+        "status_counts": {
+            value: status_counts.get(value, 0)
+            for value, _ in Student.STATUS_CHOICES
+        },
         "page": page_obj.number,
         "pages": paginator.num_pages,
+        "programs": [
+            {"id": program.id, "name": program.name, "count": program.student_count}
+            for program in Program.objects.filter(students__isnull=False)
+            .annotate(student_count=Count("students"))
+            .order_by("name")
+        ],
+        "intake_years": list(
+            AcademicYear.objects.filter(students__isnull=False)
+            .values_list("name", flat=True)
+            .distinct()
+            .order_by("-name")
+        ),
         "results": [
             {
                 "id": student.id,
@@ -804,6 +1146,7 @@ def api_archive_list(request):
                 "status": student.status,
                 "status_display": student.get_status_display(),
                 "program": student.program.name if student.program else None,
+                "intake_year": student.intake_year.name if student.intake_year else None,
             }
             for student in page_obj.object_list
         ],
@@ -2544,18 +2887,9 @@ def api_time_override(request):
 @login_required
 def api_auth_check(request):
     """Check if user is authenticated and return user info."""
-    user = request.user
     return JsonResponse({
         "authenticated": True,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "email": user.email,
-            "is_staff": user.is_staff,
-            "is_superuser": user.is_superuser,
-        }
+        "user": _auth_user_payload(request.user),
     })
 
 
@@ -2563,18 +2897,9 @@ def api_auth_check(request):
 def api_auth_check_public(request):
     """Public auth check - returns auth status without requiring login."""
     if request.user.is_authenticated:
-        user = request.user
         return JsonResponse({
             "authenticated": True,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "email": user.email,
-                "is_staff": user.is_staff,
-                "is_superuser": user.is_superuser,
-            }
+            "user": _auth_user_payload(request.user),
         })
     return JsonResponse({"authenticated": False, "user": None})
 
@@ -2598,15 +2923,7 @@ def api_auth_login(request):
         login(request, user)
         return JsonResponse({
             "success": True,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "email": user.email,
-                "is_staff": user.is_staff,
-                "is_superuser": user.is_superuser,
-            }
+            "user": _auth_user_payload(user),
         })
     return JsonResponse({"errors": {"detail": ["Invalid credentials."]}}, status=401)
 

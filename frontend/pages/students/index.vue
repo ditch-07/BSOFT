@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi();
+const { user } = useAuth();
 const { data, pending, error } = await useAsyncData('students', () => api.get<{ count: number; results: Array<{ id: number; name: string; student_number: string; program: string | null; current_semester: string | null }> }>('/api/students/'));
 </script>
 
@@ -10,7 +11,12 @@ const { data, pending, error } = await useAsyncData('students', () => api.get<{ 
         <p class="eyebrow">People</p>
         <h1>Students</h1>
       </div>
-      <NuxtLink to="/" class="secondary-link">Back to dashboard</NuxtLink>
+      <div class="heading-actions">
+        <NuxtLink to="/students/archive" class="btn btn-outline-secondary">Student archive</NuxtLink>
+        <NuxtLink v-if="user?.permissions.add_student" to="/students/import" class="btn btn-outline-primary">Import students</NuxtLink>
+        <NuxtLink v-if="user?.permissions.add_student" to="/students/new" class="btn btn-primary">Register student</NuxtLink>
+        <NuxtLink to="/" class="secondary-link">Back to dashboard</NuxtLink>
+      </div>
     </div>
 
     <div v-if="pending" class="card">Loading students…</div>
@@ -49,6 +55,12 @@ const { data, pending, error } = await useAsyncData('students', () => api.get<{ 
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
 }
 .eyebrow {
   margin: 0 0 0.4rem;

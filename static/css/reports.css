@@ -1,0 +1,75 @@
+.ui.rp { max-width: 1320px; margin: 0 auto; padding: .25rem 0 2rem; }
+.rp .rp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin: 0 0 1.15rem; }
+.rp .rp-title { margin: 0 0 .4rem; font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); font-weight: 800; font-stretch: 106%; letter-spacing: -.02em; line-height: 1.15; }
+.rp .rp-subtitle, .rp .rp-breadcrumb { color: var(--ink-2); font-size: .8125rem; margin: 0; }
+.rp .rp-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.rp .rp-actions svg { width: 16px; height: 16px; }
+.rp .rp-filters { padding: 1rem 1.15rem; margin-bottom: 1rem; }
+.rp .rp-filter-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,190px),1fr)); gap: .85rem; align-items: end; }
+.rp .rp-field label { display: block; margin-bottom: .3rem; color: var(--ink-2); font-size: .75rem; font-weight: 650; }
+.rp .rp-field select, .rp .rp-field input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; padding: .55rem .7rem; background: var(--paper); color: var(--ink); font: inherit; }
+.rp .rp-filter-summary { margin: .75rem 0 0; color: var(--ink-2); font-size: .75rem; }
+.rp .rp-kpis { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,190px),1fr)); gap: .75rem; margin: 0 0 1rem; }
+.rp .rp-kpi { min-width: 0; padding: .9rem 1rem; }
+.rp .rp-kpi-label { color: var(--ink-2); font-size: .8125rem; font-weight: 650; }
+.rp .rp-kpi-value { margin-top: .2rem; font-size: clamp(1.8rem,2.7vw,2.5rem); font-variant-numeric: tabular-nums; letter-spacing: -.035em; line-height: 1.2; }
+.rp .rp-kpi--owed .rp-kpi-value { color: var(--red); }
+.rp .rp-kpi--collected .rp-kpi-value { color: var(--green); }
+.rp .rp-section { overflow: hidden; }
+.rp .rp-scroll { overflow: auto; max-width: 100%; }
+.rp .rp-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.rp .rp-table th { position: sticky; top: 0; z-index: 1; padding: .6rem .55rem; border-bottom: 1px solid var(--line); background: var(--paper); color: var(--ink-2); text-align: left; font-size: .6875rem; font-weight: 650; white-space: nowrap; }
+.rp .rp-table td { padding: .8rem .55rem; border-bottom: 1px solid var(--line); font-size: .75rem; vertical-align: middle; }
+.rp .rp-table th:first-child,.rp .rp-table td:first-child { padding-left: 1.15rem; }
+.rp .rp-table th:last-child,.rp .rp-table td:last-child { padding-right: 1.15rem; }
+.rp .rp-table th[aria-sort],.rp .rp-table .rp-num { text-align: right; }
+.rp .rp-table .rp-num,.rp .rp-fig { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rp .rp-table tbody tr:hover { background: var(--wash); }
+.rp .rp-table tfoot td { border-top: 1px solid var(--ink); border-bottom: 0; font-weight: 750; }
+.rp .rp-student { display: block; color: var(--ink); font-size: .8125rem; font-weight: 750; line-height: 1.35; text-transform: uppercase; text-decoration: none; }
+.rp .rp-student-number { display: block; margin-top: .2rem; color: var(--ink-2); font-size: .6875rem; }
+.rp .rp-empty { padding: 1.5rem 1.15rem; }
+.rp .rp-empty p { margin: .3rem 0 0; color: var(--ink-2); font-size: .8125rem; }
+.rp .rp-lamp-word { display: inline-flex; align-items: center; gap: .45rem; }
+.rp .rp-bar { height: 4px; width: 90px; overflow: hidden; border-radius: 4px; background: #E5E9E5; }
+.rp .rp-bar span { display: block; height: 100%; background: var(--green); }
+.rp .rp-hub-head { min-height: 112px; padding: .9rem 1.25rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--wash) url('../img/dashboard-waves.svg') right bottom / cover no-repeat; }
+.rp .rp-group { margin-top: 1.25rem; }
+.rp .rp-group h2 { font-size: 1.125rem; margin: 0 0 .6rem; }
+.rp .rp-cards { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,270px),1fr)); gap: .75rem; }
+.rp .rp-card { padding: 1rem; }
+.rp .rp-card h3 { margin: 0; font-size: 1rem; font-weight: 750; }
+.rp .rp-card p { margin: .4rem 0; color: var(--ink-2); font-size: .75rem; }
+.rp .rp-card-tech { font-size: .6875rem !important; }
+.rp .rp-card-headline { font-size: .8125rem; font-weight: 650; }
+.rp .rp-card-actions { display: flex; gap: .45rem; margin-top: .7rem; }
+.rp .rp-crumbline { display: flex; align-items: center; gap: .4rem; margin-bottom: .5rem; color: var(--ink-2); font-size: .75rem; }
+.rp .rp-crumbline details { position: relative; }
+.rp .rp-crumbline summary { cursor: pointer; }
+.rp .rp-crumbline ul { position: absolute; z-index: 3; min-width: 200px; margin: .25rem 0 0; padding: .4rem; list-style: none; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+.rp .rp-crumbline li a { display: block; padding: .45rem; }
+.rp .rp-pager { display: flex; justify-content: space-between; align-items: center; padding: .75rem 1rem; font-size: .75rem; }
+.rp .rp-note { margin-top: .75rem; color: var(--ink-2); font-size: .6875rem; }
+@media (max-width: 767px) {
+ .rp .rp-head { display: block; }
+ .rp .rp-actions { margin-top: .75rem; }
+ .rp .rp-actions .ui-btn { flex: 1 1 auto; }
+ .rp .rp-table { min-width: 720px; }
+ .rp .rp-hub-head { background-image: none; }
+}
+@media (prefers-reduced-motion: reduce) { .rp *, .rp *::before, .rp *::after { transition: none !important; animation: none !important; } }
+@media print {
+ @page { size: A4; margin: 15mm; }
+ html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+ .main-content { margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+ .app-navbar, .app-sidebar, .sidebar, .rp-filters, .rp-actions, .rp-crumbline, .rp-pager, .rp-no-print { display: none !important; }
+ .rp { max-width: none; margin: 0; padding: 0; }
+ .rp .rp-head { display: block; }
+ .rp .rp-scroll { overflow: visible; }
+ .rp .rp-table { min-width: 0; width: 100%; font-size: 8pt; }
+ .rp .rp-table thead { display: table-header-group; }
+ .rp .rp-table tr { break-inside: avoid; }
+ .rp .rp-table th { position: static; }
+ .rp .ui-card { box-shadow: none; break-inside: avoid; }
+ .rp .rp-kpis { grid-template-columns: repeat(3,1fr); }
+}

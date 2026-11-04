@@ -1,0 +1,63 @@
+.bi {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  vertical-align: -0.125em;
+  font-style: normal;
+  font-family: "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.bi::before {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+
+.bi-grid-1x2::before { content: "▦"; }
+.bi-people::before { content: "👥"; }
+.bi-archive::before { content: "▣"; }
+.bi-credit-card::before { content: "💳"; }
+.bi-calendar-event::before { content: "📅"; }
+.bi-bookmark::before { content: "🔖"; }
+.bi-cash-stack::before { content: "💵"; }
+.bi-files::before { content: "📁"; }
+.bi-house::before { content: "🏠"; }
+.bi-wallet2::before { content: "👛"; }
+.bi-person-plus::before { content: "➕"; }
+.bi-exclamation-triangle::before { content: "⚠"; }
+.bi-search::before { content: "🔎"; }
+.bi-credit-card-2-back::before { content: "💳"; }
+.bi-graph-up::before { content: "📈"; }
+.bi-cash::before { content: "💰"; }
+.bi-clock-history::before { content: "🕒"; }
+.bi-shield-lock::before { content: "🔒"; }
+.bi-hdd-stack::before { content: "💾"; }
+.bi-gear::before { content: "⚙"; }
+.bi-journal-text::before { content: "📄"; }
+.bi-box-arrow-right::before { content: "↩"; }
+.bi-stopwatch::before { content: "⏱"; }
+.bi-arrow-left::before { content: "←"; }
+.bi-chevron-left::before { content: "‹"; }
+.bi-chevron-right::before { content: "›"; }
+.bi-pencil::before { content: "✎"; }
+.bi-speedometer2::before { content: "🏎"; }
+.bi-lock-fill::before { content: "🔒"; }
+.bi-check-circle::before { content: "✓"; }
+.bi-upload::before { content: "⤴"; }
+.bi-download::before { content: "⤵"; }
+.bi-arrow-counterclockwise::before { content: "↻"; }
+.bi-exclamation-circle::before { content: "❗"; }
+.bi-book::before { content: "📖"; }
+.bi-bar-chart::before { content: "📊"; }
+.bi-grid::before { content: "▦"; }
+.bi-cash-coin::before { content: "🪙"; }
+.bi-bookmark::before { content: "🔖"; }
+.bi-wallet::before { content: "💼"; }
+.bi-check::before { content: "✔"; }
+.bi-trash::before { content: "🗑"; }
+.bi-star::before { content: "★"; }

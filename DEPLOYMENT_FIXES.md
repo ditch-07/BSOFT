@@ -1,4 +1,4 @@
-# BSOFT Student Management - Windows Deployment Fix Documentation
+# NRZ Student Management - Windows Deployment Fix Documentation
 
 ## Problem Summary
 
@@ -153,12 +153,12 @@ DATABASES = {
 
 **Architecture:**
 ```
-Program Files\BSOFT Student Management\     (read-only application files)
-    ├── BSOFT Student Management.exe
+Program Files\NRZ Student Management\     (read-only application files)
+    ├── NRZ Student Management.exe
     ├── _internal\                        (Python, Django, dependencies)
     └── unins000.exe                      (uninstaller)
 
-ProgramData\BSOFT Student Management\       (writable data)
+ProgramData\NRZ Student Management\       (writable data)
     ├── school.sqlite3                    (SQLite database)
     └── backups\                          (backup files)
 ```
@@ -202,8 +202,8 @@ Output: `installer/NRZ_Student_Management_Setup_1.0.0.exe`
 installer\NRZ_Student_Management_Setup_1.0.0.exe /SILENT
 
 # Verify
-ls "C:\Program Files\BSOFT Student Management"
-ls "C:\ProgramData\BSOFT Student Management"
+ls "C:\Program Files\NRZ Student Management"
+ls "C:\ProgramData\NRZ Student Management"
 reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v NRZ_DATA_DIR
 ```
 
@@ -213,11 +213,11 @@ reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v
 
 After installation, verify:
 
-- [ ] `C:\Program Files\BSOFT Student Management\BSOFT Student Management.exe` exists
-- [ ] `C:\Program Files\BSOFT Student Management\_internal\` contains Python/Django
-- [ ] `C:\ProgramData\BSOFT Student Management\school.sqlite3` exists (created on first run)
-- [ ] `C:\ProgramData\BSOFT Student Management\backups\` directory exists
-- [ ] `NRZ_DATA_DIR` environment variable set to `C:\ProgramData\BSOFT Student Management`
+- [ ] `C:\Program Files\NRZ Student Management\NRZ Student Management.exe` exists
+- [ ] `C:\Program Files\NRZ Student Management\_internal\` contains Python/Django
+- [ ] `C:\ProgramData\NRZ Student Management\school.sqlite3` exists (created on first run)
+- [ ] `C:\ProgramData\NRZ Student Management\backups\` directory exists
+- [ ] `NRZ_DATA_DIR` environment variable set to `C:\ProgramData\NRZ Student Management`
 - [ ] Desktop/Start Menu shortcuts created
 - [ ] Application launches and runs migrations automatically
 - [ ] Browser opens to `http://127.0.0.1:8000`

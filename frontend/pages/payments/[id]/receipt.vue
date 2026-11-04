@@ -57,7 +57,7 @@ onMounted(() => {
     <div v-else-if="receipt" class="receipt-container">
       <!-- Print-only header -->
       <div class="print-only text-center mb-4">
-        <h2 class="fw-bold mb-1">NRZ Student Management</h2>
+        <h2 class="fw-bold mb-1">BSoft Student Management</h2>
         <h3 class="text-muted mb-2">Official Payment Receipt</h3>
         <p class="text-muted small">Generated: {{ new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) }}</p>
         <hr>

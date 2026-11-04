@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 180" preserveAspectRatio="xMaxYMax slice">
+<rect width="1440" height="180" fill="#F5F6F3"/>
+<defs><linearGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".45" stop-color="white"/></linearGradient><mask id="right"><rect x="480" width="960" height="180" fill="url(#fade)"/></mask></defs>
+<g mask="url(#right)"><g transform="translate(480 100) scale(.5 1.1)" fill="none" stroke-width="1" stroke-linecap="round">
+<path d="M0 42C170 35 260 7 420 20S690 58 850 37 1110 3 1290 17 1600 54 1920 21" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
+<path d="M0 47C170 40 260 12 420 25S690 63 850 42 1110 8 1290 22 1600 59 1920 26" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M0 52C170 45 260 17 420 30S690 68 850 47 1110 13 1290 27 1600 64 1920 31" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M0 55C140 30 310 39 460 49S720 19 890 24 1150 61 1330 44 1660 12 1920 39" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
+<path d="M0 60C140 35 310 44 460 54S720 24 890 29 1150 66 1330 49 1660 17 1920 44" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M80 64C190 46 325 51 460 59S720 29 890 34 1150 71 1330 54 1660 22 1920 49" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M0 51C190 65 330 13 520 27S790 66 970 48 1250 19 1430 31 1720 58 1920 45" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
+<path d="M0 56C190 70 330 18 520 32S790 71 970 53 1250 24 1430 36 1720 63 1920 50" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M35 64C220 70 345 25 520 37S790 76 970 58 1250 29 1430 41 1720 68 1920 55" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+<path d="M0 61C210 44 365 58 550 51S840 31 1020 39 1340 66 1510 49 1770 30 1920 39" stroke="#163B5C" opacity=".22" vector-effect="non-scaling-stroke"/>
+<path d="M30 66C230 49 375 63 550 56S840 36 1020 44 1340 71 1510 54 1770 35 1920 44" stroke="#2B7B87" opacity=".15" vector-effect="non-scaling-stroke"/>
+</g></g></svg>
