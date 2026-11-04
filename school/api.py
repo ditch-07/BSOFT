@@ -146,7 +146,7 @@ def _student_payload(student):
 @login_required
 @permission_required("school.view_student", raise_exception=True)
 def api_dashboard(request):
-    """Return the permission-aware dashboard summary used by Nuxt."""
+    """Return the permission-aware dashboard summary."""
     today = get_current_date()
     current_year = AcademicYear.objects.filter(
         start_date__lte=today,
@@ -1789,7 +1789,7 @@ def api_student_enrollments_for_payment(request, student_id):
 @login_required
 @permission_required("school.view_student", raise_exception=True)
 def api_reports_index(request):
-    """List all available reports for the Nuxt frontend."""
+    """List reports available to the authenticated user."""
     return JsonResponse({
         "reports": REPORTS,
     })

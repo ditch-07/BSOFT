@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DJANGO_DEBUG: "0"
-      NRZ_DISABLE_SCHEDULER: "1"
+      BSOFT_DISABLE_SCHEDULER: "1"
 
     steps:
       - name: Check out the repository

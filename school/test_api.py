@@ -3,30 +3,30 @@ from datetime import date
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import resolve
 
-from config.views import nuxt_app
 from school.models import AcademicYear, Enrollment, Program, Semester, Student, StudentStatusLog
 
 
-class FrontendApiIntegrationTests(TestCase):
-    def test_vue_routes_use_the_spa_and_api_routes_remain_available(self):
-        if settings.FRONTEND_MODE == "vue":
-            self.assertIs(resolve("/").func, nuxt_app)
-            self.assertIs(resolve("/students/").func, nuxt_app)
-            self.assertIs(resolve("/students/archive/").func, nuxt_app)
-            self.assertIs(resolve("/students/import/").func, nuxt_app)
-            self.assertIs(resolve("/students/1/edit/").func, nuxt_app)
-        else:
-            self.assertEqual(resolve("/").url_name, "dashboard")
-            self.assertEqual(resolve("/students/").url_name, "student_list")
-            self.assertEqual(resolve("/students/archive/").url_name, "archive_list")
-            self.assertEqual(resolve("/students/import/").url_name, "student_import")
-            self.assertEqual(resolve("/students/1/edit/").url_name, "student_edit")
+class ApiIntegrationTests(TestCase):
+    def test_django_template_routes_and_api_routes_are_available(self):
+        self.assertEqual(resolve("/").url_name, "dashboard")
+        self.assertEqual(resolve("/students/").url_name, "student_list")
+        self.assertEqual(resolve("/students/archive/").url_name, "archive_list")
+        self.assertEqual(resolve("/students/import/").url_name, "student_import")
+        self.assertEqual(resolve("/students/1/edit/").url_name, "student_edit")
         self.assertEqual(resolve("/api/dashboard/").url_name, "api_dashboard")
+
+    def test_unauthenticated_template_pages_redirect_to_login(self):
+        response = self.client.get("/students/")
+
+        self.assertRedirects(
+            response,
+            "/login/?next=/students/",
+            fetch_redirect_response=False,
+        )
 
     def test_unauthenticated_api_requests_return_json_401(self):
         response = self.client.get("/api/dashboard/")

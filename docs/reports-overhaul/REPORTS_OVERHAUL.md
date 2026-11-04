@@ -72,8 +72,8 @@ Shared report infrastructure, all eight existing web report routes, CSV and PDF 
 - Outstanding includes only positive student balances; credits are excluded.
 
 ## Decisions flagged
-1. **PDF dependency:** ReportLab **5.1.0**, pinned in `requirements.txt`; PyInstaller spec explicitly imports ReportLab font data. Helvetica used; no Archivo TTF embedded. Offline Windows/PyInstaller bundle itself has not been rebuilt/verified. Missing-library behavior hides PDF links and returns 404 if requested.
-2. **School name:** renderer setting `SCHOOL_NAME`, fallback “NRZ Student Management”.
+1. **PDF dependency:** ReportLab **5.1.0**, pinned in `requirements.txt`. Helvetica is used; no Archivo TTF is embedded. Missing-library behavior hides PDF links and returns 404 if requested.
+2. **School name:** renderer setting `SCHOOL_NAME`, fallback “BSOFT Student Management”.
 3. **Contact columns:** guardian name/phone require `view_student`; explicitly opt-in (`show_contact=1`), off by default.
 4. **CSV header renames proposed, not applied:** Outstanding `Program` → `Trade`; Enrollment `Program` → `Trade`; Fee setup `Program` → `Trade` and `Year Level` → `Course year`; Revenue `Program` → `Trade`; Status history `Program` → `Trade`. Existing CSV headers remain for compatibility.
 5. **Beyond-credit discrepancies:** trade attribution can cause a trade-level split mismatch as above; no verified sample numbers to cite. Payments without matching semester charges and withdrawn enrollment cases also need dedicated fixtures before claiming complete reconciliation.
@@ -86,13 +86,13 @@ Values implemented from dashboard references (CSS declarations, not browser-comp
 
 ## Tests run
 - `python -m py_compile school/reporting/*.py school/views.py school/models.py school/test_reports_overhaul.py` — passed after the final builder/view/test edits.
-- `NRZ_DISABLE_SCHEDULER=1 python manage.py test school.test_reports_overhaul --verbosity 2` — 9 tests passed, covering legacy CSV schemas, BOM/count correction, all eight HTML/PDF responses, daily default and audit, hub/contact permissions, formula injection, and Owed/Credit/Net reconciliation.
-- `NRZ_DISABLE_SCHEDULER=1 python manage.py test school --verbosity 1` — all 83 school tests passed after the final fee-grid and reconciliation changes.
+- `BSOFT_DISABLE_SCHEDULER=1 python manage.py test school.test_reports_overhaul --verbosity 2` — 9 tests passed, covering legacy CSV schemas, BOM/count correction, all eight HTML/PDF responses, daily default and audit, hub/contact permissions, formula injection, and Owed/Credit/Net reconciliation.
+- `BSOFT_DISABLE_SCHEDULER=1 python manage.py test school --verbosity 1` — all 83 school tests passed after the final fee-grid and reconciliation changes.
 - Not covered by those runs: query-count growth, PDF-unavailable fallback, three-role × four-format matrix, route-query parameter edge cases, and visual/manual checks.
 
 ## Artifacts and follow-ups
 - Isolated QA data and captured baselines: [`baseline/`](baseline/). Available image captures are hub baseline widths 1440/1280/1024/768 and Outstanding at 390px; captured CSV samples and a QA SQLite copy are present. The requested full three-user/four-width baseline matrix, after screenshots, and sample PDFs were not completed.
 - Ten-line phase plan: [`PLAN.md`](PLAN.md).
-- Rebuild PyInstaller package; finish three-user form matrix, visual/long-print/grayscale/responsive checks, query-growth assertions, PDF fallback tests, and route/query contract tests. Fees-grid link is now implemented.
+- Finish three-user form matrix, visual/long-print/grayscale/responsive checks, query-growth assertions, PDF fallback tests, and route/query contract tests. Fees-grid link is now implemented.
 - Subsequent visual overhaul order: Semesters and Programs; Archive and Users; Audit trail and Backups; Reminders.
 - Noticed but out of scope: `bulk_progress_students` permission; `console.log` in base Flatpickr setup; adding `EXPORT` AuditLog choice/migration; remaining Bootstrap-default pages.

@@ -9,7 +9,7 @@ urlpatterns = [
     path("login/", auth_views.LoginView.as_view(template_name="school/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
 
-# API endpoints for Nuxt migration
+# JSON API endpoints
     path("api/auth/check/", api.api_auth_check_public, name="api_auth_check"),
     path("api/auth/login/", api.api_auth_login, name="api_auth_login"),
     path("api/auth/logout/", api.api_auth_logout, name="api_auth_logout"),

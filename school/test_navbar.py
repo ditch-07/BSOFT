@@ -56,11 +56,18 @@ class NavbarTestCase(TestCase):
             user.user_permissions.add(Permission.objects.get(codename=codename))
         return user
 
-    def make_student(self, number, first_name="Ada", status=Student.ACTIVE, **fields):
+    def make_student(
+        self,
+        number,
+        first_name="Ada",
+        last_name="Moyo",
+        status=Student.ACTIVE,
+        **fields,
+    ):
         return Student.objects.create(
             student_number=number,
             first_name=first_name,
-            last_name="Moyo",
+            last_name=last_name,
             program=self.program,
             intake_year=self.year,
             status=status,
@@ -74,7 +81,7 @@ class NavbarRenderingTests(NavbarTestCase):
 
         response = self.client.get(reverse("dashboard"))
 
-        self.assertContains(response, "NRZ Student Management dashboard")
+        self.assertContains(response, "BSOFT Student Management dashboard")
         self.assertContains(response, 'aria-label="Quick actions"')
         self.assertContains(response, 'role="combobox"')
         self.assertContains(response, "Record payment")
@@ -221,6 +228,23 @@ class NavbarSearchTests(NavbarTestCase):
         rows = response.json()["students"]
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["status"], "Active")
+
+    def test_search_matches_first_and_last_names_in_either_order(self):
+        student = self.make_student(
+            "NAME-01",
+            first_name="Chipo",
+            last_name="Ncube",
+        )
+        self.make_student("NAME-02", first_name="Tendai", last_name="Moyo")
+
+        for query in ("Chipo Ncube", "Ncube Chipo", "Chipo", "Ncube"):
+            with self.subTest(query=query):
+                response = self.client.get(reverse("student_search"), {"q": query})
+
+                self.assertEqual(
+                    [row["id"] for row in response.json()["students"]],
+                    [student.pk],
+                )
 
     def test_search_returns_at_most_eight_students(self):
         for index in range(10):

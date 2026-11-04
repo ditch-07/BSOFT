@@ -2,17 +2,7 @@ from pathlib import Path
 import os
 import secrets
 
-from django.core.exceptions import ImproperlyConfigured
-
-from config.paths import APP_DIR, DATA_DIR, STATIC_DIR, TEMPLATES_DIR
-
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-FRONTEND_MODE = os.environ.get("NRZ_FRONTEND_MODE", "vue").strip().lower()
-if FRONTEND_MODE not in {"vue", "django"}:
-    raise ImproperlyConfigured(
-        "NRZ_FRONTEND_MODE must be either 'vue' or 'django'."
-    )
 
 
 def env_bool(name, default=False):
@@ -23,13 +13,10 @@ def env_bool(name, default=False):
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-# Use separate data directory that works both in development and packaged
-# In development: project/data
-# In packaged: ProgramData/NRZ Student Management (or env var)
 APP_DATA_DIR = Path(
     os.environ.get(
-        "NRZ_DATA_DIR",
-        DATA_DIR
+        "BSOFT_DATA_DIR",
+        BASE_DIR / "data",
     )
 )
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -72,8 +59,7 @@ def _load_secret_key():
 
 SECRET_KEY = _load_secret_key()
 
-# DEBUG stays off unless a developer opts in with DJANGO_DEBUG=1. The packaged
-# desktop app and any shared deployment must not expose Django debug pages.
+# DEBUG stays off by default; opt in for local development with DJANGO_DEBUG=1.
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = [
@@ -92,15 +78,12 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    "corsheaders",
-
     "school",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
 
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -116,7 +99,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [TEMPLATES_DIR],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -165,19 +148,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATICFILES_DIRS = [
-    STATIC_DIR,
-    BASE_DIR / "frontend" / "static",
-]
-NUXT_ASSETS_DIR = (
-    BASE_DIR / "frontend" / ".output" / "public" / "static"
-)
-if NUXT_ASSETS_DIR.is_dir():
-    STATICFILES_DIRS.append(NUXT_ASSETS_DIR)
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
-# Serve static files straight from the static directories. This keeps the
-# packaged app styled with DEBUG off and without running collectstatic against
-# a read-only install directory.
+# Serve project static files with WhiteNoise when DEBUG is disabled.
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = DEBUG
 
@@ -187,8 +160,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # When True, the application will use a frozen datetime stored in the database
 # instead of real time. This is useful for testing semester logic, payment due dates, etc.
 # The frozen time is set via the Time Override UI at /time-override/.
-# Off by default; opt in with NRZ_ENABLE_TIME_OVERRIDE=1.
-ENABLE_TIME_OVERRIDE = env_bool("NRZ_ENABLE_TIME_OVERRIDE", default=False)
+# Off by default; opt in with BSOFT_ENABLE_TIME_OVERRIDE=1.
+ENABLE_TIME_OVERRIDE = env_bool("BSOFT_ENABLE_TIME_OVERRIDE", default=False)
 
 # Session / authentication timeout settings
 # Auto-logout after 2 hours of inactivity and reset the idle timer on each request.
@@ -201,15 +174,5 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
-# CORS for Nuxt dev server (port 3000)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"

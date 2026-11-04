@@ -68,7 +68,7 @@ def query_url(path, params, **overrides):
     return path + ("?" + urlencode(values, doseq=True) if values else "")
 
 
-def pdf_response(result, filename, school_name="NRZ Student Management", mark=None):
+def pdf_response(result, filename, school_name="BSOFT Student Management", mark=None):
     """Return a ReportLab PDF attachment; None means the optional library is absent."""
     try:
         from reportlab.lib import colors
@@ -100,7 +100,7 @@ def pdf_response(result, filename, school_name="NRZ Student Management", mark=No
 
     story = []
     if mark:
-        story.append(para("NRZ", styles["ReportSmall"]))
+        story.append(para("BSOFT", styles["ReportSmall"]))
     story.extend([para(school_name, styles["Heading2"]), para(result.title, styles["ReportTitle"]),
                   para(result.subtitle, styles["ReportSmall"])])
     if result.applied_filters:
@@ -173,7 +173,7 @@ def pdf_response(result, filename, school_name="NRZ Student Management", mark=No
                 self.__dict__.update(state)
                 self.setFont("Helvetica", 7)
                 self.setFillColor(colors.HexColor("#4E5C66"))
-                self.drawString(15*mm, 8*mm, f"NRZ Student Management · {result.title}")
+                self.drawString(15*mm, 8*mm, f"BSOFT Student Management · {result.title}")
                 self.drawRightString(page_size[0]-15*mm, 8*mm, f"Page {self._pageNumber} of {total}")
                 canvas.Canvas.showPage(self)
             canvas.Canvas.save(self)

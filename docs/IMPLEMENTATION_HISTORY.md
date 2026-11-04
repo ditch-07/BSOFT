@@ -1,6 +1,8 @@
-# Project Inventory and Migration Record
+# Implementation History and Migration Record
 
-Status: **Segment 6 (Administration, Audit Logs, Backup/Restore, Time Override) completed.** Django API layer and Nuxt frontend for user management, audit logs, backup/restore, and time override implemented and verified.
+Historical implementation and migration notes. Some references below describe
+the retired Nuxt frontend and Windows packaging; the current application uses
+Django templates and runs through `manage.py`.
 
 ## A. Project overview
 
@@ -17,7 +19,7 @@ The project is a student management and fee administration system for a school o
 - Backup configuration and restore workflows
 - Background progression jobs and startup seeding
 
-This is a server-rendered web application using Django templates and Bootstrap-based styling. It operates as a single-tenant desktop-style local application packaged with PyInstaller for Windows distribution.
+This is a server-rendered web application using Django templates and Bootstrap-based styling.
 
 ### Verified Python and Django versions
 Verified in the local project environment:
@@ -42,7 +44,7 @@ Important packages visible from the current environment and project configuratio
 - SQLite as the database backend
 - Local vendor assets: Bootstrap, Bootstrap Icons, Flatpickr
 
-Other runtime dependencies are likely bundled into the PyInstaller distribution and/or the active virtual environment, but no `requirements.txt` or `pyproject.toml` was found in the repository root at the time of this audit.
+Runtime dependencies are listed in `requirements.txt`; development and demo-data dependencies are listed in `requirements-dev.txt`.
 
 ### Django settings modules and environment variables
 Main settings module:
@@ -59,8 +61,8 @@ Path helpers:
 
 Environment variables and runtime overrides currently used:
 
-- `NRZ_DATA_DIR`: overrides the writable data directory for SQLite database and backup storage.
-- `NRZ_DISABLE_SCHEDULER`: disables scheduler startup during PyInstaller analysis/build and when explicitly set.
+- `BSOFT_DATA_DIR`: overrides the writable data directory for SQLite database and backup storage.
+- `BSOFT_DISABLE_SCHEDULER`: disables scheduler startup during PyInstaller analysis/build and when explicitly set.
 
 Observed startup and deployment behavior:
 
@@ -81,8 +83,8 @@ Verified structure at the project root:
 - `build/`, `dist/`, `installer/` — packaged and installer artifacts
 - `launcher.py` — Windows launcher that runs migrations and starts Django
 - `manage.py` — standard Django management entry point
-- `NRZ_Student_Management.iss` — Inno Setup installer script
-- `nrz_student_management.spec` — PyInstaller spec
+- `BSOFT_Student_Management.iss` — Inno Setup installer script
+- `BSOFT_student_management.spec` — PyInstaller spec
 
 ### Existing frontend technologies and asset pipelines
 Current frontend technology is not Nuxt; it is Django template rendering with Bootstrap.
@@ -105,7 +107,7 @@ Database engine:
 Database path:
 
 - `APP_DATA_DIR / "school.sqlite3"`
-- `APP_DATA_DIR` resolves to `NRZ_DATA_DIR` if set, else the project or packaged data directory
+- `APP_DATA_DIR` resolves to `BSOFT_DATA_DIR` if set, else the project or packaged data directory
 
 This architecture is intentionally separated from the application installation directory to support portable Windows packaging.
 
@@ -128,7 +130,7 @@ The group setup command assigns Django permissions such as add/view student, fin
 Verified startup behavior:
 
 - `school/apps.py` defines `SchoolConfig.ready()`
-- On app startup, it seeds academic years and starts the scheduler unless disabled by `NRZ_DISABLE_SCHEDULER` or PyInstaller environment checks
+- On app startup, it seeds academic years and starts the scheduler unless disabled by `BSOFT_DISABLE_SCHEDULER` or PyInstaller environment checks
 - `school/scheduler.py` creates a `BackgroundScheduler` and schedules `run_auto_progression`
 - The job runs every 6 hours and also runs once on startup after a short delay
 - `run_auto_progression()` invokes the Django management command `progress_students_by_date`
@@ -143,8 +145,8 @@ Verified flows:
 
 - Local development: `python manage.py runserver`
 - Packaged launch: `python launcher.py` or packaged `.exe`
-- PyInstaller packaging: `nrz_student_management.spec`
-- Windows installer: `NRZ_Student_Management.iss`
+- PyInstaller packaging: `BSOFT_student_management.spec`
+- Windows installer: `BSOFT_Student_Management.iss`
 - Application startup in packaged mode includes automatic migrations and environment setup
 
 The deployment documentation in `DEPLOYMENT_FIXES.md` explains that the packaged architecture intentionally splits writable data into a `%ProgramData%` style location and bundled code into the application folder.
@@ -412,7 +414,7 @@ Verified important startup files:
 Launcher behavior:
 
 - validates writable data directory
-- sets `NRZ_DATA_DIR` if present
+- sets `BSOFT_DATA_DIR` if present
 - sets Django settings module
 - triggers migrations before startup
 - runs startup commands (`seed_academic_years`, `setup_roles`)
@@ -434,8 +436,8 @@ Important path behavior:
 ### PyInstaller and installer
 Verified packaging files:
 
-- `nrz_student_management.spec`
-- `NRZ_Student_Management.iss`
+- `BSOFT_student_management.spec`
+- `BSOFT_Student_Management.iss`
 
 Key deployment characteristics from the packaging files and deployment doc:
 
@@ -452,14 +454,14 @@ Verified:
 
 The deployment notes explicitly describe a separation between installed application files and persistent data:
 
-- `Program Files\NRZ Student Management` for read-only application files
-- `ProgramData\NRZ Student Management` for writable database and backups
+- `Program Files\BSOFT Student Management` for read-only application files
+- `ProgramData\BSOFT Student Management` for writable database and backups
 
 ### Environment variables and safeguards
 Verified:
 
-- `NRZ_DATA_DIR` — persistent database and backup path override
-- `NRZ_DISABLE_SCHEDULER` — build-time or testing disable flag for the background scheduler
+- `BSOFT_DATA_DIR` — persistent database and backup path override
+- `BSOFT_DISABLE_SCHEDULER` — build-time or testing disable flag for the background scheduler
 
 Additional safeguards:
 

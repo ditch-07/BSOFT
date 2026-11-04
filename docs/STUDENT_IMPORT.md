@@ -1,18 +1,10 @@
-# Bulk Student Import — what changed and what to wire up
+# Student Spreadsheet Import
 
-I only had `models.py`, `forms.py`, and `views.py` — no `urls.py` or your
-templates — so those two pieces need a small manual hookup on your end.
-Everything else (model change, form, parser, view, template) is done.
+The Django interface provides a spreadsheet import workflow at
+`/students/import/`. The route, view, form, parser, and template are already
+wired into the application.
 
-## 1. Files to drop in
-
-- `school/models.py` — replaces yours (one field changed, see below)
-- `school/forms.py` — replaces yours (added `StudentImportForm`)
-- `school/views.py` — replaces yours (added `student_import` view + import)
-- `school/utils/student_import.py` — **new file**, the spreadsheet parser
-- `school/templates/school/student_import.html` — **new file**, upload/preview page
-
-## 2. Model change — run a migration
+## Model migration
 
 `Student.national_id` is now `blank=True, default=""` so imported students
 without an ID on file can be saved. Run:
@@ -26,41 +18,10 @@ Everything else you're missing per-row (national ID, DOB, gender, guardian
 info, address, phone) was already optional on the model, so nothing else
 needs a migration.
 
-## 3. Add the URL
+## Dependency
 
-In `school/urls.py`, add this alongside your other student URLs (near
-`student_list`, `student_create`):
-
-```python
-path("students/import/", views.student_import, name="student_import"),
-```
-
-## 4. Add an "Import from Excel" button to the student list
-
-In `school/templates/school/student_list.html`, wherever your "Add Student"
-button lives, add:
-
-```html
-<a href="{% url 'student_import' %}" class="btn btn-outline-primary">
-  Import from Excel
-</a>
-```
-
-## 5. Template `extends`
-
-`student_import.html` assumes `{% extends "school/base.html" %}` and a
-`{% block content %}` — the same pattern your other pages presumably use.
-If your base template uses different block names, adjust the top two lines
-of `student_import.html` to match.
-
-## 6. Dependency
-
-The parser uses `openpyxl` for `.xlsx` files (CSV works with the stdlib
-alone). If it's not already installed:
-
-```bash
-pip install openpyxl
-```
+The parser uses `openpyxl` for `.xlsx` files (CSV uses the standard library).
+`openpyxl` is included in `requirements.txt`.
 
 ## How the import works
 

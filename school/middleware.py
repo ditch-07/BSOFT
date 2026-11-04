@@ -29,10 +29,6 @@ class LoginRequiredMiddleware:
                     {"detail": "Authentication credentials were not provided."},
                     status=401,
                 )
-            if settings.FRONTEND_MODE == "vue" and not path.startswith(
-                ("/admin/", "/static/", "/media/")
-            ):
-                return self.get_response(request)
             return redirect_to_login(
                 request.get_full_path(), login_url=settings.LOGIN_URL
             )

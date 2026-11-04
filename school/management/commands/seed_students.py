@@ -101,7 +101,7 @@ class Command(BaseCommand):
         def random_student_number():
             year = 2027
             seq = random.randint(1000, 9999)
-            return f"NRZ{year}-{seq:04d}"
+            return f"BSOFT{year}-{seq:04d}"
 
         def random_date_of_birth():
             start = datetime(2000, 1, 1).date()

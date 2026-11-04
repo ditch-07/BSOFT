@@ -760,13 +760,16 @@ def student_search(request):
     if request.GET.get("include_deferred") == "1":
         statuses.append(Student.DEFERRED)
 
+    name_query = Q()
+    for term in query.split():
+        name_query &= Q(first_name__icontains=term) | Q(last_name__icontains=term)
+
     students = (
         Student.objects.filter(status__in=statuses)
         .select_related("program")
         .filter(
             Q(student_number__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query)
+            | name_query
         )
         .order_by("last_name", "first_name")[:8]
     )

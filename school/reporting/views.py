@@ -48,7 +48,7 @@ def render_report(request, view_name, filter_type=None):
         return csv_response(result, _filename(spec, result, "csv"))
     if export_format == "pdf":
         response = pdf_response(result, _filename(spec, result, "pdf"),
-                                getattr(settings, "SCHOOL_NAME", "NRZ Student Management"))
+                                getattr(settings, "SCHOOL_NAME", "BSOFT Student Management"))
         if response is None:
             raise Http404("PDF export is unavailable because ReportLab is not installed.")
         _audit(request, spec, "pdf", result)

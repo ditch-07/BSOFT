@@ -1,5 +1,4 @@
 from django.apps import AppConfig
-import sys
 import os
 
 
@@ -7,8 +6,7 @@ class SchoolConfig(AppConfig):
     name = 'school'
 
     def ready(self):
-        # Skip scheduler during PyInstaller analysis or when explicitly disabled
-        if getattr(sys, 'frozen', False) or os.environ.get('NRZ_DISABLE_SCHEDULER') == '1':
+        if os.environ.get('BSOFT_DISABLE_SCHEDULER') == '1':
             return
 
         # Auto-seed academic years on startup

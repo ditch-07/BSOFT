@@ -99,7 +99,7 @@ class PaymentTestBase(TestCase):
 
     def setUp(self):
         self.client.force_login(self.bursar)
-        self.student = self.make_student("NRZ-001")
+        self.student = self.make_student("BSOFT-001")
         self.current_enrollment = Enrollment.objects.create(
             student=self.student,
             program=self.program,
@@ -387,7 +387,7 @@ class RecordPaymentSubmissionTests(PaymentTestBase):
         self.assertIn("amount", response.context["form"].errors)
 
     def test_semester_from_another_student_is_rejected(self):
-        other = self.make_student("NRZ-002")
+        other = self.make_student("BSOFT-002")
         Enrollment.objects.create(
             student=other,
             program=self.program,
@@ -439,7 +439,7 @@ class RecordPaymentSubmissionTests(PaymentTestBase):
         self.assertIn("/login/", response["Location"])
 
     def test_inactive_student_cannot_be_charged(self):
-        deferred = self.make_student("NRZ-003", status=Student.DEFERRED)
+        deferred = self.make_student("BSOFT-003", status=Student.DEFERRED)
         response = self.client.get(
             f"{reverse('payment_create')}?student={deferred.pk}"
         )
@@ -454,16 +454,16 @@ class ArchiveBase(PaymentTestBase):
 
 class ArchiveListTests(ArchiveBase):
     def test_archive_lists_every_status_not_only_active(self):
-        self.make_student("NRZ-100", status=Student.COMPLETED)
-        self.make_student("NRZ-101", status=Student.WITHDRAWN)
-        self.make_student("NRZ-102", status=Student.DEFERRED)
+        self.make_student("BSOFT-100", status=Student.COMPLETED)
+        self.make_student("BSOFT-101", status=Student.WITHDRAWN)
+        self.make_student("BSOFT-102", status=Student.DEFERRED)
 
         response = self.client.get(reverse("archive_list"))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["filtered_count"], 4)
-        self.assertContains(response, "NRZ-100")
-        self.assertContains(response, "NRZ-101")
+        self.assertContains(response, "BSOFT-100")
+        self.assertContains(response, "BSOFT-101")
 
     def test_status_and_trade_filters_narrow_the_list(self):
         other_program = Program.objects.create(
@@ -472,20 +472,20 @@ class ArchiveListTests(ArchiveBase):
             duration_years=1,
             category="NC",
         )
-        self.make_student("NRZ-200", status=Student.COMPLETED)
-        self.make_student("NRZ-201", status=Student.WITHDRAWN, program=other_program)
+        self.make_student("BSOFT-200", status=Student.COMPLETED)
+        self.make_student("BSOFT-201", status=Student.WITHDRAWN, program=other_program)
 
         completed = self.client.get(reverse("archive_list"), {"status": "COMPLETED"})
         carpentry = self.client.get(reverse("archive_list"), {"program": other_program.pk})
 
         self.assertEqual(completed.context["filtered_count"], 1)
-        self.assertContains(completed, "NRZ-200")
-        self.assertNotContains(completed, "NRZ-201")
+        self.assertContains(completed, "BSOFT-200")
+        self.assertNotContains(completed, "BSOFT-201")
         self.assertEqual(carpentry.context["filtered_count"], 1)
-        self.assertContains(carpentry, "NRZ-201")
+        self.assertContains(carpentry, "BSOFT-201")
 
     def test_search_matches_name_and_number(self):
-        response = self.client.get(reverse("archive_list"), {"q": "NRZ-001"})
+        response = self.client.get(reverse("archive_list"), {"q": "BSOFT-001"})
         self.assertEqual(response.context["filtered_count"], 1)
         self.assertContains(response, "Tendai")
 
@@ -503,7 +503,7 @@ class ArchiveListTests(ArchiveBase):
             self.client.get(reverse("archive_list"))
 
         for index in range(10):
-            self.make_student(f"NRZ-3{index:02d}")
+            self.make_student(f"BSOFT-3{index:02d}")
 
         with CaptureQueriesContext(connection) as large:
             self.client.get(reverse("archive_list"))

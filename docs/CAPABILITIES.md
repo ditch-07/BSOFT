@@ -1,34 +1,32 @@
-# NRZ Student Management — Capabilities and Functionality
+# BSOFT Student Management — Capabilities and Functionality
 
-Reference date: 2026-10-30. This document describes what the application does today,
-grounded in the code in `school/`, `config/` and the packaging scripts. It is a
-capability map, not an installation guide — see `DEPLOYMENT_FIXES.md` for build and
-installer steps and `docs/proj.md` for the system inventory.
+Reference date: 2026-10-30. This document describes the Django application in
+`school/`, `config/`, `templates/`, and `static/`. It is a capability map, not a
+setup guide — see [DEPLOYMENT.md](./DEPLOYMENT.md) and
+[PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md).
 
 ---
 
-## 1. What NRZ Student Management is
+## 1. What BSOFT Student Management is
 
 A single-tenant student administration and fee-collection system for a technical
-college or trade school. It runs as a local Windows application: a Django server
-launched by `launcher.py`, opened in the browser at `http://127.0.0.1:8000`, with an
-SQLite database stored beside the executable (or in `%ProgramData%` when installed).
+college or trade school. It runs as a Django application at
+`http://127.0.0.1:8000`, with an SQLite database stored in `data/` by default.
 
 The product supports the full student money cycle: register a student → place them in
 a trade and course year → bill them per semester from a fee structure → record
 receipts → chase outstanding balances → progress or graduate them at semester end →
 report on collections and audit every change.
 
-Two interfaces are shipped:
+The application has a server-rendered interface and JSON endpoints:
 
 | Surface | Location | Notes |
 | --- | --- | --- |
-| Server-rendered UI | `templates/` + `school/views.py` | The primary, complete interface (Bootstrap, offline assets). |
-| JSON API | `school/api.py` | Session-authenticated REST-style endpoints covering every domain area. |
-| Nuxt SPA | `frontend/` | Consumes the JSON API; `config/urls.py` serves `templates/spa.html` as a catch-all. |
+| Server-rendered UI | `templates/` + `school/views.py` | Primary interface, using Django templates and local Bootstrap assets. |
+| JSON endpoints | `school/api.py` | Session-authenticated endpoints for integrations and application workflows. |
 
 Verified stack: Python 3.14, Django 6.1, SQLite, APScheduler 3.11, openpyxl 3.1,
-ReportLab 5.1, whitenoise, django-cors-headers. Settings timezone is `Africa/Harare`.
+ReportLab 5.1, and WhiteNoise. Settings timezone is `Africa/Harare`.
 
 ---
 
@@ -117,8 +115,8 @@ data hygiene is visible without hunting for it.
 
 - **Academic years** have a name, start/end dates and a current flag. A database
   constraint allows exactly one current year, and a year must end after it starts.
-  Academic years are seeded automatically on startup and again from the launcher
-  (`seed_academic_years --back 5 --forward 10`), so a fresh install has usable years
+  Academic years are seeded automatically on startup and can also be created with
+  `seed_academic_years --back 5 --forward 10`, so a new database has usable years
   immediately.
 - **Semesters** are two per academic year (period 1 and 2), unique per year. Validation
   rejects a semester that ends before it starts, starts before its academic year, or
@@ -181,8 +179,8 @@ Progression follows the semester calendar:
 Three ways to run it:
 
 1. **Background job** — APScheduler runs `progress_students_by_date` every six hours,
-   plus once roughly 30 seconds after startup (`school/scheduler.py`). It is skipped
-   during PyInstaller analysis and whenever `NRZ_DISABLE_SCHEDULER=1`.
+   plus once roughly 30 seconds after startup (`school/scheduler.py`). It is
+   skipped whenever `BSOFT_DISABLE_SCHEDULER=1`.
 2. **Command line** — `progress_students_by_date --dry-run` shows the plan without
    writing; `--date YYYY-MM-DD` evaluates against an arbitrary date.
 3. **Bulk action** — a POST endpoint reachable from the semester list progresses all
@@ -245,7 +243,7 @@ Shared reporting behaviour:
 - **Users** (`/users/`): paginated list of accounts with their role groups; superusers
   create accounts with a temporary password, an optional role group and optional staff
   (Django admin) access.
-- **Role groups** are seeded by `setup_roles` on every launcher start:
+- **Role groups** can be initialized with the `setup_roles` management command:
 
   | Group | Granted permissions |
   | --- | --- |
@@ -274,7 +272,7 @@ Shared reporting behaviour:
   - `backup_auto` performs the daily verified copy and prunes files older than the
     retention window.
 - **Time override** (`/time-override/`, superuser only, enabled with
-  `NRZ_ENABLE_TIME_OVERRIDE=1` and off by default): freeze "now" to any datetime so
+  `BSOFT_ENABLE_TIME_OVERRIDE=1` and off by default): freeze "now" to any datetime so
   semester status, dashboard prompts, progression dates and reports can be tested out of
   season, then clear it to return to real time. All date logic flows through
   `school/utils/time_utils.py`, so one setting moves every screen consistently.
@@ -301,8 +299,8 @@ API permissions mirror the UI: `view_student` for people data, `can_view_financi
 for money data, `can_record_payments` for payment creation, `view_feestructure` for fee
 work, and superuser-only for user, backup and time-override endpoints. Student listing
 supports `q`, `status`, `program`, `year_level` and `page`; audit listing supports
-action, user, student and date filters. CORS is limited to the Nuxt dev origins
-(`localhost:3000`, `127.0.0.1:3000`).
+action, user, student and date filters. The JSON endpoints are served by Django
+alongside the template-rendered pages.
 
 ---
 
@@ -373,12 +371,10 @@ minus payments for the semester in question.
 
 | Trigger | Behaviour |
 | --- | --- |
-| Launcher start | Verify the data directory is writable, run migrations, seed academic years, seed role groups, start Django, open the browser |
 | App ready | Seed the current academic year range (guarded by table existence) and start APScheduler |
 | APScheduler | Progression check ~30 seconds after start, then every six hours |
 | First request | Navigation summary (reminder and fee counts) cached for 45 seconds |
 | Dashboard visit | Recommends progression, missing semesters, and next-year fee setup based on dates and permissions |
-| Packaged start | Migrations run automatically, so a fresh install is usable without manual steps |
 
 ---
 
@@ -386,32 +382,23 @@ minus payments for the semester in question.
 
 | Setting / variable | Default | Effect |
 | --- | --- | --- |
-| `NRZ_DATA_DIR` | `data/` beside the app | Location of `school.sqlite3` and `backups/` |
-| `NRZ_DISABLE_SCHEDULER` | unset | Skips APScheduler (used during packaging and tests) |
+| `BSOFT_DATA_DIR` | `data/` in the project | Location of `school.sqlite3` and `backups/` |
+| `BSOFT_DISABLE_SCHEDULER` | unset | Skips APScheduler when set (for example during tests) |
 | `DJANGO_DEBUG` | `0` | Enables Django debug pages; on only when set to `1` |
 | `DJANGO_SECRET_KEY` | generated into `<data>/.secret_key` | Signing key; set explicitly to share one key across data directories |
 | `DJANGO_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Comma-separated hosts Django will serve |
-| `NRZ_ENABLE_TIME_OVERRIDE` | `0` | Enables the superuser time-freeze screen and its date logic |
+| `BSOFT_ENABLE_TIME_OVERRIDE` | `0` | Enables the superuser time-freeze screen and its date logic |
 | `BACKUP_DIR` | `<data>/backups` | Default backup destination when none is configured |
 | `SESSION_COOKIE_AGE` | 7200 s | Inactivity logout |
 | `TIME_ZONE` | `Africa/Harare` | All date arithmetic and display |
-| `CORS_ALLOWED_ORIGINS` | `:3000` origins | Only the Nuxt dev server may call the API cross-origin |
-| `NRZ_DATA_DIR` (installer) | `%ProgramData%\NRZ Student Management` | Machine-wide writable data location |
 
 ---
 
-## 9. Deployment and packaging capabilities
+## 9. Development and deployment
 
-- `launcher.py` is the single entry point: no arguments starts the server; any arguments
-  are forwarded to Django management commands (for example
-  `NRZ Student Management.exe createsuperuser`), with migrations run first.
-- `nrz_student_management.spec` freezes the app with PyInstaller, bundling configs,
-  templates, static files, Django, APScheduler, openpyxl and ReportLab.
-- `NRZ_Student_Management.iss` builds an Inno Setup installer that installs the app to
-  `Program Files`, creates writable data folders in `ProgramData`, sets `NRZ_DATA_DIR`,
-  and adds desktop and Start Menu shortcuts.
-- Application code and user data are deliberately separated so updates never risk the
-  database.
+- Run the application with `python manage.py runserver`; database migrations are
+  applied with `python manage.py migrate`.
+- `BSOFT_DATA_DIR` can point the database and backups to a writable data directory.
 - `.github/workflows/ci.yml` installs `requirements.txt` and runs `manage.py check`,
   a missing-migrations check and the full `school` test suite on every push and pull
   request.
@@ -453,27 +440,25 @@ Useful to know before promising a feature:
 
 | Path | Contents |
 | --- | --- |
-| `config/settings.py` | Installed apps, middleware, database path, sessions, CORS, timezone |
-| `config/paths.py` | Portable path resolution for development and frozen builds |
+| `config/settings.py` | Installed apps, middleware, database path, sessions, timezone |
 | `school/models.py` | Schema, validation, and financial/report helper queries |
 | `school/views.py` | All server-rendered screens, fee grid logic, progression, backups |
-| `school/api.py` | JSON endpoints for the Nuxt frontend |
+| `school/api.py` | JSON endpoints for integrations and application workflows |
 | `school/forms.py` | Model forms, fee formset validation, bulk fee and import forms |
 | `school/reporting/` | Report registry, builders, CSV/PDF renderers, report view |
 | `school/utils/` | Time override helpers, audit logging, spreadsheet import parser, verified backup/restore |
 | `school/management/commands/` | Seed years, seed students, roles, progression, semesters, auto backup |
 | `school/scheduler.py` | APScheduler wiring |
 | `templates/` | Base layout, sidebar, all screens and reports |
-| `frontend/` | Nuxt SPA consuming the JSON API |
 | `docs/` | This reference plus migration, changelog and UX overhaul records |
 
 ---
 
 ## Summary
 
-NRZ Student Management covers the registrar-and-finance workflow end to end for a single campus:
+BSOFT Student Management covers the registrar-and-finance workflow end to end for a single campus:
 structured academic setup, per-semester billing from reusable fee structures, receipt
 capture with live balances, automatic semester progression, eight operational reports
 with CSV/PDF exports, role-based access, an audit trail, and a backup/restore path that
-suits a non-technical operator. It is a local Windows application by design, with a JSON
-API alongside the server-rendered screens for a modern frontend and further integrations.
+suits a non-technical operator. It is a Django application with a server-rendered
+interface and JSON endpoints for integrations.

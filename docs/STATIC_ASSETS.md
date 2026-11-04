@@ -1,4 +1,4 @@
-# Flatpickr — self-hosted (v4.6.13)
+# Static Assets — Flatpickr (v4.6.13)
 
 Pulled straight from npm so nothing depends on jsdelivr / any CDN. Works fully offline once these files are in your project.
 
@@ -25,7 +25,7 @@ Replace the CDN `<link>`/`<script>` tags from before with:
 
 Everything else (the `flatpickr(".datepicker", {...})` init script, the `.form-control.datepicker` class, the forms.py widget) stays exactly as given earlier — only the two `<link>`/`<script>` source URLs change.
 
-## 3. For production
+## Collect static assets
 
 Run the usual:
 
@@ -33,23 +33,9 @@ Run the usual:
 python manage.py collectstatic
 ```
 
-Django's static file hashing (`ManifestStaticFilesStorage`) will fingerprint these files automatically, so browsers cache them indefinitely and only re-download if the file content actually changes — no CDN, no external request, no cache-busting to manage by hand.
+Collected files are written to `staticfiles/`; WhiteNoise is already configured
+in the Django settings to serve static assets.
 
-If you're not already using long-lived cache headers for static files, adding **WhiteNoise** is the easiest way to get that in Django without needing nginx:
-
-```bash
-pip install whitenoise
-```
-```python
-# settings.py
-MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # right after security
-    ...
-]
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-```
-
-## Updating later
+## Updating Flatpickr
 
 Flatpickr is stable and rarely needs updates. When you do want a newer version, just re-download `dist/flatpickr.min.js` + `dist/flatpickr.min.css` from a fresh `npm install flatpickr` and overwrite these two files — nothing else changes.
